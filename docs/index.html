@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nuthatch — FileMaker static analysis</title>
+    <meta
+      name="description"
+      content="nuthatch is a local-only static-analysis tool for FileMaker Save a Copy as XML exports: structure, dependencies, call chains, and maintenance risks."
+    />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <style>
+      /* Palette mirrors src/index.css so the site reads like the app. */
+      :root {
+        --bg: #1b1d23;
+        --bg-elevated: #2d333f;
+        --border: #3a414e;
+        --text: #d7dce5;
+        --text-dim: #8b94a3;
+        --accent: #5aa9e6;
+        --accent-dim: #2f5d80;
+        --ok: #98c379;
+        --warn: #e5c07b;
+        --high: #e06c75;
+        --type-script: #98c379;
+        --type-field: #56b6c2;
+        --type-layout: #e5c07b;
+        --type-file: #c678dd;
+        --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+        --max-w: 960px;
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      code,
+      pre {
+        font-family: var(--font-mono);
+        font-size: 14px;
+      }
+
+      .wrap {
+        max-width: var(--max-w);
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+
+      /* Header */
+      header {
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        backdrop-filter: blur(8px);
+        z-index: 10;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 56px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text);
+        font-weight: 600;
+        font-size: 18px;
+        letter-spacing: 0.01em;
+      }
+      .brand:hover {
+        text-decoration: none;
+      }
+      .brand img {
+        height: 22px;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        font-size: 14px;
+      }
+      .nav-links a {
+        color: var(--text-dim);
+      }
+      .nav-links a:hover {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      /* Buttons — same shape as the app's buttons, scaled up */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 18px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg-elevated);
+        color: var(--text);
+        font-size: 15px;
+        transition: border-color 0.12s ease;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        text-decoration: none;
+      }
+      .btn.primary {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+      }
+      .btn svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+
+      /* Hero */
+      .hero {
+        padding: 72px 16px 48px;
+        text-align: center;
+      }
+      .hero img {
+        width: 180px;
+        max-width: 50%;
+        margin-bottom: 24px;
+      }
+      .hero h1 {
+        font-size: clamp(32px, 6vw, 48px);
+        line-height: 1.15;
+        margin: 0 0 16px;
+        font-weight: 700;
+      }
+      .hero p {
+        color: var(--text-dim);
+        font-size: 18px;
+        max-width: 620px;
+        margin: 0 auto 32px;
+      }
+      .cta {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      /* Sections */
+      section {
+        padding: 48px 0;
+        border-top: 1px solid var(--border);
+      }
+      section h2 {
+        font-size: 24px;
+        margin: 0 0 8px;
+      }
+      .lead {
+        color: var(--text-dim);
+        margin: 0 0 28px;
+      }
+
+      video {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #000;
+        display: block;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px 20px;
+        border-left: 3px solid var(--card-accent, var(--accent));
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 15px;
+      }
+
+      pre {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px 18px;
+        overflow-x: auto;
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      pre .c {
+        color: var(--text-dim);
+      }
+
+      .note {
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--warn);
+        border-radius: 8px;
+        padding: 14px 18px;
+        color: var(--text-dim);
+        font-size: 15px;
+      }
+      .note strong {
+        color: var(--text);
+      }
+
+      .contact-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .contact-list li {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px 20px;
+      }
+      .contact-list .label {
+        display: block;
+        color: var(--text-dim);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+      }
+      .contact-list a {
+        word-break: break-word;
+      }
+
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 24px 0 40px;
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      footer .wrap {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      @media (max-width: 560px) {
+        .nav-links a.optional {
+          display: none;
+        }
+        .hero {
+          padding-top: 48px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap nav">
+        <a class="brand" href="#top"><img src="bird.svg" alt="" />nuthatch</a>
+        <nav class="nav-links">
+          <a class="optional" href="#features">Features</a>
+          <a class="optional" href="#install">Install</a>
+          <a href="app/">Live app</a>
+          <a href="#contact">Contact</a>
+          <a href="https://github.com/micheledelaney/nuthatch">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <div class="wrap hero">
+        <img src="bird.svg" alt="nuthatch bird logo" />
+        <h1>See inside your FileMaker solution</h1>
+        <p>
+          nuthatch is a static-analysis tool for FileMaker “Save a Copy as XML” exports.
+          Explore structure, dependencies, call chains, and maintenance risks, all
+          parsed locally. Nothing is uploaded.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/micheledelaney/nuthatch">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            View on GitHub
+          </a>
+          <a class="btn" href="app/">Try it in your browser</a>
+          <a class="btn" href="#demo">Watch the demo</a>
+        </div>
+      </div>
+
+      <section id="demo">
+        <div class="wrap">
+          <h2>Demo</h2>
+          <p class="lead">
+            A walkthrough of the report card, browsing and filtering, the ⌘K command
+            palette, the relationship graph, and comparing two analyses of the same
+            solution.
+          </p>
+          <video src="demo/full-tour-demo.mp4" controls preload="metadata" playsinline></video>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <h2>Features</h2>
+          <p class="lead">Three views (Report Card, Browse, and ERD) plus a dashboard of saved analyses.</p>
+          <div class="grid">
+            <div class="card" style="--card-accent: var(--ok)">
+              <h3>Report card</h3>
+              <p>
+                Object inventory, broken and unreferenced objects, unstored and deep
+                calculations, globals, and risk flags. Click a tile to open the matching list.
+              </p>
+            </div>
+            <div class="card" style="--card-accent: var(--accent)">
+              <h3>Browse</h3>
+              <p>
+                Search-first navigator with full-text search over names, calculations, and
+                script code. ⌘K jumps to any object, with filters like
+                <code>is:unreferenced</code>.
+              </p>
+            </div>
+            <div class="card" style="--card-accent: var(--type-script)">
+              <h3>Call chains</h3>
+              <p>
+                A script's recursive Perform Script tree, with cycle detection and external or
+                missing targets marked.
+              </p>
+            </div>
+            <div class="card" style="--card-accent: var(--type-layout)">
+              <h3>ERD</h3>
+              <p>
+                The relationship graph laid out as in FileMaker, with lines colored by
+                cascade rule (delete, create, sorted).
+              </p>
+            </div>
+            <div class="card" style="--card-accent: var(--type-file)">
+              <h3>Compare over time</h3>
+              <p>
+                Save analyses locally and diff two versions of a solution: adds, removes,
+                renames, and changed calculations and scripts.
+              </p>
+            </div>
+            <div class="card" style="--card-accent: var(--type-field)">
+              <h3>Local only</h3>
+              <p>
+                Runs in the browser or as a native desktop app. No backend, no uploads, no
+                telemetry.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <div class="wrap">
+          <h2>Install</h2>
+          <p class="lead">
+            Needs Node.js 18+. The desktop app also needs the
+            <a href="https://www.rust-lang.org/tools/install">Rust toolchain</a>.
+          </p>
+          <pre><code>git clone https://github.com/micheledelaney/nuthatch.git
+cd nuthatch
+npm install
+
+<span class="c"># Browser app</span>
+npm run build &amp;&amp; npm run preview
+
+<span class="c"># Desktop app (Tauri)</span>
+npm run tauri:build</code></pre>
+          <div class="note">
+            <strong>When exporting from FileMaker</strong>, use File → Save a Copy As… → XML
+            and tick <strong>“Include details for analysis tools”</strong>. Without it,
+            calculation references and script-step text are incomplete.
+          </div>
+        </div>
+      </section>
+
+      <section id="contact">
+        <div class="wrap">
+          <h2>Contact</h2>
+          <p class="lead">Questions, bug reports, or ideas are welcome.</p>
+          <ul class="contact-list">
+            <li>
+              <span class="label">GitHub repository</span>
+              <a href="https://github.com/micheledelaney/nuthatch">github.com/micheledelaney/nuthatch</a>
+            </li>
+            <li>
+              <span class="label">Issues &amp; feature requests</span>
+              <a href="https://github.com/micheledelaney/nuthatch/issues">Open an issue</a>
+            </li>
+            <li>
+              <span class="label">Email</span>
+              <a href="mailto:c.michele.delaney@gmail.com">c.michele.delaney@gmail.com</a>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>nuthatch, static analysis for FileMaker</span>
+        <span>Made by <a href="https://github.com/micheledelaney">Michèle Delaney</a></span>
+      </div>
+    </footer>
+  </body>
+</html>
