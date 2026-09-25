@@ -220,9 +220,11 @@ function GraphCanvas({
     [nodes, expanded],
   );
 
+  // Don't zoom out past fit-to-width, but cap that floor at 100% so small graphs
+  // (whose fit exceeds MAX_SCALE) still leave a zoom range.
   const minScale = () => {
     const el = scrollRef.current;
-    return Math.min(MAX_SCALE, el ? el.clientWidth / boundsW : MIN_SCALE);
+    return el ? Math.max(MIN_SCALE, Math.min(1, el.clientWidth / boundsW)) : MIN_SCALE;
   };
   const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(minScale(), s));
 
@@ -246,7 +248,8 @@ function GraphCanvas({
       }
     });
   };
-  useLayoutEffect(fitToView, [graph, boundsW, boundsH]);
+  // Not keyed on boundsH: expanding a box grows the graph and shouldn't reset zoom.
+  useLayoutEffect(fitToView, [graph, boundsW]);
 
   // Opened from a table occurrence elsewhere: highlight it as if it were clicked.
   useLayoutEffect(() => {
@@ -542,6 +545,8 @@ function GraphBox({
       <rect className="fmg-box" x={node.left} y={node.top} width={w} height={h} rx={6} />
       <rect className="fmg-title" x={node.left} y={node.top} width={w} height={Math.min(TITLE_H, h)} rx={6} fill={colors.fill} />
       {h > TITLE_H && <rect className="fmg-title" x={node.left} y={node.top + TITLE_H / 2} width={w} height={TITLE_H / 2} fill={colors.fill} />}
+      {/* Outline drawn again above the title fills, which otherwise cover its inner half. */}
+      <rect className="fmg-box fmg-outline" x={node.left} y={node.top} width={w} height={h} rx={6} />
       {rows.length > 0 && <line className="fmg-divider" x1={node.left} y1={node.top + TITLE_H} x2={node.left + w} y2={node.top + TITLE_H} />}
       <text className="fmg-label" x={node.left + 8} y={node.top + TITLE_H / 2 + FONT / 2 - 1} textAnchor="start" fill={colors.text}>
         {fit(node.name, w - 16, FONT)}

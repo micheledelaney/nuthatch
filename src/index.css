@@ -291,6 +291,9 @@ select:focus {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Contain the floating header's z-index so it can't paint over the
+     sidebar resizer's accent line. */
+  isolation: isolate;
 }
 .navigator .results {
   overflow: auto;
@@ -2462,6 +2465,11 @@ ul.rel-cascade li {
 }
 .fmg-node:hover .fmg-box {
   stroke-width: 2.5;
+}
+.fmg-node .fmg-box.fmg-outline {
+  fill: none;
+  filter: none;
+  pointer-events: none;
 }
 /* Hairline between an expanded box's title bar and its field rows. */
 .fmg-divider {
