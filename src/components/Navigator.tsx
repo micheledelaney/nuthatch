@@ -410,9 +410,9 @@ export function Navigator() {
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
             {lg.name} · {lg.objects.length}
           </div>
-          {open && lg.objects.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 1))}
+          {open && lg.objects.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && lg.objects.length > GROUP_LIMIT && (
-            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad }}>
+            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
               +{lg.objects.length - GROUP_LIMIT} more — narrow your search
             </div>
           )}
@@ -423,7 +423,8 @@ export function Navigator() {
 
   /** A type group's fields split into base-table sub-groups (each collapsed by
    * default). A field's base table is its `parentUid`. `depthOffset` is the
-   * parent type group's depth; sub-groups and their leaves sit one level in. */
+   * parent type group's depth; sub-groups sit one level in and their leaves
+   * one level further, like script folders. */
   const renderFieldsByBaseTable = (items: FmObject[], fileUid: string | null, depthOffset: number) => {
     const byTable = new Map<string, FmObject[]>();
     for (const field of items) {
@@ -451,9 +452,9 @@ export function Navigator() {
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
             {tg.name} · {tg.fields.length}
           </div>
-          {open && tg.fields.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 1))}
+          {open && tg.fields.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && tg.fields.length > GROUP_LIMIT && (
-            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad }}>
+            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
               +{tg.fields.length - GROUP_LIMIT} more — narrow your search
             </div>
           )}

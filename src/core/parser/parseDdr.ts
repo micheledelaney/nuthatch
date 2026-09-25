@@ -1649,6 +1649,23 @@ const SUMMARY_OPERATION_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * A container field's storage, e.g. "In file" or "External (Secure) · Mona_Lisa/".
+ * External storage is a nested <Remote type="Secure|Open"> whose
+ * <BaseDirectoryReference> names the base directory (Manage ▸ Containers).
+ */
+function containerStorage(storage: unknown): string {
+  const remote = asArray(isRecord(storage) ? storage["Remote"] : undefined)[0];
+  if (!isRecord(remote)) return "In file";
+  const dirRef = asArray(remote["BaseDirectoryReference"])[0];
+  const dir = attr(dirRef, "name");
+  const parts = [`External (${attr(remote, "type") ?? "Secure"})`];
+  if (dir) parts.push(decodeEntities(dir));
+  if (attr(dirRef, "absolute") === "True") parts.push("absolute path");
+  if (attr(remote, "withFewerFolders") === "True") parts.push("fewer folders");
+  return parts.join(" · ");
+}
+
+/**
  * Lift storage info onto a field object for the report card and navigator
  * filters. (`fieldType` and `dataType` already arrive via the element's own
  * attributes; here we surface the bits that live in the nested <Storage>.)
@@ -1659,6 +1676,10 @@ function annotateField(fieldNode: unknown, fieldObj: FmObject): void {
   // A global field is one whose <Storage> declares global storage.
   if (attr(storage, "global") === "True") {
     fieldObj.attributes.global = "true";
+  }
+  // Container fields: where the data lives — in the file, or externally.
+  if (attr(fieldNode, "datatype") === "Binary") {
+    fieldObj.attributes.containerStorage = containerStorage(storage);
   }
   // Repetitions beyond the default single value are worth surfacing.
   const reps = attr(storage, "maxRepetitions");

@@ -26,15 +26,16 @@ kbd {
   border-radius: 4px;
 }
 
-/* Top bar: pinned shelf + search button + help */
+/* Top bar: pinned shelf + search button + help. Same height as the
+   navigator header so their bottom borders line up. */
 .wb-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  height: var(--bar-h);
+  padding: 0 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
-  min-height: 40px;
 }
 .wb-shelf {
   flex: 1;

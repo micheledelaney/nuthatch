@@ -97,6 +97,7 @@ const ATTR_LABELS: Record<string, string> = {
   repetitions: "Repetitions",
   autoEnter: "Auto-enter",
   global: "Global storage",
+  containerStorage: "Container storage",
   width: "Width",
   runsWithFullAccess: "Runs with full access",
   recordsAccess: "Records",
@@ -379,7 +380,7 @@ export function DetailsProps({
   })() : null;
 
   return (
-    <Section title="Details">
+    <Section title="Metadata" defaultOpen={false}>
       <dl className="kv compact">
         <dt>Type</dt>
         <dd>{OBJECT_TYPE_META[obj.type].label}</dd>
@@ -797,7 +798,7 @@ function LayoutDetail({
     <>
       <LayoutTriggers triggers={triggers} owner={owner} model={model} onGo={onGo} />
       {objectCount > 0 && (
-        <Section title="Layout contents" count={objectCount}>
+        <Section title="Layout contents" count={objectCount} defaultOpen={false}>
         <div className="layout-parts">
           {showFilter && (
             <div className="layout-type-filter">
