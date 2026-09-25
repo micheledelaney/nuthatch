@@ -215,6 +215,9 @@
       .row.flip .text {
         order: 2;
       }
+      .row.small {
+        grid-template-columns: 3fr 2fr;
+      }
       .row h2 {
         font-size: 22px;
         font-weight: 600;
@@ -275,6 +278,7 @@
       @media (max-width: 800px) {
         .row,
         .row.flip,
+        .row.small,
         .bottom {
           grid-template-columns: 1fr;
           gap: 20px;
@@ -328,21 +332,22 @@
         </div>
         <div class="window">
           <div class="bar"><i></i><i></i><i></i></div>
-          <img src="shots/report-card.jpg" alt="The report card: reference counts, broken and unreferenced objects, risk flags, and an object inventory" />
+          <img src="shots/browse.jpg" alt="Browse view: the Broken script selected in the navigator, with its missing-field reference" />
         </div>
       </div>
 
       <div class="band" id="features">
         <div class="wrap">
-          <div class="row">
+          <div class="row small">
             <div class="text">
               <h2>Start from what's wrong</h2>
               <p>
-                Click a number on the report card and you land on the objects behind it, like this
-                script that still points at a deleted field.
+                The report card counts broken references, unreferenced objects, accounts without a
+                password, and unstored or deep calculations. Click any number to see the objects
+                behind it.
               </p>
             </div>
-            <img src="shots/browse.jpg" alt="A script with a broken Go to Field reference" />
+            <img src="shots/report-card.jpg" alt="The report card: reference counts, risk flags, and an object inventory" />
           </div>
 
           <div class="row flip">
@@ -358,6 +363,18 @@
           </div>
 
           <div class="row">
+            <div class="text">
+              <h2>Put two objects side by side</h2>
+              <p>
+                ⇧-click a search result or a reference to open it in a second pane. Collapse the
+                navigator when you need the room, like here, comparing two versions of a custom
+                function.
+              </p>
+            </div>
+            <img src="shots/side-by-side.jpg" alt="Two custom functions, FormatDuration and formatDurationNew, open side by side with the navigator collapsed" />
+          </div>
+
+          <div class="row flip">
             <div class="text">
               <h2>See what changed</h2>
               <p>
