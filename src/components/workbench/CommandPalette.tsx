@@ -10,8 +10,13 @@ import { parentContext } from "./objectInfo";
 /** Cap on rendered result rows; the header still reports the true total. */
 const RESULT_LIMIT = 80;
 
+interface PaletteRow {
+  obj: FmObject;
+  snippet?: string;
+}
+
 /**
- * ⌘K palette: fuzzy name search over every object, narrowed by typed filter
+ * ⌘K palette: fuzzy name search (then body-text search) over every object, narrowed by typed filter
  * tokens. A recognised token becomes a chip as soon as it's followed by a
  * space; ⌫ in an empty input removes the last chip. Rendered into
  * document.body so it centres over the whole viewport.
@@ -30,15 +35,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const { rows, total, isRecent } = useMemo(() => {
-    if (!model) return { rows: [] as FmObject[], total: 0, isRecent: false };
+    if (!model) return { rows: [] as PaletteRow[], total: 0, isRecent: false };
     const live = tokenize(deferredText);
     const tokens = [...chips, ...live.tokens];
     if (tokens.length === 0 && !live.free.trim()) {
       const recentObjs = recent.map((u) => model.byUid.get(u)).filter((o): o is FmObject => !!o);
-      return { rows: recentObjs, total: recentObjs.length, isRecent: true };
+      return { rows: recentObjs.map((obj): PaletteRow => ({ obj })), total: recentObjs.length, isRecent: true };
     }
     const { results, total: t } = runQuery(model, tokens, live.free, RESULT_LIMIT);
-    return { rows: results.map((r) => r.obj), total: t, isRecent: false };
+    return { rows: results.map((r) => ({ obj: r.obj, snippet: r.snippet })), total: t, isRecent: false };
   }, [model, chips, deferredText, recent]);
 
   useEffect(() => setSel(0), [rows]);
@@ -77,7 +82,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       setSel((s) => (rows.length ? (s - 1 + rows.length) % rows.length : 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      open(rows[sel], e.shiftKey);
+      open(rows[sel]?.obj, e.shiftKey);
     } else if (e.key === "Backspace" && text === "" && chips.length > 0) {
       e.preventDefault();
       setChips((prev) => prev.slice(0, -1));
@@ -118,7 +123,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           {rows.length === 0 && (
             <div className="wb-palette-empty">{isRecent ? "Nothing opened yet. Start typing." : "No matches."}</div>
           )}
-          {rows.map((obj, i) => {
+          {rows.map(({ obj, snippet }, i) => {
             const stats = refStatsFor(model, obj.uid);
             return (
               <div
@@ -130,7 +135,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               >
                 <TypePill type={obj.type} short />
                 <span className="wb-result-name ellipsis">{objectLabel(obj)}</span>
-                <span className="wb-result-ctx ellipsis">{parentContext(model, obj)}</span>
+                <span className="wb-result-ctx ellipsis" title={snippet}>{snippet ?? parentContext(model, obj)}</span>
                 <span className="wb-counts" title="Inbound ← / outbound → references">
                   ←{stats.inbound} →{stats.outbound}
                 </span>

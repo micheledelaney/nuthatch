@@ -74,7 +74,7 @@ function matchesQualifiedName(model: SolutionModel, field: FmObject, toQuery: st
   );
 }
 
-function excerpt(text: string, idx: number, matchLen: number): string {
+export function excerpt(text: string, idx: number, matchLen: number): string {
   const start = Math.max(0, idx - SNIPPET_RADIUS);
   const end = Math.min(text.length, idx + matchLen + SNIPPET_RADIUS);
   const prefix = start > 0 ? "…" : "";
