@@ -62,6 +62,11 @@
   --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
 
   --sidebar-w: 320px;
+  /* Shared bar heights so the Browse pane's horizontal lines continue the
+     navigator's: the pin bar matches the navigator header, and the pane's
+     breadcrumb bar matches the navigator's file row beneath it. */
+  --bar-h: 55px;
+  --subbar-h: 34px;
 
   /* Functional transitions stay fast and neutral (0.12s ease). This springy
      curve is reserved for ARRIVAL moments only — a column appending to the
@@ -218,6 +223,10 @@ select:focus {
   z-index: 5;
   cursor: col-resize;
   touch-action: none;
+  /* Own compositing layer: in WebKit (the Tauri app) the navigator's sticky
+     floating header is composited inside its scroller and otherwise paints
+     over the left half of the accent line, despite the z-index. */
+  will-change: transform;
 }
 /* Grip: a gap in the divider line with three small dots stacked in it (⋮). */
 .sidebar-resizer::before {
@@ -273,6 +282,7 @@ select:focus {
   flex: 1;
 }
 .navigator .controls {
+  height: var(--bar-h);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -336,7 +346,8 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 12px;
+  height: var(--subbar-h);
+  padding: 0 12px;
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
@@ -3146,7 +3157,8 @@ ul.rel-cascade li {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  height: var(--subbar-h);
+  padding: 0 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   min-width: 0;
@@ -3228,23 +3240,59 @@ ul.rel-cascade li {
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
 }
-.op-title-row {
+/* At a glance: name + type, the key attributes, then the flags. No box; the
+   12px side padding matches .op-tab's, so the name lines up with the first
+   tab's label. */
+.op-glance {
+  padding: 10px 12px 0;
+}
+.op-glance-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 6px;
 }
-.op-title {
+.op-glance-name {
   margin: 0;
-  font-size: 22px;
+  min-width: 0;
+  font-size: 17px;
   font-weight: 600;
   word-break: break-word;
+}
+.op-glance-kv {
+  display: grid;
+  /* 153px + 16px gap puts the values on the same x as the Metadata box's
+     values (.kv.compact: 150px + 16px, inset 3px more by the box's border and padding). */
+  grid-template-columns: 153px minmax(0, 1fr);
+  gap: 9px 16px;
+  margin: 16px 0 0;
+}
+/* Each row is a wrapper so dt/dd pairs stay together; let them join the grid. */
+.op-glance-row {
+  display: contents;
+}
+.op-glance-kv dt {
+  color: var(--text-dim);
+}
+.op-glance-kv dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  word-break: break-word;
+}
+.op-glance-empty {
+  color: var(--text-dim);
+}
+.op-glance-kv code {
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 .op-facts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 16px;
 }
 .op-fact {
   padding: 2px 9px;
@@ -3270,7 +3318,7 @@ ul.rel-cascade li {
 .op-tabs {
   display: flex;
   gap: 2px;
-  margin-top: 12px;
+  margin-top: 20px;
 }
 .op-tab {
   display: inline-flex;

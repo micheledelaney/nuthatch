@@ -11,11 +11,11 @@ import {
   OccurrenceRelationships,
   Section,
   refIndexFor,
-  renderWithBrokenPlaceholders,
 } from "../ObjectColumn";
 import { TypePill } from "../TypePill";
 import { isUnreferenced } from "./filters";
 import { factsFor } from "./facts";
+import { Glance } from "./Glance";
 import { PaneNavContext } from "../workbench/paneNav";
 
 /** Rows shown per tab before "Show more" — a tab is the whole view, so it can
@@ -25,7 +25,7 @@ const TAB_PREVIEW_LIMIT = 200;
 type Tab = "definition" | "usedBy" | "uses" | "calls";
 
 /**
- * The object page: name + type, key facts, then tabs (Definition, Referenced
+ * The object page: the At a glance card (name, type, key attributes, flags), then tabs (Definition, Referenced
  * by, References, Call chain). The pane's history bar above it is the only breadcrumb.
  * Every link inside navigates forward from this page's trail position.
  */
@@ -55,15 +55,14 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   const brokenCount = outbound.filter((e) => e.ref.broken).length;
   const callCount = chain?.children.length ?? 0;
 
-  const facts = factsFor(obj, model, {
+  const facts = factsFor({
     brokenCount,
-    callCount,
     unreferenced: isUnreferenced(model, obj),
     selfBroken: isBrokenTableOccurrence(obj),
   });
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "definition", label: "Definition" },
+    { id: "definition", label: "Details" },
     { id: "usedBy", label: "Referenced by", count: inbound.length },
     { id: "uses", label: "References", count: outbound.length },
   ];
@@ -72,30 +71,19 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   return (
     <div className="object-page">
       <header className="op-header">
-        <div className="op-title-row">
-          <h1 className="op-title" title={objectLabel(obj)}>
-            {renderWithBrokenPlaceholders(objectLabel(obj))}
-          </h1>
-          <TypePill
-            type={obj.type}
-            label={obj.isSeparator ? "Separator" : undefined}
-            color={obj.isSeparator ? "var(--type-separator)" : undefined}
-          />
-          {obj.type === "tableOccurrence" && (
-            <button className="graph-jump-btn" title="Show in relationship graph" onClick={() => showGraphFor(uid)}>
-              Show in graph
-            </button>
-          )}
-        </div>
-        {facts.length > 0 && (
-          <div className="op-facts">
-            {facts.map((f, i) => (
-              <span key={`${i}-${f.label}`} className={`op-fact${f.tone ? ` tone-${f.tone}` : ""}`} title={f.title}>
-                {f.label}
-              </span>
-            ))}
-          </div>
-        )}
+        <Glance
+          obj={obj}
+          model={model}
+          facts={facts}
+          onGo={go}
+          actions={
+            obj.type === "tableOccurrence" && (
+              <button className="graph-jump-btn" title="Show in relationship graph" onClick={() => showGraphFor(uid)}>
+                Show in graph
+              </button>
+            )
+          }
+        />
         <div className="op-tabs" role="tablist">
           {tabs.map((t) => (
             <button
@@ -143,8 +131,8 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   );
 }
 
-/** Definition tab: the type-specific detail first (steps, calc, layout, …),
- * then base table / children, then the full property sheet. */
+/** Details tab: the type-specific detail first (steps, calc, layout, …),
+ * then children, then the full property sheet. */
 function DefinitionTab({
   obj,
   model,
@@ -161,7 +149,6 @@ function DefinitionTab({
   const children = childTitle
     ? model.objects.filter((o) => o.parentUid === uid).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     : [];
-  const baseTable = obj.type === "field" && obj.parentUid ? model.byUid.get(obj.parentUid) ?? null : null;
   const brokenSteps = new Set<number>();
   for (const ref of model.outbound.get(uid) ?? []) {
     if (ref.broken && ref.fromStep != null) brokenSteps.add(ref.fromStep);
@@ -181,17 +168,6 @@ function DefinitionTab({
           scrollToStep={scrollToStep}
         />
       ) : null}
-
-      {baseTable && (
-        <Section title="Base table">
-          <ul className="ref-list">
-            <li onClick={() => onGo(baseTable.uid, `base:${baseTable.uid}`)} title={objectLabel(baseTable)}>
-              <TypePill type={baseTable.type} short />
-              <span className="ellipsis">{baseTable.name}</span>
-            </li>
-          </ul>
-        </Section>
-      )}
 
       {childTitle && children.length > 0 && (
         <Section title={childTitle} count={children.filter((c) => !c.isSeparator).length}>
