@@ -1,3 +1,19 @@
+<p align="center">
+  <img src="docs/bird.svg" alt="nuthatch bird logo" width="160" />
+</p>
+
+<p align="center">
+  <strong>See inside your FileMaker solution: structure, dependencies, and risks, all analyzed locally.</strong>
+</p>
+
+<p align="center">
+  <a href="https://micheledelaney.github.io/nuthatch/">Website</a>
+  &nbsp;·&nbsp;
+  <a href="https://micheledelaney.github.io/nuthatch/app/">Try the live app</a>
+</p>
+
+---
+
 # nuthatch
 
 A static-analysis tool for FileMaker solutions. Load one or more **"Save a Copy
