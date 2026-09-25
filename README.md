@@ -1,3 +1,4 @@
+
 <p align="center">
   <img src="docs/bird.svg" alt="nuthatch bird logo" width="160" />
 </p>
@@ -31,7 +32,7 @@ A walkthrough covering the report card, browsing and filtering, the ⌘K
 command palette, the relationship graph, and comparing two analyses of the
 same solution:
 
-<video src="https://github.com/user-attachments/assets/82a9694a-2605-4b14-b257-e1216f494036" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/63390d70-31c6-49dd-94a2-5fd3508e5cff" controls width="100%"></video>
 
 ---
 
