@@ -1,6 +1,7 @@
 import { OBJECT_TYPE_META, isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { isUnreferenced, matchesFieldFilter } from "@/components/browseA/filters";
 import { brokenSourcesFor, refStatsFor } from "@/components/browseA/refStats";
+import { excerpt } from "@/core/search/search";
 import { ancestorsOf } from "./objectInfo";
 
 /**
@@ -209,20 +210,31 @@ export function fuzzyScore(name: string, query: string): number {
 export interface PaletteResult {
   obj: FmObject;
   score: number;
+  /** Excerpt around the match when it hit the body text, not the name. */
+  snippet?: string;
 }
 
-/** Run a palette query: filter by tokens, fuzzy-rank by free text. */
+/** Run a palette query: filter by tokens, fuzzy-rank by free text. Objects
+ * whose name doesn't match but whose body text (script steps, calcs, string
+ * literals…) contains the query as a substring follow the name matches. */
 export function runQuery(model: SolutionModel, tokens: Token[], free: string, limit: number): { results: PaletteResult[]; total: number } {
   const q = free.trim().toLowerCase();
   const types = new Set(tokens.flatMap((t) => (t.kind === "type" ? [t.type] : [])));
-  const hits: PaletteResult[] = [];
+  const nameHits: PaletteResult[] = [];
+  const textHits: PaletteResult[] = [];
   for (const o of model.objects) {
     if (o.isSeparator) continue;
     if (!matchesTokens(model, o, tokens, types)) continue;
     const score = fuzzyScore(objectLabel(o), q);
-    if (score < 0) continue;
-    hits.push({ obj: o, score });
+    if (score >= 0) {
+      nameHits.push({ obj: o, score });
+      continue;
+    }
+    const textIdx = q ? o.text.toLowerCase().indexOf(q) : -1;
+    if (textIdx >= 0) textHits.push({ obj: o, score, snippet: excerpt(o.text, textIdx, q.length) });
   }
-  hits.sort((a, b) => b.score - a.score || a.obj.name.localeCompare(b.obj.name));
+  nameHits.sort((a, b) => b.score - a.score || a.obj.name.localeCompare(b.obj.name));
+  textHits.sort((a, b) => a.obj.name.localeCompare(b.obj.name));
+  const hits = [...nameHits, ...textHits];
   return { results: hits.slice(0, limit), total: hits.length };
 }
