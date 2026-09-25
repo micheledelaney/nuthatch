@@ -1,0 +1,37 @@
+{
+  "name": "nuthatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "nuthatch — DDR / XML analysis in the browser (structure, dependencies, call chains, risks)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/gen-icons.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "ffmpeg-static": "^5.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "fsevents@2.3.3": true
+  }
+}

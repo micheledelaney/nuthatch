@@ -1,0 +1,3297 @@
+:root {
+  --bg: #1b1d23;
+  --bg-panel: #1b1d23;
+  --bg-elevated: #2d333f;
+  --border: #3a414e;
+  --text: #d7dce5;
+  --text-dim: #8b94a3;
+  --fmg-edge: #8b94a3;
+  --fmg-edge-del: #c26f73;
+  --fmg-edge-create: #7fa976;
+  --fmg-edge-sort: #61afef;
+  --fmg-edge-dim: #4b5260;
+  --fmg-edge-del-dim: color-mix(in srgb, #c26f73 25%, black 75%);
+  --fmg-edge-create-dim: color-mix(in srgb, #7fa976 25%, black 75%);
+  --fmg-edge-sort-dim: color-mix(in srgb, #61afef 25%, black 75%);
+  --accent: #5aa9e6;
+  --accent-dim: #2f5d80;
+  /* The "this was clicked / selected" shade — a muted blue sitting between the
+     neutral hover gray (--bg-elevated) and the strong selection (--accent-dim).
+     Used for shaded items in the navigator and object lists. */
+  --selected-soft: color-mix(in srgb, var(--accent-dim) 50%, var(--bg-elevated));
+  --high: #e06c75;
+  --warn: #e5c07b;
+  --ok: #98c379;
+  --info: #61afef;
+
+  --type-file: #c678dd;
+  --type-table: #61afef;
+  --type-field: #56b6c2;
+  --type-script: #98c379;
+  --type-layout: #e5c07b;
+  --type-relationship: #d19a66;
+  --type-value-list: #f0a6ca;
+  --type-custom-function: #4fc6a8;
+  /* Security family — warm peach→rose shades (red itself is reserved for --high). */
+  --type-account: #f5a97f;
+  --type-privilege-set: #e8927c;
+  --type-extended-privilege: #d98a8a;
+  --type-file-access: #c9a0a0;
+  --type-data-source: #7aa2f7;
+  /* Custom menu family — lavender shades. */
+  --type-menu-set: #a9a1e1;
+  --type-menu: #9d92d8;
+  --type-menu-item: #b8b2ea;
+  --type-theme: #d4b86a;
+  --type-global-variable: #c3e88d;
+  --type-default: #8b94a3;
+  /* A separator's pill ("Sep") — a subdued, desaturated blend of the script
+     green and the neutral dim grey, so it reads as "not a real object". */
+  --type-separator: color-mix(in srgb, var(--type-script) 45%, var(--text-dim) 55%);
+
+  --syn-string: #98c379;
+  --syn-var: #e5c07b;
+  --syn-func: #4fc6a8;
+  --syn-kw: #c678dd;
+  --syn-num: #d19a66;
+  --syn-op: #abb2bf;
+
+  /* UI is a clean sans; monospace is reserved strictly for code (calculations,
+     script steps, diffs) so the app doesn't read as a terminal. */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+
+  --sidebar-w: 320px;
+
+  /* Functional transitions stay fast and neutral (0.12s ease). This springy
+     curve is reserved for ARRIVAL moments only — a column appending to the
+     trail, a popup or modal opening — so entrances read as crafted, not generic. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--accent);
+}
+button.primary {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+button.primary:disabled {
+  background: var(--accent-dim);
+  border-color: var(--border);
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+input[type="search"],
+input[type="text"],
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  width: 100%;
+}
+/* Strip the native control chrome so selects honor the same padding/height as
+   the text and search fields, then re-add a custom chevron. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%238b94a3' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+input[type="search"]:focus,
+input[type="text"]:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  /* Fixed height so the bar doesn't shift when its contents differ (e.g. the
+     dashboard has no buttons while the analysing/comparison screens do). */
+  min-height: 49px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.toolbar h1 {
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+.brand-bird {
+  height: 22px;
+  margin-right: 7px;
+  flex: none;
+}
+.toolbar .spacer {
+  flex: 1;
+}
+.toolbar .meta {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+/* Dashboards (saved analyses + comparison) have no navigable model, so the
+   sidebar is dropped entirely and the main area spans the full width. */
+.workspace.no-sidebar {
+  grid-template-columns: 1fr;
+}
+.sidebar {
+  position: relative;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+/* Collapsed to 0: the type rail's border already draws the edge. */
+.sidebar.collapsed {
+  border-right: none;
+}
+/* Drag handle straddling the sidebar's right border, modelled on VS Code's
+   sash: a 4px accent line that fades in after a short hover delay, and
+   immediately while dragging. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+}
+/* Grip: a gap in the divider line with three small dots stacked in it (⋮). */
+.sidebar-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 20px;
+  transform: translateY(-50%);
+  background: radial-gradient(circle, var(--text-dim) 1px, transparent 1.5px) center 1px / 6px 6px repeat-y,
+    var(--bg-panel);
+}
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 4px;
+  background: transparent;
+  transition: background 0.1s ease-out;
+}
+.sidebar-resizer:hover::after {
+  background: var(--accent);
+  transition-delay: 0.3s;
+}
+.sidebar-resizer.dragging::after {
+  background: var(--accent);
+  transition-delay: 0s;
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Grid items default to min-width:auto, so without this .main grows to fit
+     wide content and adds a second, page-wide scrollbar. Pinning it to 0 keeps
+     width in the 1fr track. */
+  min-width: 0;
+}
+.browse-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Navigator */
+.navigator {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.navigator .controls {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.navigator .controls .field-filters {
+  display: flex;
+  gap: 8px;
+}
+/* Holds the scrolling list and the single floating context header that
+   replaces per-section sticky headers (which left a gap at file boundaries). */
+.navigator .nav-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.navigator .results {
+  overflow: auto;
+  flex: 1;
+  padding: 0 0 6px;
+}
+/* One overlay pinned to the top of the list, mirroring the file/group the
+   user is currently scrolled within. Sits over the rows that scroll beneath. */
+/* Sits inside the scroll container (so it never overlaps the scrollbar) and
+   overlays the rows beneath via a negative margin set in JS. */
+.navigator .floating-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  overflow: hidden;
+  background: var(--bg-panel);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: var(--bg-panel);
+}
+.group-header .fchevron {
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+.group-header .fchevron.open {
+  transform: rotate(90deg);
+}
+.file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--bg-elevated);
+}
+.file-header:hover {
+  background: var(--bg-elevated);
+}
+.file-header .fchevron {
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+.file-header .file-icon {
+  flex: none;
+  color: var(--accent);
+}
+.file-header .ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 18px;
+  margin: 0 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node:hover {
+  background: var(--bg-elevated);
+}
+.node.selected {
+  background: var(--selected-soft);
+  animation: node-select 0.70s ease-out;
+}
+.node .snippet {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-left: 6px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* Main header: report-card / issues toggles */
+.main-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+/* Current analysis name, centered in the header bar (independent of the
+   toggle buttons on the left). */
+.analysis-name {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--text);
+  pointer-events: none;
+}
+.pill {
+  border-radius: 14px;
+  padding: 4px 14px;
+}
+.pill.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* Segmented control — mutually-exclusive view selector */
+.seg-control {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  flex: none;
+}
+.seg-btn {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  padding: 4px 13px;
+  color: var(--text-dim);
+}
+.seg-btn:hover {
+  border-color: transparent;
+  color: var(--text);
+}
+.seg-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.seg-btn.active:hover {
+  border-color: var(--accent);
+}
+.badge {
+  margin-left: 6px;
+  background: var(--high);
+  color: #1e2127;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+/* Sits above the scrolling body as a plain flex sibling (not a sticky child
+   painted inside the scroll box), so its background can never paint over the
+   scrollbar the way a sticky-in-scroll-container header does. */
+.detail-header {
+  flex: 0 0 auto;
+  background: var(--bg-panel);
+  padding: 14px 16px;
+}
+.detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+.jump-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.jump-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jump-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.jump-btn .count {
+  color: var(--text-dim);
+}
+/* Expandable "widget" card wrapping each detail-view section (Details,
+   References, Definition, etc.) — the same bordered-card look as the report
+   card's metric tiles, so every section reads as a discrete unit. */
+.detail-widget {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 18px 0;
+}
+.detail-widget-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+}
+.detail-widget-header.clickable {
+  cursor: pointer;
+}
+.detail-widget-header.clickable:hover {
+  color: var(--text);
+}
+.detail-widget-body {
+  margin-top: 10px;
+}
+/* References and Referenced By sit side by side, each its own widget. */
+.detail-widgets-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 18px 0;
+}
+.detail-widgets-row .detail-widget {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .detail-widgets-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* A reference subgroup (one object type) inside References / Referenced By. */
+.ref-group {
+  margin-top: 4px;
+}
+.ref-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.ref-group .ref-list {
+  margin-top: 0;
+}
+.col-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.col-title {
+  font-size: 20px;
+  font-weight: 600;
+  word-break: break-word;
+}
+/* "Show in graph" — sits at the far right of a table occurrence's title row. */
+.graph-jump-btn {
+  margin-left: auto;
+  flex: none;
+  align-self: center;
+  white-space: nowrap;
+}
+/* A broken object (e.g. a table occurrence with an unresolved base table). */
+.col-title.broken {
+  color: var(--high);
+}
+/* A broken attribute value (e.g. an "<unknown>" external data source). */
+.broken-value {
+  color: var(--high);
+}
+/* Warning pill in the detail header — shown for broken objects and objects
+   with broken outbound references: a red exclamation mark in a solid pill. */
+.broken-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--high);
+  color: var(--bg-panel);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+}
+/* Type pill */
+.type-pill {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 7px;
+  border: 1px solid;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  white-space: nowrap;
+}
+.type-pill.short {
+  padding: 1px 4px;
+  min-width: 24px;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* Navigator folder headers */
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 5px 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.folder-header.clickable,
+.group-header.clickable {
+  cursor: pointer;
+}
+.folder-header.clickable:hover,
+.group-header.clickable:hover {
+  color: var(--text);
+}
+.folder-header .fchevron {
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+.folder-header .fchevron.open {
+  transform: rotate(90deg);
+}
+.folder-header .folder-icon {
+  flex: none;
+  opacity: 0.85;
+}
+.folder-header .folder-name {
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node.in-folder {
+  padding-left: 30px;
+}
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 12px;
+}
+/* Per-file sub-header inside an issues section (multi-file imports). */
+.issues-file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.issues-file-header .count {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.issues-file-header.clickable {
+  cursor: pointer;
+}
+.issues-file-header.clickable:hover {
+  color: var(--accent);
+}
+.issues-file-header .fchevron {
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+/* Collapse chevron (rotates when open) — shared by nav, folders, and sections */
+.fchevron {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+.fchevron.open {
+  transform: rotate(90deg);
+}
+.kv.compact {
+  grid-template-columns: 150px 1fr;
+  margin: 8px 0;
+}
+.indent {
+  padding-left: 8px;
+}
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Issues filters */
+.issues-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.type-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.type-filter select {
+  width: auto;
+}
+
+.panel {
+  overflow: auto;
+  flex: 1;
+  padding: 18px 22px;
+}
+.panel h2 {
+  font-size: 14px;
+  margin: 0 0 4px;
+  /* Match the height of the filter control so the title sits at the same
+     vertical level whether or not a control shares its row (Issues vs Report
+     card). 31px = 14px line + 6px*2 padding + 1px*2 border of a select. */
+  display: flex;
+  align-items: center;
+  min-height: 31px;
+}
+.panel .subtle {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 14px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* Saved-analyses dashboard */
+.dashboard {
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dashboard-header .primary {
+  flex: none;
+}
+.dashboard-header h2 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.project {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.project-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 16px;
+}
+.project-head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+}
+.project-head-main:hover {
+  border: none;
+  color: var(--text);
+}
+.project-add {
+  flex: none;
+}
+.project-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+/* Per-project analysis-health dashboard */
+.health {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 4px;
+}
+.health-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.metric-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.metric-card:hover:not(:disabled) {
+  border-color: var(--metric);
+}
+.metric-card.selected {
+  border-color: var(--metric);
+  background: color-mix(in srgb, var(--metric) 12%, var(--bg-elevated));
+}
+.metric-card:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.metric-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+.metric-value {
+  grid-column: 1;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.metric-delta {
+  grid-column: 2;
+  justify-self: end;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.metric-delta.worse {
+  color: var(--high);
+}
+.metric-delta.better {
+  color: var(--ok);
+}
+.metric-delta.neutral {
+  color: var(--text-dim);
+}
+.metric-spark {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 26px;
+  margin-top: 4px;
+  overflow: visible;
+}
+.metric-spark path {
+  stroke: var(--metric);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.metric-chart {
+  max-width: 620px;
+  margin-top: 2px;
+}
+.metric-chart-empty {
+  padding: 16px 0;
+  font-size: 12px;
+}
+.metric-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.mc-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.55;
+}
+.mc-axis {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.mc-line {
+  stroke: var(--metric);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.mc-dot {
+  fill: var(--bg-panel);
+  stroke: var(--metric);
+  stroke-width: 2;
+}
+.mc-dot.last {
+  fill: var(--metric);
+}
+.mc-halo {
+  fill: var(--metric);
+  opacity: 0.18;
+}
+.mc-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.mc-value {
+  fill: var(--metric);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.entity-note {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.project > .entity-note {
+  margin: 0;
+  padding: 0 16px 12px 34px;
+}
+.snapshot-note {
+  margin-top: 2px;
+}
+
+/* Hamburger action menu */
+.menu {
+  position: relative;
+  flex: none;
+}
+.menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+.menu-trigger:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.menu-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  /* Arrival: spring open from the trigger. */
+  transform-origin: top right;
+  animation: spring-in 0.2s var(--ease-spring);
+}
+.menu-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.menu-item:hover {
+  border: none;
+  background: var(--bg-panel);
+}
+.menu-item.danger {
+  color: var(--high);
+}
+.note-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  width: 100%;
+  resize: vertical;
+}
+.note-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.project-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.project-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: auto;
+}
+.snapshot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.snapshot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.snapshot:first-child {
+  border-top: none;
+}
+.snapshot:hover {
+  background: var(--bg-elevated);
+}
+@keyframes snapshot-flash {
+  0%   { background: var(--accent-dim); }
+  60%  { background: var(--accent-dim); }
+  100% { background: transparent; }
+}
+.snapshot-new {
+  animation: snapshot-flash 2s ease-out forwards;
+}
+.snapshot-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.snapshot-name {
+  font-size: 13px;
+}
+.snapshot-files {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snapshot-stats {
+  display: flex;
+  gap: 14px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.snapshot-date {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.card-broken {
+  color: var(--high);
+}
+.card-delete {
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  font-size: 16px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+.card-delete:hover {
+  color: var(--high);
+  border-color: var(--high);
+}
+.snapshot-check {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex: none;
+}
+
+/* Compare action bar */
+.compare-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+.compare-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Comparison view */
+.comparison {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 28px;
+}
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.diff-settings-wrap {
+  position: relative;
+  display: inline-flex;
+  margin-left: auto;
+}
+.diff-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diff-settings-btn.diff-settings-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.diff-settings-btn svg {
+  flex: none;
+  opacity: 0.7;
+}
+.diff-settings-btn:hover svg,
+.diff-settings-btn.diff-settings-active svg {
+  opacity: 1;
+}
+.diff-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+}
+.diff-settings-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: 340px;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.diff-settings-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.diff-settings-row + .diff-settings-title {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.diff-settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.diff-settings-row + .diff-settings-row {
+  border-top: 1px solid var(--border);
+}
+.diff-settings-hint {
+  color: var(--text-dim);
+}
+.comparison-warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: -8px 0 22px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: rgba(214, 158, 46, 0.12);
+  border: 1px solid rgba(214, 158, 46, 0.4);
+  border-radius: 6px;
+}
+.comparison-warning-icon {
+  flex: none;
+  color: #d69e2e;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.comparison-pair {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.comparison-arrow {
+  color: var(--text-dim);
+}
+.comparison-tag {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.comparison-tag-project {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.comparison-tag-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.comparison-tag-date {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.file-filter-row {
+  display: flex;
+  margin-bottom: 14px;
+}
+.file-filter-select {
+  width: auto;
+}
+.type-filter-row {
+  display: flex;
+  margin-top: 14px;
+  margin-bottom: 24px;
+}
+.type-filter-select {
+  width: auto;
+}
+.file-summary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.file-summary-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.file-summary-card:hover {
+  border-color: var(--accent);
+}
+.file-summary-active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.file-summary-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.file-summary-stats {
+  display: flex;
+  gap: 6px;
+}
+.file-summary-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  background: var(--bg-elevated);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.file-summary-stat:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.file-summary-stat:not(:disabled):hover {
+  filter: brightness(1.2);
+}
+.file-summary-num {
+  font-size: 15px;
+  font-weight: 600;
+}
+.file-summary-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.file-summary-added .file-summary-num {
+  color: var(--ok);
+}
+.file-summary-removed .file-summary-num {
+  color: var(--high);
+}
+.file-summary-changed .file-summary-num {
+  color: var(--info);
+}
+.comparison-section-title {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+.comparison-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 760px;
+  margin-bottom: 24px;
+}
+.comparison-table th,
+.comparison-table td {
+  text-align: left;
+  padding: 6px 18px 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.comparison-table th {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 12px;
+}
+.privilege-access-table {
+  max-width: none;
+}
+.privilege-access-table td {
+  vertical-align: top;
+}
+.privilege-fields-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.privilege-fields-toggle:hover {
+  color: var(--accent);
+}
+.privilege-fields-list {
+  margin: 8px 0 0;
+}
+.privilege-fields-list dt {
+  /* Field names are single unbroken tokens (underscores, no spaces) — without
+   * this they overflow the 160px dt column into the access value next to them. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.count-added,
+.count-removed,
+.count-changed {
+  color: var(--info);
+}
+.count-zero {
+  color: var(--text-dim);
+}
+.change-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.change-group {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  border-left-width: 3px;
+  padding: 12px 14px;
+}
+.change-group-block .comparison-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.change-count {
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  padding: 0 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.change-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.change-group li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.change-name {
+  word-break: break-word;
+}
+/* A clickable change row: resets button chrome, full-width bg on hover. */
+.change-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  margin: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.change-link:hover {
+  background: var(--bg-elevated);
+}
+/* Inside the changed-item accordion head the row is already full-width; let flex layout handle width. */
+.changed-item-head .change-link {
+  flex: 1;
+  width: auto;
+}
+/* Renamed: two equal-width columns (old → new). */
+.change-rename {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 4px;
+}
+.change-rename .change-link {
+  width: 100%;
+}
+.change-rename-arrow {
+  color: var(--text-dim);
+  flex: none;
+}
+.change-added {
+  border-left-color: var(--ok);
+}
+.change-removed {
+  border-left-color: var(--high);
+}
+.change-renamed {
+  border-left-color: var(--warn);
+}
+.change-changed {
+  border-left-color: var(--info);
+}
+
+/* Changed objects with expandable line diffs */
+.changed-section {
+  margin-top: 24px;
+}
+.changed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.changed-item {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--info);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.changed-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.changed-item-head:hover {
+  border: none;
+  background: var(--bg-elevated);
+}
+.changed-item-sides {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+.changed-item-side {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.changed-item-side:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.linediff {
+  margin: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-gutter {
+  flex: none;
+  width: 12px;
+  color: var(--text-dim);
+  user-select: none;
+}
+.diff-line.added {
+  background: rgba(152, 195, 121, 0.12);
+  color: var(--ok);
+}
+.diff-line.removed {
+  background: rgba(224, 108, 117, 0.12);
+  color: var(--high);
+}
+.diff-line.context {
+  color: var(--text-dim);
+}
+
+/* Save dialog */
+.field-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: -4px;
+}
+.locked-field {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text-dim);
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  width: min(420px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Arrival: spring up as the dialog opens. */
+  animation: spring-in 0.22s var(--ease-spring);
+}
+.modal h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.modal .subtle {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Inspector */
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 6px 16px;
+  margin: 14px 0;
+}
+.kv dt {
+  color: var(--text-dim);
+}
+.kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+/* Theme color palette — small rounded chips, one per swatch. */
+.palette-swatches {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.palette-swatches .swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+/* Diagram container (relationship ERD) — centered with room on all sides.
+ * Centering via margin:auto on the child (not justify/align-center) so that an
+ * oversized diagram stays fully scrollable instead of being clipped at the edges. */
+.graph-wrap {
+  display: flex;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  margin: 10px 0 4px;
+  padding: 24px;
+}
+.graph-wrap > svg {
+  margin: auto;
+  /* Keep the SVG at its intrinsic size; without this the flex item shrinks to
+     the container width and the diagram gets clipped instead of scrolling. */
+  flex: none;
+}
+.graph-node text {
+  fill: var(--text);
+  font-size: 10px;
+}
+.graph-edge {
+  stroke: var(--border);
+  fill: none;
+}
+.graph-edge.broken {
+  stroke: var(--high);
+  stroke-dasharray: 4 3;
+}
+
+/* Script Workspace — FileMaker-style step list */
+.sw {
+  /* -14px exactly cancels .detail-widget's 14px padding, so a hovered row's
+     full-bleed background reaches the card's inner edge without painting over
+     its 1px border (a -16px offset used to overshoot it by 2px). */
+  margin: 8px 0 8px -14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sw-line {
+  display: flex;
+  gap: 12px;
+  padding: 1px 4px 1px 26px;
+  border-radius: 3px;
+  position: relative;
+}
+.sw-line.disabled {
+  opacity: 0.4;
+}
+.sw-line.hit {
+  background: color-mix(in srgb, var(--high) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--high);
+  border-radius: 3px;
+}
+.sw-ln {
+  position: absolute;
+  left: 0;
+  width: 22px;
+  top: 1px;
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+.sw-step {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sw-name {
+  color: var(--text);
+}
+.sw-params {
+  color: var(--text-dim);
+}
+.sw-comment {
+  color: var(--text-dim);
+  font-style: italic;
+}
+/* Step name colour categories */
+.sw-name.sw-flow   { color: var(--syn-kw); }     /* purple: if/loop/transaction */
+.sw-name.sw-nav    { color: var(--ok); }           /* green:  navigation/window */
+.sw-name.sw-exit   { color: #e07090; }             /* pink:   halt/exit script/app */
+.sw-name.sw-delete { color: var(--high); }
+/* Inline clickable object name — accent color, element-width bg on hover, no underline. */
+.obj-link {
+  display: inline;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  border-radius: 3px;
+}
+.obj-link:hover {
+  background: var(--bg-elevated);
+}
+/* Inside a row-link container the row handles hover; let text color inherit from the row. */
+.ref-list li .obj-link,
+.tree .call-node .obj-link {
+  color: inherit;
+}
+.ref-list li .obj-link:hover,
+.tree .call-node .obj-link:hover {
+  background: none;
+}
+/* Details dl and the relationship name link are navigation, not syntax —
+   keep them plain text with the shared bg-elevated hover instead of accent color.
+   Padding is offset by an equal negative margin so the hover box reads as tall/wide
+   as other clickable things without shifting the text or the row's own height. */
+.kv.compact dd .obj-link,
+.rel-name .obj-link {
+  color: var(--text);
+  padding: 3px 6px;
+  margin: -3px -6px;
+}
+
+/* Syntax highlighting */
+.syn-comment {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.syn-string {
+  color: var(--syn-string);
+}
+.syn-var {
+  color: var(--syn-var);
+}
+/* The two halves of an unlinked `TO::Field` reference: the occurrence keeps the
+   table color, the field is grey to signal it is external / not clickable. */
+.syn-to {
+  color: var(--type-table);
+}
+.syn-field {
+  color: var(--text-dim);
+}
+.syn-func {
+  color: var(--syn-func);
+}
+.syn-kw {
+  color: var(--syn-kw);
+}
+.syn-num {
+  color: var(--syn-num);
+}
+.syn-op {
+  color: var(--syn-op);
+}
+/* A deleted reference placeholder ("<Field Missing>" etc.) — flagged red like a
+   broken reference in the references list. */
+.syn-missing {
+  color: var(--high);
+  font-weight: 600;
+}
+
+/* Calculation body */
+.signature {
+  font-family: var(--font-mono);
+  font-style: italic;
+  margin: 6px 0;
+  word-break: break-word;
+}
+.to-rel {
+  margin-top: 12px;
+}
+.rel-name {
+  margin: 6px 0;
+}
+pre.code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  /* Grows with a taller window, with a sane floor for short windows. */
+  max-height: max(360px, 55vh);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+pre.lo-text-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Value list custom values */
+ol.value-list {
+  margin: 6px 0;
+  padding-left: 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+ol.value-list li {
+  padding: 1px 0;
+  word-break: break-word;
+}
+
+/* Layout detail: the drawn map beside the (collapsible) part list */
+.layout-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 8px;
+}
+.layout-parts {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Proportional layout map */
+.layout-map {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.layout-map > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+}
+.layout-map-frame {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.layout-map-part {
+  fill: var(--bg);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.layout-map-label {
+  fill: var(--text-dim);
+}
+.layout-map-obj {
+  fill: var(--accent-dim);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+/* Tree-style layout object view */
+.lo-part-section {
+  margin-bottom: 8px;
+}
+.lo-part-divider {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding: 5px 2px 3px;
+  margin-bottom: 1px;
+  cursor: default;
+  user-select: none;
+}
+.lo-part-divider.clickable {
+  cursor: pointer;
+}
+.lo-part-divider.clickable:hover {
+  color: var(--text);
+}
+.lo-part-divider .fchevron {
+  font-size: 13px;
+  margin-right: 1px;
+}
+.lo-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding-right: 6px;
+  border-radius: 3px;
+  cursor: default;
+}
+.lo-row.navigable:hover {
+  background: var(--bg-elevated);
+}
+.lo-row.navigable {
+  cursor: pointer;
+}
+.lo-chevron {
+  flex-shrink: 0;
+  width: 18px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.lo-chevron-inline {
+  display: inline-flex;
+  width: 14px;
+  height: 1em;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.lo-chevron-space {
+  flex-shrink: 0;
+  width: 18px;
+}
+.lo-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text);
+}
+.lo-label.lo-label-dim {
+  color: var(--text-dim);
+}
+.lo-script-ref {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  white-space: nowrap;
+}
+.lo-script-link {
+  font-size: 11px;
+}
+.lo-trigger-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 4px;
+  line-height: 16px;
+  cursor: default;
+}
+.lo-trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 1px 6px 1px 0;
+  font-style: italic;
+}
+.lo-trigger-action {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.lo-label-selectable {
+  cursor: pointer;
+}
+
+/* Layout object detail panel */
+
+/* Layout contents (parts and the objects placed on each) */
+.layout-part {
+  margin-bottom: 4px;
+}
+.layout-part .group-header {
+  padding-left: 4px;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+ul.layout-objects {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+ul.layout-objects li {
+  padding: 4px 6px;
+  border-radius: 5px;
+}
+ul.layout-objects li.hoverable:hover {
+  background: var(--bg-elevated);
+}
+.layout-obj-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.layout-obj-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layout-obj-name.unnamed {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.layout-obj-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+.layout-obj-info {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+/* Layout-level script triggers — row-link style: bg on hover, normal text color. */
+button.layout-trigger-link {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+}
+button.layout-trigger-link:hover {
+  background: var(--bg-elevated);
+}
+/* The inline → ScriptName variant in the object tree — inline-link style. */
+button.layout-trigger-link.lo-script-link {
+  color: var(--accent);
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.layout-trigger-info {
+  margin-top: 3px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Layout type filter chip strip */
+.layout-type-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 6px;
+}
+.layout-type-filter + .lo-part-section > .lo-part-divider {
+  border-top: none;
+}
+.layout-type-chip {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 7px;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.layout-type-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.layout-type-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.layout-type-chip.active .count {
+  color: var(--bg);
+  opacity: 0.8;
+}
+
+/* Portal table occurrence / row count line */
+.layout-portal-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* Object-level trigger lines under a row */
+.layout-obj-trigger-lines {
+  margin-top: 3px;
+}
+.layout-obj-trigger-line {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Secondary chip on a row indicating object has triggers */
+.layout-obj-triggers-chip {
+  color: var(--text-dim);
+  border-color: var(--border);
+  opacity: 0.8;
+}
+
+/* Tooltip info line — same as layout-obj-info but slightly more muted */
+.layout-obj-tooltip {
+  opacity: 0.75;
+}
+
+/* Nested children container (portal fields, tab panels) */
+.layout-obj-children {
+  margin-top: 5px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+.layout-obj-children .layout-part {
+  margin-bottom: 2px;
+}
+.layout-obj-children .group-header {
+  font-size: 11px;
+  padding: 2px 0;
+}
+.layout-obj-children ul.layout-objects {
+  padding-left: 8px;
+}
+.layout-obj-children ul.layout-objects li {
+  padding: 2px 0;
+}
+
+/* Relationship per-side cascade/sort notes, under the ERD */
+ul.rel-cascade {
+  list-style: none;
+  margin: 6px 0 0;
+  padding-left: 0;
+  font-size: 11px;
+}
+ul.rel-cascade li {
+  padding: 1px 0;
+}
+
+/* Relationship ERD */
+.erd-box {
+  fill: var(--bg);
+  stroke: var(--border);
+}
+/* Title bar fill for a table box — darker/more muted than --accent, so the box
+   reads as a card header rather than competing with genuine accent links. */
+.erd-titlebar {
+  fill: color-mix(in srgb, var(--accent-dim) 40%, var(--bg));
+  transition: filter 0.12s ease;
+}
+/* Hairline between a table box's title bar and its field rows. */
+.erd-divider {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.erd-node.clickable {
+  cursor: pointer;
+}
+.erd-node.clickable:hover .erd-titlebar {
+  filter: brightness(1.35);
+}
+.erd-link {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.erd-title {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.erd-field {
+  fill: var(--text);
+  font-size: 10px;
+  pointer-events: none;
+}
+/* A clickable predicate field: an invisible hit/highlight box behind the label,
+   same bg-elevated hover as every other inline link instead of accent+underline. */
+.erd-field-hit {
+  fill: transparent;
+}
+.erd-field-label.clickable {
+  cursor: pointer;
+}
+.erd-field-label.clickable:hover .erd-field-hit {
+  fill: var(--bg-elevated);
+}
+.erd-op {
+  fill: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.erd-empty {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+/* FileMaker relationship graph (re-drawn from stored coordinates) */
+.erd-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.fmg-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.fmg-file-select {
+  width: auto;
+  margin-left: auto;
+}
+.fmg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+.fmg-zoom {
+  width: 28px;
+  padding: 4px 0;
+  text-align: center;
+  font-weight: 700;
+}
+.fmg-zoom-pct {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.fmg-hint {
+  font-size: 11px;
+  margin-left: 6px;
+}
+.fmg-selinfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-left: 6px;
+}
+.fmg-selinfo strong {
+  color: var(--accent);
+}
+.fmg-clear {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.fmg-search-row {
+  margin: 8px 0 10px;
+}
+.fmg-search {
+  width: 280px !important;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.fmg-canvas-wrap {
+  /* Hug the diagram's height (so there's no empty band below it), capped to the
+     viewport with internal scrolling for tall graphs. */
+  flex: 0 1 auto;
+  min-height: 240px;
+  max-height: 78vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.fmg-canvas {
+  display: block;
+}
+/* Subtle dotted-grid backdrop for depth. */
+.fmg-bg {
+  pointer-events: none;
+}
+.fmg-dot {
+  fill: var(--border);
+  opacity: 0.45;
+}
+.fmg-edge {
+  stroke: var(--fmg-edge);
+  stroke-width: 1.5;
+  opacity: 0.5;
+  pointer-events: none;
+  transition: stroke 0.12s ease, opacity 0.12s ease, stroke-width 0.12s ease;
+}
+/* Invisible wide hit target so ⌘/Ctrl-click on a relationship line is forgiving. */
+.fmg-edge-hit {
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
+}
+/* Cascade coloring (toggle): delete = red + bold, create = green, sort = blue. */
+.fmg-edge.cas-del {
+  stroke: var(--fmg-edge-del);
+  stroke-width: 3;
+  opacity: 0.95;
+}
+.fmg-edge.cas-create {
+  stroke: var(--fmg-edge-create);
+  stroke-width: 2.5;
+  opacity: 0.9;
+}
+.fmg-edge.cas-sort {
+  stroke: var(--fmg-edge-sort);
+  stroke-width: 2.5;
+  opacity: 0.9;
+}
+.fmg-canvas.selecting .fmg-edge:not(.hot) {
+  stroke: var(--fmg-edge-dim);
+  opacity: 1;
+}
+.fmg-canvas.selecting .fmg-edge.cas-del:not(.hot) {
+  stroke: var(--fmg-edge-del-dim);
+  opacity: 1;
+}
+.fmg-canvas.selecting .fmg-edge.cas-create:not(.hot) {
+  stroke: var(--fmg-edge-create-dim);
+  opacity: 1;
+}
+.fmg-canvas.selecting .fmg-edge.cas-sort:not(.hot) {
+  stroke: var(--fmg-edge-sort-dim);
+  opacity: 1;
+}
+/* Hover highlight: thicker and brighter, but NOT recolored — so it never clashes
+   with the cascade colors. Last, so its width wins over the cascade rules. */
+.fmg-edge.hot {
+  stroke-width: 5;
+  opacity: 1;
+  filter: brightness(1.9);
+}
+.fmg-node {
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.fmg-node.dim {
+  opacity: 0.3;
+}
+.fmg-edge.dim {
+  stroke: var(--fmg-edge-dim);
+  opacity: 0.35;
+}
+/* Title bar fill; brightens on hover so only the hovered occurrence lights up
+   (no dimming of the rest, so sweeping across boxes doesn't strobe). */
+.fmg-title {
+  transition: filter 0.12s ease;
+}
+.fmg-node:hover .fmg-title {
+  filter: brightness(1.45);
+}
+
+/* The actually-clicked one stands out further: a tinted fill and accent glow, so
+   it's distinguishable from its (also-highlighted) siblings. */
+.fmg-node.sel .fmg-box {
+  stroke: var(--accent); 
+  stroke-width: 4;
+  fill: color-mix(in srgb, var(--accent) 22%, var(--bg-elevated));
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 6px var(--accent));
+}
+.fmg-box {
+  fill: var(--bg-elevated);
+  /* Brighter outline in the occurrence's own hue (set per node via --toc). */
+  stroke: var(--toc, var(--border));
+  stroke-width: 1.5;
+  transition: stroke 0.12s ease;
+  /* Soft elevation so boxes lift off the dotted backdrop. */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+.fmg-node:hover .fmg-box {
+  stroke-width: 2.5;
+}
+/* Hairline between an expanded box's title bar and its field rows. */
+.fmg-divider {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.fmg-label {
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.fmg-field {
+  font-size: 11px;
+  fill: var(--text-dim);
+  pointer-events: none;
+}
+.fmg-field.more {
+  font-style: italic;
+}
+
+/* Per-rule cascade-color toggles + legend in the toolbar. */
+.fmg-cascade-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+/* One toggle chip per rule: lit (swatch in color) when on, greyed out when off. */
+.fmg-cascade-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: none;
+  color: var(--text-dim);
+}
+.fmg-cascade-toggle:hover {
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+.fmg-cascade-toggle.on {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.fmg-cascade-toggle:not(.on) .fmg-swatch {
+  background: var(--fmg-edge-dim);
+}
+/* ⓘ info button + popover explaining the cascade colors. */
+.fmg-info-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.fmg-info {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+}
+.fmg-info:hover {
+  color: var(--accent);
+}
+/* Invisible full-viewport catcher: any click outside the popover closes it. */
+.fmg-info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+}
+.fmg-info-pop {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+.fmg-info-title {
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.fmg-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.fmg-swatch {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+.fmg-swatch.cas-del {
+  background: var(--high);
+  height: 4px;
+}
+.fmg-swatch.cas-create {
+  background: var(--ok);
+}
+.fmg-swatch.cas-sort {
+  background: var(--info);
+}
+
+/* Reference / dependency lists */
+.ref-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.ref-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ref-list li:hover {
+  background: var(--bg-elevated);
+}
+.ref-list li.clicked {
+  background: var(--selected-soft);
+}
+.ref-list li.broken {
+  cursor: default;
+  color: var(--high);
+}
+/* A reference whose target lives in another file that isn't loaded — not an
+   error, just unresolved here. Dimmed (not red), with a small tag. */
+.ref-list li.external {
+  cursor: default;
+  color: var(--text-dim);
+}
+.ref-external-tag {
+  margin-left: auto;
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+/* "Show N more" toggle below a truncated reference list. */
+.ref-show-more {
+  display: block;
+  margin: 6px 0 2px 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.ref-show-more:hover {
+  text-decoration: underline;
+}
+/* A menu-item separator, drawn as a divider line (matches .nav-divider). */
+.ref-list li.ref-divider {
+  display: block;
+  height: 1px;
+  padding: 0;
+  margin: 6px 12px;
+  border-radius: 0;
+  background: var(--border);
+  cursor: default;
+}
+.ref-list li.ref-divider:hover {
+  background: var(--border);
+}
+.kind-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Call chain tree */
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+}
+.tree li {
+  margin: 2px 0;
+}
+.tree .call-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tree .call-node:hover {
+  background: var(--bg-elevated);
+}
+.tree .call-node.clicked {
+  background: var(--selected-soft);
+}
+.tree .call-node.root {
+  cursor: default;
+  font-weight: 600;
+}
+.tree .call-node.broken {
+  color: var(--high);
+  cursor: default;
+}
+/* A performed script in another file that isn't loaded — dimmed, not an error. */
+.tree .call-node.external {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+/* Script call-chain graph (detail view): callers above ▸ active ▸ callees below */
+.call-graph-wrap {
+  /* Self-contained scroll box so a tall/wide graph scrolls in both directions
+     instead of being clipped by the column. */
+  max-height: 70vh;
+  align-items: flex-start; /* don't stretch the SVG; keep it scrollable */
+}
+.call-graph-wrap > svg {
+  margin: 0; /* override .graph-wrap centering so overflow scrolls from the start */
+}
+.cg-link {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.cg-node.clickable {
+  cursor: pointer;
+}
+.cg-box {
+  fill: var(--bg-elevated);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.cg-node.clickable:hover .cg-box {
+  stroke: var(--accent);
+}
+.cg-box.active {
+  fill: var(--accent-dim);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.cg-box.more {
+  fill: transparent;
+  stroke-dasharray: 4 3;
+}
+.cg-box.muted {
+  fill: var(--bg);
+  stroke: var(--border);
+  opacity: 0.6;
+}
+.cg-box.muted + .cg-label {
+  fill: var(--text-dim);
+}
+.cg-label {
+  fill: var(--text);
+  font-size: 11px;
+  pointer-events: none;
+}
+.cg-node.clickable:hover .cg-label {
+  fill: var(--accent);
+}
+.cg-box.more + .cg-label,
+.cg-node:has(.cg-box.more) .cg-label {
+  fill: var(--text-dim);
+}
+
+/* Report card */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.metric {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.metric .value {
+  font-size: 24px;
+  font-weight: 600;
+}
+.metric .label {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.metric.clickable {
+  cursor: pointer;
+}
+.metric.clickable:hover {
+  border-color: var(--accent);
+}
+.metric.high .value {
+  color: var(--high);
+}
+.metric.warn .value {
+  color: var(--warn);
+}
+.flags {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.flags li {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--border);
+  background: var(--bg-panel);
+}
+.flags li.high {
+  border-left-color: var(--high);
+}
+.flags li.warn {
+  border-left-color: var(--warn);
+}
+.flags li.info {
+  border-left-color: var(--info);
+}
+
+/* Report-card warning callout (e.g. incomplete DDR export). Matches the diff
+   version-mismatch warning (.comparison-warning) for a consistent look. */
+.report-warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: rgba(214, 158, 46, 0.12);
+  border: 1px solid rgba(214, 158, 46, 0.4);
+  border-radius: 6px;
+}
+.report-warning-icon {
+  flex: none;
+  color: #d69e2e;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Loading animation */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+}
+.loading-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-pulse 1.6s ease-in-out infinite;
+}
+.loading-edge {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.loading-bird {
+  color: var(--accent);
+}
+.loading-title {
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  color: var(--text);
+}
+@keyframes node-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Entrance curves (see --ease-spring). Kept transform/opacity-only so they
+   compose with each element's own state styles. */
+@keyframes column-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* Brief accent flash when a navigator node is selected — confirms the tap
+   before the detail panel arrives so there's no visual gap between action
+   and reaction. */
+@keyframes node-select {
+  0%   { background: var(--accent-dim); }
+  100% { background: var(--selected-soft); }
+}
+@keyframes spring-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-popup,
+  .modal,
+  .node.selected {
+    animation: none;
+  }
+}
+
+.banner {
+  padding: 10px 16px;
+  background: #3a2326;
+  color: var(--high);
+  border-bottom: 1px solid var(--high);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Browse A — "Library + Object Page"
+   Type rail · filter chips · rich list rows · object page · history bar
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --rail-w: 96px;
+}
+.workspace.with-rail {
+  grid-template-columns: var(--rail-w) var(--sidebar-w) 1fr;
+}
+
+/* Type rail */
+.type-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  min-height: 0;
+}
+.rail-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.rail-entry:hover {
+  background: var(--bg-elevated);
+  border-color: transparent;
+  color: var(--text);
+}
+.rail-entry.active {
+  background: var(--selected-soft);
+  color: var(--text);
+}
+.rail-glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.rail-broken-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--high);
+  box-shadow: 0 0 0 2px var(--bg-panel);
+}
+.rail-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Title row (type + count) with the filter button, and the filter popover */
+.navigator .controls .nav-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* The filter button's height — keeps the row steady for types with no filters. */
+  min-height: 30px;
+}
+.nav-title {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-title-count {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.filter-menu {
+  position: relative;
+  flex: none;
+}
+.filter-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+.filter-btn:hover,
+.filter-btn.open {
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+.filter-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 280px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* Filter chips */
+.chip-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.chip-group-label {
+  width: 100%;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.chip-count {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.chip.empty {
+  opacity: 0.45;
+}
+.chip.active {
+  background: var(--selected-soft);
+  border-color: var(--accent);
+}
+.chip.tone-high.active {
+  background: color-mix(in srgb, var(--high) 22%, transparent);
+  border-color: var(--high);
+}
+.chip.tone-warn.active {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border-color: var(--warn);
+}
+.chip-clear {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--accent);
+}
+.chip-clear:hover {
+  text-decoration: underline;
+}
+
+/* Rich list rows */
+.node.lib-row .ellipsis {
+  flex: 1 1 auto;
+}
+.lib-row-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.lib-count.zero {
+  opacity: 0.4;
+}
+.lib-broken-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--high);
+}
+.node.lib-row.unref > .ellipsis,
+.node.lib-row.unref > .type-pill {
+  opacity: 0.5;
+}
+.node.lib-row.unref > .ellipsis {
+  font-style: italic;
+}
+
+/* History bar (top of each Browse pane) */
+.history-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  min-width: 0;
+}
+.hb-nav {
+  flex: none;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text);
+}
+.hb-nav:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: transparent;
+}
+.hb-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.hb-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  margin-left: 4px;
+}
+.hb-crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.hb-sep {
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+.hb-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 2px 6px;
+  font-size: 12px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+}
+.hb-crumb:hover {
+  background: var(--bg-elevated);
+  border-color: transparent;
+  color: var(--text);
+}
+.hb-crumb.current {
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+}
+.hb-crumb.home {
+  flex: none;
+}
+
+/* Object page */
+.object-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: column-in 0.4s var(--ease-spring);
+}
+.op-header {
+  flex: none;
+  padding: 14px 20px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.op-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.op-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.op-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.op-fact {
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.op-fact.tone-high {
+  color: var(--high);
+  border-color: color-mix(in srgb, var(--high) 60%, transparent);
+  background: color-mix(in srgb, var(--high) 12%, transparent);
+}
+.op-fact.tone-warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.op-fact.tone-ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+}
+.op-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 12px;
+}
+.op-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.op-tab:hover {
+  color: var(--text);
+}
+.op-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.op-tab-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.op-body {
+  padding: 0 20px 20px;
+}
+.op-tab-panel {
+  margin: 14px 0;
+  max-width: 900px;
+}

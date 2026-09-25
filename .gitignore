@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+*.tsbuildinfo
+.verify*.mjs
+files
+demo
+tools
+
+# Tauri (Rust build artifacts)
+src-tauri/target
