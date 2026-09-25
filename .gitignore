@@ -6,9 +6,9 @@ dist-ssr
 .vite
 *.tsbuildinfo
 .verify*.mjs
-files
-demo
-tools
+/files
+/demo
+/tools
 
 # Tauri (Rust build artifacts)
 src-tauri/target
