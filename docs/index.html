@@ -13,22 +13,15 @@
       /* Palette mirrors src/index.css so the site reads like the app. */
       :root {
         --bg: #1b1d23;
+        --bg-deep: #15171c;
         --bg-elevated: #2d333f;
         --border: #3a414e;
         --text: #d7dce5;
         --text-dim: #8b94a3;
         --accent: #5aa9e6;
         --accent-dim: #2f5d80;
-        --ok: #98c379;
-        --warn: #e5c07b;
-        --high: #e06c75;
-        --type-script: #98c379;
-        --type-field: #56b6c2;
-        --type-layout: #e5c07b;
-        --type-file: #c678dd;
         --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
-        --max-w: 960px;
         color-scheme: dark;
       }
 
@@ -59,14 +52,14 @@
         text-decoration: underline;
       }
 
-      code,
-      pre {
+      code {
         font-family: var(--font-mono);
         font-size: 14px;
+        color: var(--text);
       }
 
       .wrap {
-        max-width: var(--max-w);
+        max-width: 1160px;
         margin: 0 auto;
         padding: 0 16px;
       }
@@ -144,10 +137,10 @@
 
       /* Hero */
       .hero {
-        padding: 72px 16px 48px;
+        padding: 72px 16px 0;
         text-align: center;
       }
-      .hero img {
+      .hero > img {
         width: 180px;
         max-width: 50%;
         margin-bottom: 24px;
@@ -171,99 +164,99 @@
         gap: 12px;
       }
 
-      /* Sections */
-      section {
-        padding: 48px 0;
-        border-top: 1px solid var(--border);
+      /* The big screenshot sits in a window chrome so it reads as the real app. */
+      .window {
+        margin-top: 56px;
+        border: 1px solid var(--border);
+        border-bottom: 0;
+        border-radius: 10px 10px 0 0;
+        overflow: hidden;
+        background: var(--bg-deep);
+        text-align: left;
       }
-      section h2 {
-        font-size: 24px;
-        margin: 0 0 8px;
+      .window .bar {
+        height: 28px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border);
       }
-      .lead {
-        color: var(--text-dim);
-        margin: 0 0 28px;
+      .window .bar i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--border);
       }
-
-      video {
+      .window img {
         width: 100%;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: #000;
         display: block;
       }
 
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 16px;
+      /* Screenshot rows */
+      .band {
+        background: var(--bg-deep);
+        border-top: 1px solid var(--border);
+        padding: 72px 0;
       }
-      .card {
-        background: var(--bg-elevated);
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 48px;
+        align-items: center;
+        margin-bottom: 88px;
+      }
+      .row:last-child {
+        margin-bottom: 0;
+      }
+      .row.flip {
+        grid-template-columns: 2fr 1fr;
+      }
+      .row.flip .text {
+        order: 2;
+      }
+      .row h2 {
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0 0 10px;
+      }
+      .row p {
+        color: var(--text-dim);
+        margin: 0;
+      }
+      .row img {
+        width: 100%;
+        display: block;
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 18px 20px;
-        border-left: 3px solid var(--card-accent, var(--accent));
-      }
-      .card h3 {
-        margin: 0 0 6px;
-        font-size: 16px;
-      }
-      .card p {
-        margin: 0;
-        color: var(--text-dim);
-        font-size: 15px;
       }
 
+      /* Build + contact */
+      .bottom {
+        padding: 64px 16px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 48px;
+      }
+      .bottom > div {
+        min-width: 0;
+      }
+      .bottom h2 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+      .bottom p {
+        color: var(--text-dim);
+        margin: 0 0 12px;
+      }
       pre {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 16px 18px;
-        overflow-x: auto;
-        margin: 0 0 16px;
-        line-height: 1.5;
-      }
-      pre .c {
-        color: var(--text-dim);
-      }
-
-      .note {
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--warn);
-        border-radius: 8px;
-        padding: 14px 18px;
-        color: var(--text-dim);
-        font-size: 15px;
-      }
-      .note strong {
-        color: var(--text);
-      }
-
-      .contact-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 16px;
-      }
-      .contact-list li {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 18px 20px;
-      }
-      .contact-list .label {
-        display: block;
-        color: var(--text-dim);
+        font-family: var(--font-mono);
         font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 4px;
-      }
-      .contact-list a {
-        word-break: break-word;
+        background: var(--bg-elevated);
+        border-radius: 6px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 0 0 12px;
       }
 
       footer {
@@ -279,6 +272,17 @@
         gap: 12px;
       }
 
+      @media (max-width: 800px) {
+        .row,
+        .row.flip,
+        .bottom {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .row.flip .text {
+          order: 0;
+        }
+      }
       @media (max-width: 560px) {
         .nav-links a.optional {
           display: none;
@@ -320,118 +324,68 @@
             View on GitHub
           </a>
           <a class="btn" href="app/">Try it in your browser</a>
-          <a class="btn" href="#demo">Watch the demo</a>
+          <a class="btn" href="demo/full-tour-demo.mp4">Watch the demo</a>
+        </div>
+        <div class="window">
+          <div class="bar"><i></i><i></i><i></i></div>
+          <img src="shots/report-card.jpg" alt="The report card: reference counts, broken and unreferenced objects, risk flags, and an object inventory" />
         </div>
       </div>
 
-      <section id="demo">
+      <div class="band" id="features">
         <div class="wrap">
-          <h2>Demo</h2>
-          <p class="lead">
-            A walkthrough of the report card, browsing and filtering, the ⌘K command
-            palette, the relationship graph, and comparing two analyses of the same
-            solution.
-          </p>
-          <video src="demo/full-tour-demo.mp4" controls preload="metadata" playsinline></video>
-        </div>
-      </section>
+          <div class="row">
+            <div class="text">
+              <h2>Start from what's wrong</h2>
+              <p>
+                Click a number on the report card and you land on the objects behind it, like this
+                script that still points at a deleted field.
+              </p>
+            </div>
+            <img src="shots/browse.jpg" alt="A script with a broken Go to Field reference" />
+          </div>
 
-      <section id="features">
-        <div class="wrap">
-          <h2>Features</h2>
-          <p class="lead">Three views (Report Card, Browse, and ERD) plus a dashboard of saved analyses.</p>
-          <div class="grid">
-            <div class="card" style="--card-accent: var(--ok)">
-              <h3>Report card</h3>
+          <div class="row flip">
+            <div class="text">
+              <h2>Jump anywhere with ⌘K</h2>
               <p>
-                Object inventory, broken and unreferenced objects, unstored and deep
-                calculations, globals, and risk flags. Click a tile to open the matching list.
+                Search names, calculations, and script steps across every loaded file. Filters like
+                <code>type:script</code>, <code>is:unreferenced</code>, or <code>refs&gt;20</code>
+                narrow it down.
               </p>
             </div>
-            <div class="card" style="--card-accent: var(--accent)">
-              <h3>Browse</h3>
+            <img src="shots/palette.jpg" alt="The command palette filtered to table:Topics" />
+          </div>
+
+          <div class="row">
+            <div class="text">
+              <h2>See what changed</h2>
               <p>
-                Search-first navigator with full-text search over names, calculations, and
-                script code. ⌘K jumps to any object, with filters like
-                <code>is:unreferenced</code>.
+                Save an analysis, export again later, and compare. Renamed objects stay matched,
+                and changed scripts and calculations show a line-by-line diff.
               </p>
             </div>
-            <div class="card" style="--card-accent: var(--type-script)">
-              <h3>Call chains</h3>
-              <p>
-                A script's recursive Perform Script tree, with cycle detection and external or
-                missing targets marked.
-              </p>
-            </div>
-            <div class="card" style="--card-accent: var(--type-layout)">
-              <h3>ERD</h3>
-              <p>
-                The relationship graph laid out as in FileMaker, with lines colored by
-                cascade rule (delete, create, sorted).
-              </p>
-            </div>
-            <div class="card" style="--card-accent: var(--type-file)">
-              <h3>Compare over time</h3>
-              <p>
-                Save analyses locally and diff two versions of a solution: adds, removes,
-                renames, and changed calculations and scripts.
-              </p>
-            </div>
-            <div class="card" style="--card-accent: var(--type-field)">
-              <h3>Local only</h3>
-              <p>
-                Runs in the browser or as a native desktop app. No backend, no uploads, no
-                telemetry.
-              </p>
-            </div>
+            <img src="shots/compare.jpg" alt="Comparing two analyses of the same solution" />
           </div>
         </div>
-      </section>
+      </div>
 
-      <section id="install">
-        <div class="wrap">
-          <h2>Install</h2>
-          <p class="lead">
-            Needs Node.js 18+. The desktop app also needs the
-            <a href="https://www.rust-lang.org/tools/install">Rust toolchain</a>.
-          </p>
+      <div class="wrap bottom">
+        <div id="install">
+          <h2>Build it yourself</h2>
           <pre><code>git clone https://github.com/micheledelaney/nuthatch.git
-cd nuthatch
-npm install
-
-<span class="c"># Browser app</span>
-npm run build &amp;&amp; npm run preview
-
-<span class="c"># Desktop app (Tauri)</span>
-npm run tauri:build</code></pre>
-          <div class="note">
-            <strong>When exporting from FileMaker</strong>, use File → Save a Copy As… → XML
-            and tick <strong>“Include details for analysis tools”</strong>. Without it,
-            calculation references and script-step text are incomplete.
-          </div>
+cd nuthatch && npm install
+npm run build && npm run preview</code></pre>
+          <p>A desktop build (Tauri) is also available: <code>npm run tauri:build</code>. See the README for details.</p>
         </div>
-      </section>
-
-      <section id="contact">
-        <div class="wrap">
-          <h2>Contact</h2>
-          <p class="lead">Questions, bug reports, or ideas are welcome.</p>
-          <ul class="contact-list">
-            <li>
-              <span class="label">GitHub repository</span>
-              <a href="https://github.com/micheledelaney/nuthatch">github.com/micheledelaney/nuthatch</a>
-            </li>
-            <li>
-              <span class="label">Issues &amp; feature requests</span>
-              <a href="https://github.com/micheledelaney/nuthatch/issues">Open an issue</a>
-            </li>
-            <li>
-              <span class="label">Email</span>
-              <a href="mailto:c.michele.delaney@gmail.com">c.michele.delaney@gmail.com</a>
-            </li>
-          </ul>
+        <div id="contact">
+          <h2>Get in touch</h2>
+          <p>
+            Bugs and requests go in <a href="https://github.com/micheledelaney/nuthatch/issues">GitHub issues</a>.
+            For anything else, email <a href="mailto:c.michele.delaney@gmail.com">c.michele.delaney@gmail.com</a>.
+          </p>
         </div>
-      </section>
+      </div>
     </main>
 
     <footer>
