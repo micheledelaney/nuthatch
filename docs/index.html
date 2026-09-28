@@ -21,6 +21,7 @@
         --text-dim: #8b94a3;
         --accent: #5aa9e6;
         --accent-dim: #2f5d80;
+        --particle: #8b94a3;
         --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
         color-scheme: dark;
@@ -45,6 +46,25 @@
         text-rendering: optimizeLegibility;
       }
 
+      /* Drifting-particle field behind everything (see particles.js). */
+      #particles {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        pointer-events: none;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        pointer-events: none;
+        background:
+          radial-gradient(60% 45% at 50% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%);
+      }
+
       a {
         color: var(--accent);
         text-decoration: none;
@@ -60,7 +80,7 @@
       }
 
       .wrap {
-        max-width: 1160px;
+        max-width: 1360px;
         margin: 0 auto;
         padding: 0 16px;
       }
@@ -120,11 +140,13 @@
         background: var(--bg-elevated);
         color: var(--text);
         font-size: 15px;
-        transition: border-color 0.12s ease;
+        transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
       }
       .btn:hover {
         border-color: var(--accent);
         text-decoration: none;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--accent) 60%, transparent);
       }
       .btn.primary {
         background: var(--accent-dim);
@@ -138,44 +160,106 @@
 
       /* Hero */
       .hero {
-        padding: 72px 16px 0;
-        text-align: center;
+        padding: 0 16px;
       }
-      .hero > img {
-        width: 180px;
-        max-width: 50%;
-        margin-bottom: 24px;
+      /* Text on the left, a cropped peek of the app on the right. */
+      /* Fills the first screen (minus the 57px header) so the big screenshot
+         only appears once you scroll. */
+      .hero-top {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        gap: 48px;
+        align-items: center;
+        min-height: calc(100vh - 57px);
+        min-height: calc(100svh - 57px);
+        padding: 48px 0;
+        position: relative;
+      }
+      /* Bobbing chevron at the bottom of the first screen; fades once you scroll. */
+      .scroll-cue {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        width: 56px;
+        height: 32px;
+        margin-left: -28px;
+        display: grid;
+        place-items: center;
+        color: var(--text-dim);
+        opacity: 0.5;
+        transition: color 0.15s ease, opacity 0.3s ease;
+        animation: bob 1.8s ease-in-out infinite;
+      }
+      .scroll-cue:hover {
+        color: var(--accent);
+        opacity: 1;
+      }
+      .scroll-cue svg {
+        width: 44px;
+        height: 16px;
+      }
+      .scrolled .scroll-cue {
+        opacity: 0;
+        pointer-events: none;
+      }
+      @keyframes bob {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(8px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .scroll-cue {
+          animation: none;
+        }
+      }
+      .hero .cta {
+        padding-top: 8px;
+      }
+      /* Shows only the left third of the side-by-side shot, fading out to the right. */
+      .peek {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--bg-deep);
+        -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent);
+        mask-image: linear-gradient(90deg, #000 70%, transparent);
+      }
+      .peek .crop {
+        aspect-ratio: 800 / 900;
+        overflow: hidden;
+      }
+      .peek img {
+        width: 300%;
+        display: block;
+      }
+      .eyebrow {
+        display: block;
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
       }
       .hero h1 {
-        font-size: clamp(32px, 6vw, 48px);
+        font-size: clamp(28px, 4.5vw, 40px);
         line-height: 1.15;
         margin: 0 0 16px;
         font-weight: 700;
+        text-wrap: balance;
       }
       .hero p {
         color: var(--text-dim);
-        font-size: 18px;
-        max-width: 620px;
-        margin: 0 auto 32px;
+        font-size: 16px;
+        margin: 0 0 28px;
       }
       .cta {
         display: flex;
-        justify-content: center;
         flex-wrap: wrap;
         gap: 12px;
       }
 
-      /* The big screenshot sits in a window chrome so it reads as the real app. */
-      .window {
-        margin-top: 56px;
-        border: 1px solid var(--border);
-        border-bottom: 0;
-        border-radius: 10px 10px 0 0;
-        overflow: hidden;
-        background: var(--bg-deep);
-        text-align: left;
-      }
-      .window .bar {
+      /* Window chrome on the hero peek so it reads as the real app. */
+      .peek .bar {
         height: 28px;
         display: flex;
         align-items: center;
@@ -183,20 +267,16 @@
         padding: 0 12px;
         border-bottom: 1px solid var(--border);
       }
-      .window .bar i {
+      .peek .bar i {
         width: 10px;
         height: 10px;
         border-radius: 50%;
         background: var(--border);
       }
-      .window img {
-        width: 100%;
-        display: block;
-      }
 
       /* Screenshot rows */
       .band {
-        background: var(--bg-deep);
+        background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
         border-top: 1px solid var(--border);
         padding: 72px 0;
       }
@@ -228,11 +308,98 @@
         color: var(--text-dim);
         margin: 0;
       }
-      .row img {
-        width: 100%;
+      /* Screenshots are laid out at their zoomed size (--zoom, set by script) and
+         scaled down at rest, so enlarging shrinks them less rather than upscaling a
+         small bitmap. That keeps them sharp when zoomed. */
+      .shot {
+        position: relative;
+        z-index: 1;
+        aspect-ratio: var(--ratio);
+        --zoom: 1;
+      }
+      .shot img {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        width: calc(100% * var(--zoom));
+        max-width: none;
         display: block;
-        border: 1px solid var(--border);
-        border-radius: 8px;
+        border: calc(1px * var(--zoom)) solid var(--border);
+        border-radius: calc(8px * var(--zoom));
+        /* Grow from the outer edge so the zoom covers the text, not the viewport edge. */
+        transform-origin: right center;
+        transform: translateY(-50%) scale(calc(1 / var(--zoom)));
+        transition: transform 0.3s ease, border-color 0.3s ease;
+      }
+      .row.flip .shot img {
+        right: auto;
+        left: 0;
+        transform-origin: left center;
+      }
+      /* Click to enlarge. The zoom-in cursor, a border tint and a small corner
+         badge on hover hint that the shot can be opened. */
+      @media (min-width: 801px) {
+        .shot {
+          cursor: zoom-in;
+        }
+        .shot:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 4px;
+          border-radius: 8px;
+        }
+        .shot:hover img,
+        .shot:focus-visible img {
+          border-color: var(--accent-dim);
+        }
+        .shot::after {
+          content: "";
+          position: absolute;
+          right: 10px;
+          bottom: 10px;
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          border: 1px solid var(--border);
+          background: color-mix(in srgb, var(--bg-elevated) 85%, transparent)
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d7dce5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/%3E%3C/svg%3E")
+            center / 14px no-repeat;
+          opacity: 0.35;
+          transition: opacity 0.2s ease;
+          pointer-events: none;
+        }
+        .shot:hover::after,
+        .shot:focus-visible::after {
+          opacity: 1;
+        }
+        .shot.open {
+          z-index: 2;
+          cursor: zoom-out;
+        }
+        .shot.open::after {
+          opacity: 0;
+        }
+        .shot.open img {
+          transform: translateY(-50%);
+          border-color: var(--accent-dim);
+        }
+      }
+
+      /* Rows fade up as they scroll into view (only when JS adds .reveal). */
+      .reveal .row {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+      }
+      .reveal .row.in {
+        opacity: 1;
+        transform: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reveal .row {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
       }
 
       /* Build + contact */
@@ -277,6 +444,12 @@
       }
 
       @media (max-width: 800px) {
+        .hero-top {
+          grid-template-columns: 1fr;
+        }
+        .peek {
+          display: none;
+        }
         .row,
         .row.flip,
         .row.small,
@@ -299,6 +472,7 @@
     </style>
   </head>
   <body>
+    <canvas id="particles" aria-hidden="true"></canvas>
     <header>
       <div class="wrap nav">
         <a class="brand" href="#top"><img src="bird.svg" alt="" />nuthatch</a>
@@ -314,12 +488,17 @@
 
     <main id="top">
       <div class="wrap hero">
-        <img src="bird.svg" alt="nuthatch bird logo" />
-        <h1>See inside your FileMaker solution</h1>
+        <div class="hero-top">
+        <div class="hero-intro">
+        <span class="eyebrow">FileMaker analysis tool</span>
+        <h1>Connect the dots in your FileMaker solution</h1>
         <p>
           nuthatch is a static-analysis tool for FileMaker “Save a Copy as XML” exports.
-          Explore structure, dependencies, call chains, and maintenance risks, all
-          parsed locally. Nothing is uploaded.
+          Load one file or a whole multi-file solution and explore its structure,
+          dependencies, call chains, and maintenance risks. Find broken references and
+          unused objects, trace where any field or script is used, and compare two
+          versions side by side. Everything is parsed locally, in your browser or the
+          desktop app. Nothing is uploaded.
         </p>
         <div class="cta">
           <a class="btn primary" href="https://github.com/micheledelaney/nuthatch">
@@ -331,14 +510,33 @@
           <a class="btn" href="app/">Try it in your browser</a>
           <a class="btn" href="demo/full-tour-demo.mp4">Watch the demo</a>
         </div>
-        <div class="window">
+        </div>
+        <div class="peek" aria-hidden="true">
           <div class="bar"><i></i><i></i><i></i></div>
-          <img src="shots/browse.jpg" alt="Browse view: the Broken script selected in the navigator, with its missing-field reference" />
+          <div class="crop"><img src="shots/side-by-side.jpg" alt="" /></div>
+        </div>
+        <a class="scroll-cue" href="#features" aria-label="Scroll to the features">
+          <svg viewBox="0 0 44 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3l19 10 19-10" />
+          </svg>
+        </a>
         </div>
       </div>
 
       <div class="band" id="features">
         <div class="wrap">
+          <div class="row flip">
+            <div class="text">
+              <h2>Browse every object</h2>
+              <p>
+                Pick an object type in the navigator and open any table, field, layout, or script.
+                Each one shows what it references, what references it, and its call chain, with
+                broken references flagged where they occur.
+              </p>
+            </div>
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/browse.jpg" alt="Browse view: the Broken script selected in the navigator, with its missing-field reference" /></div>
+          </div>
+
           <div class="row small">
             <div class="text">
               <h2>Start from what's wrong</h2>
@@ -348,7 +546,7 @@
                 behind it.
               </p>
             </div>
-            <img src="shots/report-card.jpg" alt="The report card: reference counts, risk flags, and an object inventory" />
+            <div class="shot" style="--ratio: 2400 / 1005"><img src="shots/report-card.jpg" alt="The report card: reference counts, risk flags, and an object inventory" /></div>
           </div>
 
           <div class="row flip">
@@ -360,7 +558,7 @@
                 narrow it down.
               </p>
             </div>
-            <img src="shots/palette.jpg" alt="The command palette filtered to table:Topics" />
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/palette.jpg" alt="The command palette filtered to table:Topics" /></div>
           </div>
 
           <div class="row">
@@ -372,7 +570,7 @@
                 function.
               </p>
             </div>
-            <img src="shots/side-by-side.jpg" alt="Two custom functions, FormatDuration and formatDurationNew, open side by side with the navigator collapsed" />
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/side-by-side.jpg" alt="Two custom functions, FormatDuration and formatDurationNew, open side by side with the navigator collapsed" /></div>
           </div>
 
           <div class="row flip">
@@ -383,7 +581,7 @@
                 and changed scripts and calculations show a line-by-line diff.
               </p>
             </div>
-            <img src="shots/compare.jpg" alt="Comparing two analyses of the same solution" />
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/compare.jpg" alt="Comparing two analyses of the same solution" /></div>
           </div>
         </div>
       </div>
@@ -412,5 +610,71 @@ npm run build && npm run preview</code></pre>
         <span>Made by <a href="https://github.com/micheledelaney">Michèle Delaney</a></span>
       </div>
     </footer>
+    <script src="particles.js"></script>
+    <script>
+      if ("IntersectionObserver" in window) {
+        document.body.classList.add("reveal");
+        const io = new IntersectionObserver(
+          (entries) =>
+            entries.forEach((e) => {
+              if (!e.isIntersecting) return;
+              e.target.classList.add("in");
+              io.unobserve(e.target);
+            }),
+          { threshold: 0.15 },
+        );
+        document.querySelectorAll(".row").forEach((r) => io.observe(r));
+      }
+
+      const markScrolled = () => document.body.classList.toggle("scrolled", window.scrollY > 40);
+      markScrolled();
+      window.addEventListener("scroll", markScrolled, { passive: true });
+
+      // Click zoom: each screenshot's enlarged width is the full content width.
+      const canZoom = window.matchMedia("(min-width: 801px)");
+      function setZoom() {
+        const wrap = document.querySelector(".band .wrap");
+        const style = getComputedStyle(wrap);
+        const inner = wrap.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        document.querySelectorAll(".shot").forEach((shot) => {
+          const zoom = canZoom.matches && shot.offsetWidth ? inner / shot.offsetWidth : 1;
+          shot.style.setProperty("--zoom", zoom);
+        });
+      }
+      setZoom();
+      window.addEventListener("resize", setZoom);
+
+      const shots = document.querySelectorAll(".shot");
+      function setOpen(shot, isOpen) {
+        shot.classList.toggle("open", isOpen);
+        shot.setAttribute("aria-expanded", String(isOpen));
+      }
+      function closeAll(except) {
+        shots.forEach((shot) => shot !== except && setOpen(shot, false));
+      }
+      function toggle(shot) {
+        if (!canZoom.matches) return;
+        closeAll(shot);
+        setOpen(shot, !shot.classList.contains("open"));
+      }
+      shots.forEach((shot) => {
+        shot.tabIndex = 0;
+        shot.setAttribute("role", "button");
+        shot.setAttribute("aria-label", "Enlarge screenshot: " + shot.querySelector("img").alt);
+        setOpen(shot, false);
+        shot.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggle(shot);
+        });
+        shot.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          toggle(shot);
+        });
+      });
+      document.addEventListener("click", () => closeAll());
+      document.addEventListener("keydown", (e) => e.key === "Escape" && closeAll());
+      canZoom.addEventListener("change", () => closeAll());
+    </script>
   </body>
 </html>
