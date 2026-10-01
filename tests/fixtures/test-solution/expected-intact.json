@@ -1,0 +1,869 @@
+{
+  "fixture": {
+    "spec": "BUILD.md",
+    "exports": "TEST_MAIN__intact.xml + TEST_EXT__intact.xml",
+    "snapshot": "Taken before the DEL_… deletions and before TEST_GONE.fmp12 is removed from disk. Construction steps (removing T_Unused's auto-created occurrence, removing f_TableViewOnly from the form, unticking options) are already done, as in the final snapshot.",
+    "scenario": "Both files loaded together, unless a section says otherwise (see mainAlone).",
+    "companion": "expected.json is the same build after the deletions.",
+    "c_DelField": "This snapshot was exported before c_DelField was changed to TO_Child::DEL_Field2, so here it still reads T_Main::DEL_Field (same table, stored)."
+  },
+  "conventions": {
+    "ref": "\"<FILE>:<type>:<name>\". FILE is MAIN (TEST_MAIN) or EXT (TEST_EXT); type is the parser's ObjectType. Fields are \"Table::field\". Relationships use the parser's label \"LeftTO → RightTO\" and match in either direction.",
+    "descendants": "A ref ending in \"/**\" means the object or anything contained in it (parentUid chain): a layout and its layout objects, a custom menu and its items.",
+    "targets": "\"to\" is a resolved ref; \"broken:<type>\" is a reference whose target was deleted (broken: true); \"unresolved:<type>\" is a target that can't be verified (not broken, not resolved). \"broken:field|tableOccurrence\" accepts either type.",
+    "edge": "{ to, kind?, via?, step?, disabled? }. kind, via and step are checked only when given. via is the table occurrence a field edge reads through. step is the 1-based script step index (fromStep).",
+    "exact": "exact: true means the source's outbound edges must equal the listed set (nothing missing, nothing extra). exact: false means the listed edges must exist; extras are allowed.",
+    "unverified": "A string explaining why FileMaker's XML for this case hasn't been observed yet. A mismatch there is a question to investigate first, not automatically a parser bug.",
+    "matchers": "Attribute values: a plain string must match exactly; {\"contains\": s} is a substring match; {\"oneOf\": [..]} matches any; {\"absent\": true} means the attribute must not be set; {\"present\": true} means it must be set.",
+    "ignoredTypes": "Object types listed in ignoredTypes aren't checked: edges to them are neither required nor flagged as extra, and they're left out of the unreferenced check."
+  },
+  "ignoredTypes": ["theme"],
+  "objects": {
+    "absent": [],
+    "counts": {"MAIN:relationship": 7, "EXT:relationship": 0, "MAIN:table": 5, "EXT:table": 1},
+    "attributes": {
+      "MAIN:file:TEST_MAIN": {
+        "autoLogin": "Account “autologin”",
+        "minimumVersion": "22.0",
+        "allowStoredCredentials": "Yes",
+        "requirePasscode": "Yes",
+        "showSignInFields": "Yes",
+        "requireFileAuthorization": "Yes",
+        "authorizedFilesSameHost": "Yes"
+      },
+      "EXT:file:TEST_EXT": {"autoLogin": "Guest account", "_unverified": "Depends on which <Login type> FileMaker writes for Guest; see openQuestions."},
+      "MAIN:field:T_Main::f_Text": {"comment": "Main text field"},
+      "MAIN:field:T_Main::f_ValAll": {
+        "validation": "Strict data type: numeric only, Not empty, Unique, Max 10 characters, In value list “VL_Custom”, In range 1 to 100, By calculation",
+        "validateWhen": "Always",
+        "validationOverride": "Strict (no override)",
+        "validationCalculation": "f_ValAll > 0",
+        "validationMessage": {"contains": "Bad value"}
+      },
+      "MAIN:field:T_Main::f_ValDate": {"validation": "Strict data type: 4-digit year date", "validateWhen": "Only during data entry", "validationOverride": "User can override"},
+      "MAIN:field:T_Main::f_ValTime": {"validation": "Strict data type: time of day"},
+      "MAIN:field:T_Main::f_ValCalcOff": {"validation": {"absent": true}, "validationCalculation": {"absent": true}},
+      "MAIN:field:T_Main::f_ValMsgCalc": {"validation": "Not empty, Existing value", "validationMessage": "\"Bad: \" & f_Text"},
+      "MAIN:field:T_Main::f_ValMsgOff": {"validation": "Not empty", "validationMessage": {"absent": true}},
+      "MAIN:field:T_Main::f_ValDelVL": {"validation": "In value list “DEL_VL_Val”"},
+      "MAIN:field:T_Main::g_Global": {"global": "true"},
+      "MAIN:field:T_Main::f_Rep": {"repetitions": "5"},
+      "MAIN:field:T_Main::f_Indexed": {"indexing": "All", "indexLanguage": "German"},
+      "MAIN:field:T_Main::f_Cont": {"containerStorage": "External (Secure) · TEST_MAIN/", "validation": "Max 500 KB"},
+      "MAIN:field:T_Main::f_ContOpen": {"containerStorage": "External (Open) · TEST_MAIN/"},
+      "MAIN:field:T_Main::f_Serial": {"autoEnter": "Serial number", "serialIncrement": "2", "serialGenerate": "On commit"},
+      "MAIN:field:T_Main::f_Created": {"autoEnter": "Creation timestamp"},
+      "MAIN:field:T_Main::f_Const": {"autoEnter": "Data: ABC"},
+      "MAIN:field:T_Main::f_LastVisited": {"autoEnter": "Value from last visited record"},
+      "MAIN:field:T_Main::f_AECalc": {"autoEnterOptions": "Prohibit modification"},
+      "MAIN:field:T_Main::c_Stored": {"unstored": {"absent": true}},
+      "MAIN:field:T_Main::c_Unstored": {"unstored": "true"},
+      "MAIN:field:T_Main::c_Deep": {"unstored": "true"},
+      "MAIN:field:T_Main::c_Ext": {"unstored": "true"},
+      "MAIN:field:T_Main::c_DelTO": {"unstored": "true"},
+      "MAIN:tableOccurrence:TO_Ext": {"baseTable": "E_Table", "externalDataSource": "DS_Ext"},
+      "MAIN:tableOccurrence:TO_ExtMissing": {"baseTable": "G_Table", "baseTableId": {"present": true}, "baseTableUnresolved": {"absent": true}},
+      "MAIN:tableOccurrence:TO_VarPath": {"baseTableId": {"absent": true}, "baseTableUnresolved": {"present": true}},
+      "MAIN:tableOccurrence:TO_DelDS": {"baseTable": "E_Table", "externalDataSource": "DEL_DS", "baseTableId": {"present": true}},
+      "MAIN:tableOccurrence:TO_Broken": {"baseTable": "DEL_Table", "baseTableId": {"present": true}, "baseTableUnresolved": {"absent": true}},
+      "MAIN:tableOccurrence:TO_Collapsed": {"graphView": {"contains": "Collapse"}, "color": {"present": true}},
+      "MAIN:externalDataSource:DS_Ext": {"path": {"contains": "TEST_EXT"}},
+      "MAIN:externalDataSource:DS_Missing": {"path": {"contains": "TEST_GONE"}},
+      "MAIN:externalDataSource:DS_VarPath": {"path": {"contains": "$$path"}},
+      "MAIN:script:S_FullAccess": {"runsWithFullAccess": "Yes"},
+      "MAIN:script:S_Hidden": {"includeInMenu": "No"},
+      "MAIN:layout:L_Start": {"tableOccurrence": "TO_Main", "menuSet": "MS_Main"},
+      "MAIN:layout:L_Hidden": {"includeInLayoutMenus": "No"},
+      "MAIN:layout:L_Child": {"tableOccurrence": "TO_Child"},
+      "MAIN:privilegeSet:PS_CustomRecords": {"recordsAccess": "Custom"},
+      "MAIN:privilegeSet:PS_CustomLayouts": {"layoutsAccess": "Custom, Create"},
+      "MAIN:privilegeSet:PS_CustomScripts": {"scriptsAccess": "Custom"},
+      "MAIN:privilegeSet:PS_CustomVL": {"valueListsAccess": "Custom"},
+      "MAIN:privilegeSet:PS_Other": {
+        "otherPrivileges": "Printing, Exporting, Manage database, Manage custom menus, Manage accounts, Manage extended privileges, Override data validation, Allow Open Quickly, Disconnect idle users",
+        "passwordChange": "Prohibited",
+        "menuCommands": {"contains": "Edit"}
+      },
+      "MAIN:account:acc_Active": {"type": "FileMaker", "status": "Active", "password": "Yes", "privilegeSet": "PS_CustomRecords"},
+      "MAIN:account:acc_NoPwd": {"type": "FileMaker", "status": "Active", "password": "No", "privilegeSet": "PS_CustomLayouts"},
+      "MAIN:account:acc_Inactive": {"status": "Inactive", "privilegeSet": "PS_CustomScripts"},
+      "MAIN:account:TestGroup": {"password": {"absent": true}, "privilegeSet": "PS_CustomVL"},
+      "MAIN:account:autologin": {"password": "Yes", "privilegeSet": "PS_Other"},
+      "MAIN:account:Admin": {"password": "Yes", "privilegeSet": "[Full Access]"},
+      "MAIN:extendedPrivilege:xpTest": {"description": "Test keyword"},
+      "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}},
+      "MAIN:valueList:VL_External": {"source": "External"},
+      "MAIN:externalDataSource:DEL_DS": {"path": {"contains": "TEST_EXT"}},
+      "MAIN:field:T_Main::c_DelField": {"unstored": {"absent": true}}
+    },
+    "folders": {
+      "MAIN:script:S_Main": "Test",
+      "MAIN:script:S_Trigger": "Test",
+      "MAIN:script:S_Sub": "Test / Sub",
+      "MAIN:script:S_Callback": "Test / Sub",
+      "MAIN:layout:L_Start": "",
+      "MAIN:layout:L_Detail": "Layouts",
+      "MAIN:layout:L_Child": "Layouts / Sub"
+    },
+    "separators": {"MAIN:script": 1, "MAIN:layout": 1},
+    "relationshipDepth": {"MAIN:field:T_Main::c_Deep": 2, "MAIN:field:T_Main::c_Ext": 1, "MAIN:field:T_Main::c_Stored": 0, "MAIN:field:T_Main::c_DelTO": 1},
+    "details": {
+      "MAIN:field:T_Main::c_Stored": {"kind": "calculation", "body": "f_Text & \"!\""},
+      "MAIN:field:T_Main::f_AECalc": {"kind": "calculation", "signature": "Auto-enter calculation", "body": "f_Text"},
+      "MAIN:field:T_Main::f_AECalcOff": {"_absent": true, "_note": "The switched-off auto-enter calc must not show as the field's calculation."},
+      "MAIN:field:T_Main::f_Lookup": {"kind": "lookup", "source": "TO_Child::c_Name"},
+      "MAIN:field:T_Main::f_LookupOff": {"_absent": true},
+      "MAIN:field:T_Main::s_Total": {"kind": "summary", "operation": "Running total of", "fields": ["f_ValAll"]},
+      "MAIN:field:T_Main::s_List": {"kind": "summary", "operation": "List of", "fields": ["f_Text"]},
+      "MAIN:valueList:VL_Custom": {"kind": "valueList", "source": "Custom", "customValues": ["A", "B", "-", "C"]},
+      "MAIN:valueList:VL_Field": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "sort": true}},
+      "MAIN:valueList:VL_Field2nd": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "secondaryField": "TO_Child::c_ID"}},
+      "MAIN:valueList:VL_Field2ndOff": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "secondaryField": {"absent": true}}},
+      "MAIN:valueList:VL_Related": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "showRelatedFrom": "TO_Main"}},
+      "MAIN:valueList:VL_RelatedOff": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "showRelatedFrom": {"absent": true}}},
+      "MAIN:valueList:VL_DelField": {"kind": "valueList", "field": {"primaryField": "TO_Child::DEL_Field2"}},
+      "EXT:valueList:EVL_List": {"kind": "valueList", "source": "Custom", "customValues": ["X", "Y"]},
+      "MAIN:relationship:TO_Main → TO_Child": {
+        "predicates": [{"leftField": "f_ID", "operator": "=", "rightField": "c_ParentID"}],
+        "TO_Child side": {"cascadeCreate": true, "cascadeDelete": true, "sorted": true}
+      },
+      "MAIN:relationship:TO_Main → TO_Collapsed": {"operators": ["≠", "<", "≤", ">", "≥"]},
+      "MAIN:relationship:TO_Main → TO_Cartesian": {"operators": ["×"]},
+      "MAIN:file:TEST_MAIN": {
+        "kind": "file",
+        "triggers": [{"action": "OnFirstWindowOpen", "scriptName": "S_Trigger"}, {"action": "OnLastWindowClose", "scriptName": "DEL_Script_FileTrig"}]
+      },
+      "MAIN:layout:L_Start": {
+        "kind": "layout",
+        "triggers": [{"action": "OnLayoutEnter", "scriptName": "S_Trigger"}, {"action": "OnRecordLoad", "scriptName": "DEL_Script_LayTrig"}],
+        "partCount": 4,
+        "offLayout": [{"info": {"contains": "Off-layout"}}]
+      },
+      "MAIN:privilegeSet:PS_CustomRecords": {
+        "kind": "privilegeSet",
+        "tables": [
+          {
+            "table": "T_Main",
+            "view": "Limited",
+            "edit": "Limited",
+            "create": "Yes",
+            "delete": "Limited",
+            "viewCondition": {"contains": "CF_Used"},
+            "editCondition": {"contains": "f_Text"},
+            "deleteCondition": {"contains": "locked"},
+            "fieldsAccess": "Custom",
+            "fields": [{"field": "f_Text", "access": "None"}]
+          }
+        ],
+        "_match": "tables: the T_Main row must match; other rows are defaults and aren't checked. fields: f_Text must be listed with None."
+      },
+      "MAIN:privilegeSet:PS_CustomLayouts": {
+        "kind": "privilegeSet",
+        "layouts": [
+          {"name": "L_Start", "access": "Modifiable", "records": "Modifiable"},
+          {"name": "L_Detail", "access": "View only", "records": "View only"},
+          {"name": "L_Hidden", "access": "No access", "records": "No access"},
+          {"name": "(new layouts)", "access": "Modifiable"}
+        ],
+        "_match": "Each listed row must exist; rows for other layouts are defaults and aren't checked."
+      },
+      "MAIN:privilegeSet:PS_CustomScripts": {
+        "kind": "privilegeSet",
+        "scripts": [
+          {"name": "S_Main", "access": "Modifiable"},
+          {"name": "S_Sub", "access": "Executable only"},
+          {"name": "S_Unused", "access": "No access"},
+          {"name": "(new scripts)"}
+        ]
+      },
+      "MAIN:privilegeSet:PS_CustomVL": {
+        "kind": "privilegeSet",
+        "valueLists": [{"name": "VL_Custom", "access": "Modifiable"}, {"name": "VL_Field", "access": "View only"}, {"name": "VL_Unused", "access": "No access"}],
+        "_unverified": "No export seen so far has custom value-list privileges; the XML shape is assumed to match layouts/scripts."
+      }
+    },
+    "layoutObjects": [
+      {
+        "layout": "MAIN:layout:L_Start",
+        "match": {"fieldRef": "TO_Main::f_Text"},
+        "expect": {
+          "valueListRef": "VL_Custom",
+          "tooltip": {"contains": "f_Const"},
+          "hideWhen": {"contains": "f_Serial"},
+          "hideInFind": true,
+          "conditionalFormats": ["TO_Main::f_ValAll > 10", "TO_Main::f_ValAll < 10"],
+          "triggers": [{"action": "OnObjectEnter", "scriptName": "S_Trigger"}, {"action": "OnObjectModify", "scriptName": "DEL_Script_ObjTrig"}],
+          "style": {"present": true}
+        }
+      },
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "TO_Child"}, "expect": {"portalRows": 5}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "DEL_TO"}, "expect": {}},
+      {"layout": "MAIN:layout:L_Start", "match": {"objectName": "obj_Named"}, "expect": {"info": {"contains": "$$MERGE_VAR"}}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Main"}, "expect": {}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "actionStep": "Go to Layout"}, "expect": {}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Popover"}}, "expect": {"children": {"contains": "f_Created"}}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Tab"}}, "expect": {"children": {"contains": "TO_Child"}}}
+    ],
+    "present": [
+      "MAIN:table:DEL_Table",
+      "MAIN:field:T_Main::DEL_Field",
+      "MAIN:field:T_Main::DEL_Field4",
+      "MAIN:field:T_Child::DEL_Field2",
+      "MAIN:field:T_Child::DEL_Field3",
+      "MAIN:tableOccurrence:DEL_TO",
+      "MAIN:tableOccurrence:DEL_TO3",
+      "MAIN:externalDataSource:DEL_DS",
+      "MAIN:valueList:DEL_VL_Val",
+      "MAIN:valueList:DEL_VL_Fmt",
+      "MAIN:customFunction:DEL_CF",
+      "MAIN:script:DEL_Script",
+      "MAIN:script:DEL_Script_FileTrig",
+      "MAIN:script:DEL_Script_LayTrig",
+      "MAIN:script:DEL_Script_ObjTrig",
+      "MAIN:script:DEL_Script_Menu",
+      "MAIN:layout:DEL_Layout",
+      "EXT:script:DEL_ES_Script",
+      "EXT:layout:DEL_EL_Layout"
+    ]
+  },
+  "sources": {
+    "MAIN:file:TEST_MAIN": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:script:S_Trigger", "kind": "trigger", "_note": "OnFirstWindowOpen"},
+        {"to": "MAIN:script:DEL_Script_FileTrig", "kind": "trigger", "_note": "OnLastWindowClose"},
+        {"to": "MAIN:layout:L_Start", "kind": "layout"},
+        {"to": "MAIN:customMenuSet:MS_Main", "kind": "customMenuSet"}
+      ]
+    },
+    "MAIN:table:T_Main": {"exact": true, "edges": []},
+    "MAIN:table:T_Child": {"exact": true, "edges": []},
+    "MAIN:table:T_Grand": {"exact": true, "edges": []},
+    "MAIN:table:T_Unused": {"exact": true, "edges": []},
+    "MAIN:externalDataSource:DS_Ext": {"exact": true, "edges": []},
+    "MAIN:externalDataSource:DS_Missing": {"exact": true, "edges": []},
+    "MAIN:externalDataSource:DS_VarPath": {
+      "exact": true,
+      "edges": [
+        {
+          "to": "MAIN:globalVariable:$$path",
+          "kind": "globalVariable",
+          "_note": "The data source's path reads $$path. Known parser gap: variables in data-source paths aren't detected today."
+        }
+      ]
+    },
+    "MAIN:tableOccurrence:TO_Main": {"exact": true, "edges": [{"to": "MAIN:table:T_Main", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Child": {"exact": true, "edges": [{"to": "MAIN:table:T_Child", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Grand": {"exact": true, "edges": [{"to": "MAIN:table:T_Grand", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Collapsed": {"exact": true, "edges": [{"to": "MAIN:table:T_Main", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Cartesian": {"exact": true, "edges": [{"to": "MAIN:table:T_Child", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Unused": {"exact": true, "edges": [{"to": "MAIN:table:T_Child", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Ext": {"exact": true, "edges": [{"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"}, {"to": "EXT:table:E_Table", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_ExtMissing": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:externalDataSource:DS_Missing", "kind": "externalDataSource"},
+        {"to": "unresolved:table", "_note": "G_Table in TEST_GONE, which isn't loaded: unresolved, not broken"}
+      ]
+    },
+    "MAIN:tableOccurrence:TO_VarPath": {"exact": true, "edges": [{"to": "MAIN:externalDataSource:DS_VarPath", "kind": "externalDataSource"}]},
+    "MAIN:tableOccurrence:TO_DelDS": {"exact": true, "edges": [{"to": "MAIN:externalDataSource:DEL_DS", "kind": "externalDataSource"}, {"to": "EXT:table:E_Table", "kind": "table"}]},
+    "MAIN:tableOccurrence:TO_Broken": {"exact": true, "edges": [{"to": "MAIN:table:DEL_Table", "kind": "table"}]},
+    "MAIN:relationship:TO_Main → TO_Child": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Child::c_ParentID", "via": "MAIN:tableOccurrence:TO_Child"},
+        {
+          "to": "MAIN:field:T_Child::c_Name",
+          "via": "MAIN:tableOccurrence:TO_Child",
+          "_note": "sort order on the TO_Child side",
+          "unverified": "Where FileMaker writes the relationship's sort field hasn't been observed."
+        }
+      ]
+    },
+    "MAIN:relationship:TO_Child → TO_Grand": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Grand"},
+        {"to": "MAIN:field:T_Child::c_ID", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Grand::g_ChildID", "via": "MAIN:tableOccurrence:TO_Grand"}
+      ]
+    },
+    "MAIN:relationship:TO_Main → TO_Ext": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Ext"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "EXT:field:E_Table::e_ID", "via": "MAIN:tableOccurrence:TO_Ext"}
+      ]
+    },
+    "MAIN:relationship:TO_Main → TO_Collapsed": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Collapsed"},
+        {"to": "MAIN:field:T_Main::f_ValAll", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValAll", "via": "MAIN:tableOccurrence:TO_Collapsed"}
+      ]
+    },
+    "MAIN:relationship:TO_Main → TO_Cartesian": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Cartesian"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Child::c_ID", "via": "MAIN:tableOccurrence:TO_Cartesian"}
+      ]
+    },
+    "MAIN:field:T_Main::f_ID": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Text": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Unused": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_TableViewOnly": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::g_Global": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Rep": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Indexed": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_ValDate": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_ValTime": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_ValCalcOff": {"exact": true, "edges": [], "_note": "switched-off validation calc: no edge to f_Text"},
+    "MAIN:field:T_Main::f_ValMsgOff": {"exact": true, "edges": [], "_note": "switched-off message calc: no edge to f_Const"},
+    "MAIN:field:T_Main::f_Cont": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_ContOpen": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Main", "_note": "context of the open-storage folder-path calculation"}]},
+    "MAIN:field:T_Main::f_Serial": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Created": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_Const": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_LastVisited": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::f_AECalcOff": {"exact": true, "edges": [], "_note": "switched-off auto-enter calc: no edge to f_Const"},
+    "MAIN:field:T_Main::f_LookupOff": {"exact": true, "edges": [], "_note": "switched-off lookup: no edge to c_ID or TO_Child"},
+    "MAIN:field:T_Main::f_ValAll": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:valueList:VL_Custom", "kind": "valueList"},
+        {"to": "MAIN:field:T_Main::f_ValAll", "via": "MAIN:tableOccurrence:TO_Main", "_note": "validation calc reads itself; must not count as a use"},
+        {"to": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:field:T_Main::f_ValMsgCalc": {"exact": true, "edges": [{"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::f_ValDelVL": {"exact": true, "edges": [{"to": "MAIN:valueList:DEL_VL_Val", "kind": "valueList"}]},
+    "MAIN:field:T_Main::f_AECalc": {"exact": true, "edges": [{"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::f_Lookup": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Main", "_note": "the lookup's starting occurrence (<Context>)"}
+      ]
+    },
+    "MAIN:field:T_Main::c_Stored": {"exact": true, "edges": [{"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_Unstored": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_Deep": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Grand::g_Val", "via": "MAIN:tableOccurrence:TO_Grand"},
+        {"to": "MAIN:tableOccurrence:TO_Grand"},
+        {"to": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:field:T_Main::c_UsesCF": {"exact": true, "edges": [{"to": "MAIN:customFunction:CF_Used", "kind": "customFunction"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_Global": {"exact": true, "edges": [{"to": "MAIN:globalVariable:$$GLOBAL_A", "kind": "globalVariable"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_Ext": {
+      "exact": true,
+      "edges": [
+        {"to": "EXT:field:E_Table::e_Field", "via": "MAIN:tableOccurrence:TO_Ext"},
+        {"to": "MAIN:tableOccurrence:TO_Ext"},
+        {"to": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:field:T_Main::c_DelCF": {"exact": true, "edges": [{"to": "MAIN:customFunction:DEL_CF", "kind": "customFunction"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_DelField": {"exact": true, "edges": [{"to": "MAIN:field:T_Main::DEL_Field", "via": "MAIN:tableOccurrence:TO_Main"}, {"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:field:T_Main::c_DelTO": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:DEL_TO"},
+        {"to": "MAIN:tableOccurrence:DEL_TO"},
+        {"to": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:field:T_Main::s_Total": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Main::f_ValAll", "_note": "the summarized field"},
+        {
+          "to": "MAIN:field:T_Main::f_ValAll",
+          "via": "MAIN:tableOccurrence:TO_Main",
+          "_note": "restart for each sorted group: when sorted by f_ValAll"
+        },
+        {"to": "MAIN:tableOccurrence:TO_Main", "_note": "context of the restart field"},
+        {
+          "to": "MAIN:table:T_Main",
+          "kind": "table",
+          "_note": "the summarized field is named by its base table (the field's own table; never counts as a use)"
+        }
+      ]
+    },
+    "MAIN:field:T_Main::s_List": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Main::f_Text"},
+        {
+          "to": "MAIN:table:T_Main",
+          "kind": "table",
+          "_note": "the summarized field is named by its base table (the field's own table; never counts as a use)"
+        }
+      ]
+    },
+    "MAIN:field:T_Child::c_ID": {"exact": true, "edges": []},
+    "MAIN:field:T_Child::c_ParentID": {"exact": true, "edges": []},
+    "MAIN:field:T_Child::c_Name": {"exact": true, "edges": []},
+    "MAIN:field:T_Grand::g_ChildID": {"exact": true, "edges": []},
+    "MAIN:field:T_Grand::g_Val": {"exact": true, "edges": []},
+    "MAIN:field:T_Unused::u_Field": {"exact": true, "edges": []},
+    "MAIN:valueList:VL_Custom": {"exact": true, "edges": []},
+    "MAIN:valueList:VL_Unused": {"exact": true, "edges": []},
+    "MAIN:valueList:VL_Field": {"exact": true, "edges": [{"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"}, {"to": "MAIN:tableOccurrence:TO_Child"}]},
+    "MAIN:valueList:VL_Field2nd": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Child::c_ID", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:valueList:VL_Field2ndOff": {
+      "exact": true,
+      "edges": [{"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"}, {"to": "MAIN:tableOccurrence:TO_Child"}],
+      "_note": "switched-off second field: no edge to c_ID"
+    },
+    "MAIN:valueList:VL_Related": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:valueList:VL_RelatedOff": {
+      "exact": true,
+      "edges": [{"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"}, {"to": "MAIN:tableOccurrence:TO_Child"}],
+      "_note": "switched-off 'related values only': no edge to TO_Main"
+    },
+    "MAIN:valueList:VL_External": {
+      "exact": true,
+      "edges": [{"to": "EXT:valueList:EVL_List", "kind": "valueList"}, {"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"}]
+    },
+    "MAIN:valueList:VL_ExtDeleted": {
+      "exact": true,
+      "edges": [{"to": "EXT:valueList:EVL_List", "kind": "valueList"}, {"to": "MAIN:externalDataSource:DEL_DS", "kind": "externalDataSource"}]
+    },
+    "MAIN:valueList:VL_DelField": {
+      "exact": true,
+      "edges": [{"to": "MAIN:field:T_Child::DEL_Field2", "via": "MAIN:tableOccurrence:TO_Child"}, {"to": "MAIN:tableOccurrence:TO_Child"}]
+    },
+    "MAIN:customFunction:CF_Used": {"exact": true, "edges": []},
+    "MAIN:customFunction:CF_Empty": {"exact": true, "edges": []},
+    "MAIN:customFunction:CF_Unused": {"exact": true, "edges": []},
+    "MAIN:customFunction:CF_CallsCF": {"exact": true, "edges": [{"to": "MAIN:customFunction:CF_Used", "kind": "customFunction"}]},
+    "MAIN:customFunction:CF_Recursive": {"exact": true, "edges": [{"to": "MAIN:customFunction:CF_Recursive", "kind": "customFunction", "_note": "self-call; must not count as a use"}]},
+    "MAIN:script:S_Sub": {"exact": true, "edges": []},
+    "MAIN:script:S_Callback": {"exact": true, "edges": []},
+    "MAIN:script:S_Trigger": {"exact": true, "edges": []},
+    "MAIN:script:S_Unused": {"exact": true, "edges": []},
+    "MAIN:script:S_OnlyDisabled": {"exact": true, "edges": []},
+    "MAIN:script:S_FullAccess": {"exact": true, "edges": []},
+    "MAIN:script:S_Hidden": {"exact": true, "edges": []},
+    "MAIN:script:S_SetPath": {"exact": true, "edges": [{"to": "MAIN:globalVariable:$$path", "kind": "globalVariable"}]},
+    "MAIN:script:S_Main": {
+      "exact": false,
+      "edges": [
+        {"step": 2, "to": "MAIN:script:S_Sub", "kind": "performScript"},
+        {"step": 2, "to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 2, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 3, "to": "MAIN:script:DEL_Script", "kind": "performScript"},
+        {"step": 4, "to": "EXT:script:ES_Script", "kind": "performScript"},
+        {"step": 4, "to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"},
+        {"step": 5, "to": "EXT:script:DEL_ES_Script", "kind": "performScript"},
+        {"step": 5, "to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"},
+        {"step": 6, "to": "EXT:script:ES_Script", "kind": "performScript"},
+        {"step": 6, "to": "MAIN:externalDataSource:DEL_DS", "kind": "externalDataSource"},
+        {"step": 7, "to": "MAIN:script:S_Sub", "kind": "performScript"},
+        {"step": 7, "to": "MAIN:script:S_Callback", "kind": "performScript"},
+        {"step": 8, "to": "MAIN:script:S_OnlyDisabled", "kind": "performScript", "disabled": true},
+        {"step": 9, "to": "MAIN:layout:L_Detail", "kind": "goToLayout"},
+        {"step": 10, "to": "MAIN:layout:DEL_Layout", "kind": "goToLayout"},
+        {"step": 12, "to": "MAIN:tableOccurrence:TO_Child"},
+        {"step": 12, "to": "MAIN:layout:L_Child", "kind": "layout"},
+        {"step": 13, "to": "MAIN:tableOccurrence:TO_Ext"},
+        {"step": 13, "to": "EXT:layout:EL_Layout", "kind": "layout", "unverified": "No export seen so far has an FM 26 GTRR to an external layout."},
+        {"step": 14, "to": "MAIN:tableOccurrence:TO_Ext"},
+        {
+          "step": 14,
+          "to": "EXT:layout:DEL_EL_Layout",
+          "kind": "layout",
+          "unverified": "No export seen so far has an FM 26 GTRR to an external layout."
+        },
+        {"step": 15, "to": "MAIN:tableOccurrence:DEL_TO"},
+        {"step": 16, "to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 16, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 17, "to": "MAIN:field:T_Child::DEL_Field3", "kind": "setField", "via": "MAIN:tableOccurrence:DEL_TO3"},
+        {"step": 17, "to": "MAIN:tableOccurrence:DEL_TO3"},
+        {"step": 18, "to": "MAIN:globalVariable:$$GLOBAL_A", "kind": "globalVariable"},
+        {"step": 19, "to": "MAIN:globalVariable:$$ONLY_SET", "kind": "globalVariable"},
+        {"step": 21, "to": "MAIN:globalVariable:$$RESULT", "kind": "globalVariable"},
+        {"step": 22, "to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 22, "to": "MAIN:field:T_Main::s_Total", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 22, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 23, "to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 23, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 24, "to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 24, "to": "EXT:field:E_Table::e_Field", "via": "MAIN:tableOccurrence:TO_Ext"},
+        {"step": 24, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 24, "to": "MAIN:tableOccurrence:TO_Ext"},
+        {"step": 25, "to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 25, "to": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 27, "to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"},
+        {"step": 30, "to": "MAIN:customMenuSet:MS_Main", "kind": "customMenuSet"}
+      ]
+    },
+    "MAIN:layout:L_Start/**": {
+      "exact": false,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:customMenuSet:MS_Main", "kind": "customMenuSet"},
+        {"to": "MAIN:script:S_Trigger", "kind": "trigger", "_note": "OnLayoutEnter and OnObjectEnter"},
+        {"to": "MAIN:script:DEL_Script_LayTrig", "kind": "trigger", "_note": "OnRecordLoad"},
+        {"to": "MAIN:script:DEL_Script_ObjTrig", "kind": "trigger", "_note": "OnObjectModify"},
+        {"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:valueList:VL_Custom", "kind": "valueList"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main", "_note": "placeholder calc and grouped-button parameter"},
+        {"to": "MAIN:field:T_Main::f_Const", "via": "MAIN:tableOccurrence:TO_Main", "_note": "tooltip, slide 1, second copy"},
+        {"to": "MAIN:field:T_Main::f_Serial", "via": "MAIN:tableOccurrence:TO_Main", "_note": "hide-when calc, tab panel 2"},
+        {"to": "MAIN:field:T_Main::f_ValAll", "via": "MAIN:tableOccurrence:TO_Main", "_note": "conditional formats, chart"},
+        {"to": "MAIN:field:T_Main::f_Created", "via": "MAIN:tableOccurrence:TO_Main", "_note": "inside the popover"},
+        {"to": "MAIN:field:T_Main::f_Lookup", "via": "MAIN:tableOccurrence:TO_Main", "_note": "slide 2"},
+        {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child", "_note": "related field and portals"},
+        {"to": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Main::DEL_Field4", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:valueList:DEL_VL_Fmt", "kind": "valueList"},
+        {"to": "MAIN:globalVariable:$$MERGE_VAR", "kind": "globalVariable"},
+        {
+          "to": "MAIN:field:T_Child::c_Name",
+          "via": "MAIN:tableOccurrence:DEL_TO",
+          "_note": "merge field <<DEL_TO::c_Name>>",
+          "unverified": "Whether FileMaker writes a merge field in a text object as a structural field reference hasn't been observed."
+        },
+        {"to": "MAIN:tableOccurrence:DEL_TO", "_note": "portal on DEL_TO (and the merge field)"},
+        {"to": "MAIN:script:S_Main", "_note": "button and grouped button"},
+        {"to": "MAIN:layout:L_Detail", "_note": "button and button-bar segment 2"},
+        {"to": "MAIN:script:DEL_Script", "_note": "button → DEL_Script"},
+        {"to": "MAIN:script:S_Sub", "_note": "button-bar segment 1"}
+      ]
+    },
+    "MAIN:layout:L_Detail/**": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::g_Global", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Rep", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Indexed", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValAll", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValDate", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValTime", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValCalcOff", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValMsgCalc", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValMsgOff", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ValDelVL", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Cont", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ContOpen", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Serial", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Created", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Const", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_LastVisited", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_AECalc", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_AECalcOff", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Lookup", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_LookupOff", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_Stored", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_Unstored", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_Deep", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_UsesCF", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_Global", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_Ext", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_DelCF", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_DelField", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::c_DelTO", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::s_Total", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::s_List", "via": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:layout:L_Child/**": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Child"}, {"to": "MAIN:field:T_Child::c_Name", "via": "MAIN:tableOccurrence:TO_Child"}]},
+    "MAIN:layout:L_Hidden/**": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:layout:L_Unused/**": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "MAIN:layout:L_TableView/**": {
+      "exact": false,
+      "edges": [{"to": "MAIN:tableOccurrence:TO_Main"}, {"to": "MAIN:field:T_Main::f_Text", "via": "MAIN:tableOccurrence:TO_Main"}],
+      "undecidedEdges": [{"to": "MAIN:field:T_Main::f_TableViewOnly", "_note": "the Table View column whose field was removed from the form; see openQuestions"}]
+    },
+    "MAIN:customMenuSet:MS_Main": {"exact": false, "edges": [{"to": "MAIN:customMenu:M_Custom", "kind": "customMenu"}]},
+    "MAIN:customMenu:M_Custom/**": {
+      "exact": false,
+      "edges": [
+        {"to": "MAIN:script:S_Main", "kind": "performScript"},
+        {"to": "MAIN:customMenu:M_Sub", "kind": "customMenu"},
+        {"to": "MAIN:script:DEL_Script_Menu", "kind": "performScript", "_note": "the 'Deleted script item'"}
+      ]
+    },
+    "MAIN:privilegeSet:PS_CustomRecords": {"exact": false, "edges": [{"to": "MAIN:customFunction:CF_Used", "kind": "customFunction"}, {"to": "MAIN:field:T_Main::f_Text"}]},
+    "MAIN:privilegeSet:PS_Other": {"exact": false, "edges": [{"to": "MAIN:extendedPrivilege:xpTest", "kind": "extendedPrivilege"}]},
+    "MAIN:extendedPrivilege:xpTest": {"exact": true, "edges": []},
+    "MAIN:account:Admin": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:[Full Access]", "kind": "privilegeSet"}]},
+    "MAIN:account:[Guest]": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:[Read-Only Access]", "kind": "privilegeSet"}]},
+    "MAIN:account:acc_Active": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:PS_CustomRecords", "kind": "privilegeSet"}]},
+    "MAIN:account:acc_NoPwd": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:PS_CustomLayouts", "kind": "privilegeSet"}]},
+    "MAIN:account:acc_Inactive": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:PS_CustomScripts", "kind": "privilegeSet"}]},
+    "MAIN:account:TestGroup": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:PS_CustomVL", "kind": "privilegeSet"}]},
+    "MAIN:account:autologin": {"exact": true, "edges": [{"to": "MAIN:privilegeSet:PS_Other", "kind": "privilegeSet"}]},
+    "EXT:table:E_Table": {"exact": true, "edges": []},
+    "EXT:field:E_Table::e_ID": {"exact": true, "edges": []},
+    "EXT:field:E_Table::e_Field": {"exact": true, "edges": []},
+    "EXT:tableOccurrence:ETO_Main": {"exact": true, "edges": [{"to": "EXT:table:E_Table", "kind": "table"}]},
+    "EXT:layout:EL_Layout/**": {"exact": true, "edges": [{"to": "EXT:tableOccurrence:ETO_Main"}, {"to": "EXT:field:E_Table::e_Field", "via": "EXT:tableOccurrence:ETO_Main"}]},
+    "EXT:script:ES_Script": {"exact": true, "edges": []},
+    "EXT:valueList:EVL_List": {"exact": true, "edges": []},
+    "EXT:account:Admin": {"exact": true, "edges": [{"to": "EXT:privilegeSet:[Full Access]", "kind": "privilegeSet"}]},
+    "EXT:account:[Guest]": {"exact": true, "edges": [{"to": "EXT:privilegeSet:[Read-Only Access]", "kind": "privilegeSet"}]},
+    "MAIN:table:DEL_Table": {"exact": true, "edges": []},
+    "MAIN:externalDataSource:DEL_DS": {"exact": true, "edges": []},
+    "MAIN:tableOccurrence:DEL_TO": {"exact": true, "edges": [{"to": "MAIN:table:T_Child", "kind": "table"}]},
+    "MAIN:tableOccurrence:DEL_TO3": {"exact": true, "edges": [{"to": "MAIN:table:T_Child", "kind": "table"}]},
+    "MAIN:relationship:TO_Main → DEL_TO": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:DEL_TO"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Child::c_ParentID", "via": "MAIN:tableOccurrence:DEL_TO"}
+      ]
+    },
+    "MAIN:relationship:TO_Main → DEL_TO3": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:DEL_TO3"},
+        {"to": "MAIN:field:T_Main::f_ID", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Child::c_ParentID", "via": "MAIN:tableOccurrence:DEL_TO3"}
+      ]
+    },
+    "MAIN:field:T_Main::DEL_Field": {"exact": true, "edges": []},
+    "MAIN:field:T_Main::DEL_Field4": {"exact": true, "edges": []},
+    "MAIN:field:T_Child::DEL_Field2": {"exact": true, "edges": []},
+    "MAIN:field:T_Child::DEL_Field3": {"exact": true, "edges": []},
+    "MAIN:valueList:DEL_VL_Val": {"exact": true, "edges": []},
+    "MAIN:valueList:DEL_VL_Fmt": {"exact": true, "edges": []},
+    "MAIN:customFunction:DEL_CF": {"exact": true, "edges": []},
+    "MAIN:script:DEL_Script": {"exact": true, "edges": []},
+    "MAIN:script:DEL_Script_FileTrig": {"exact": true, "edges": []},
+    "MAIN:script:DEL_Script_LayTrig": {"exact": true, "edges": []},
+    "MAIN:script:DEL_Script_ObjTrig": {"exact": true, "edges": []},
+    "MAIN:script:DEL_Script_Menu": {"exact": true, "edges": []},
+    "MAIN:layout:DEL_Layout/**": {"exact": true, "edges": [{"to": "MAIN:tableOccurrence:TO_Main"}]},
+    "EXT:script:DEL_ES_Script": {"exact": true, "edges": []},
+    "EXT:layout:DEL_EL_Layout/**": {"exact": true, "edges": [{"to": "EXT:tableOccurrence:ETO_Main"}]}
+  },
+  "absentEdges": [
+    {"from": "MAIN:field:T_Main::f_ValCalcOff", "to": "MAIN:field:T_Main::f_Text", "why": "validation calc switched off"},
+    {"from": "MAIN:field:T_Main::f_ValMsgOff", "to": "MAIN:field:T_Main::f_Const", "why": "custom message calc switched off"},
+    {"from": "MAIN:field:T_Main::f_AECalcOff", "to": "MAIN:field:T_Main::f_Const", "why": "auto-enter calc switched off"},
+    {"from": "MAIN:field:T_Main::f_LookupOff", "to": "MAIN:field:T_Child::c_ID", "why": "lookup switched off"},
+    {"from": "MAIN:valueList:VL_Field2ndOff", "to": "MAIN:field:T_Child::c_ID", "why": "second field switched off"},
+    {"from": "MAIN:valueList:VL_RelatedOff", "to": "MAIN:tableOccurrence:TO_Main", "why": "'related values only' switched off"},
+    {"from": "MAIN:script:S_Main", "step": 11, "to": "MAIN:layout:L_Detail", "why": "layout named by a calculation: no structural edge"},
+    {"from": "MAIN:script:S_Main", "step": 28, "to": "MAIN:externalDataSource:*", "why": "Close File [current file] names no data source"},
+    {"from": "MAIN:script:S_Main", "step": 20, "to": "MAIN:globalVariable:*", "why": "$local isn't a global"},
+    {"from": "MAIN:script:S_Main", "step": 23, "to": "broken:field", "why": "unmapped Import Records columns are placeholders, not references"}
+  ],
+  "unreferenced": {
+    "_rule": "Candidate types only (script, layout, customFunction, valueList, table, tableOccurrence, field, privilegeSet); separators excluded. Must equal this set, minus 'undecided'. Themes are skipped for now (see todo).",
+    "exact": [
+      "MAIN:table:T_Unused",
+      "MAIN:field:T_Main::f_Unused",
+      "MAIN:field:T_Unused::u_Field",
+      "MAIN:tableOccurrence:TO_ExtMissing",
+      "MAIN:tableOccurrence:TO_VarPath",
+      "MAIN:tableOccurrence:TO_DelDS",
+      "MAIN:tableOccurrence:TO_Broken",
+      "MAIN:tableOccurrence:TO_Unused",
+      "MAIN:layout:L_Hidden",
+      "MAIN:layout:L_Unused",
+      "MAIN:layout:L_TableView",
+      "MAIN:script:S_Unused",
+      "MAIN:script:S_OnlyDisabled",
+      "MAIN:script:S_FullAccess",
+      "MAIN:script:S_Hidden",
+      "MAIN:script:S_SetPath",
+      "MAIN:customFunction:CF_CallsCF",
+      "MAIN:customFunction:CF_Recursive",
+      "MAIN:customFunction:CF_Empty",
+      "MAIN:customFunction:CF_Unused",
+      "MAIN:valueList:VL_Field",
+      "MAIN:valueList:VL_Field2nd",
+      "MAIN:valueList:VL_Field2ndOff",
+      "MAIN:valueList:VL_Related",
+      "MAIN:valueList:VL_RelatedOff",
+      "MAIN:valueList:VL_External",
+      "MAIN:valueList:VL_ExtDeleted",
+      "MAIN:valueList:VL_DelField",
+      "MAIN:valueList:VL_Unused",
+      "MAIN:privilegeSet:[Data Entry Only]",
+      "MAIN:privilegeSet:PS_Unused",
+      "EXT:privilegeSet:[Data Entry Only]"
+    ],
+    "undecided": ["MAIN:field:T_Main::f_TableViewOnly"],
+    "mustBeReferenced": {
+      "_note": "Easy to get wrong; each must NOT be in the unreferenced list.",
+      "MAIN:customFunction:CF_Used": "c_UsesCF, CF_CallsCF, PS_CustomRecords",
+      "MAIN:script:S_Callback": "PSoS callback (S_Main step 7)",
+      "MAIN:field:T_Grand::g_Val": "c_Deep (two hops)",
+      "MAIN:tableOccurrence:TO_Collapsed": "R4",
+      "MAIN:tableOccurrence:TO_Cartesian": "R5",
+      "MAIN:privilegeSet:PS_CustomScripts": "acc_Inactive (inactive accounts still reference their set)",
+      "EXT:field:E_Table::e_ID": "MAIN relationship R3 (cross-file)",
+      "EXT:script:ES_Script": "MAIN S_Main step 4 (cross-file)",
+      "EXT:valueList:EVL_List": "MAIN VL_External (cross-file)",
+      "EXT:layout:EL_Layout": "MAIN S_Main step 13 (cross-file; unverified, see sources)",
+      "MAIN:table:DEL_Table": "TO_Broken",
+      "MAIN:field:T_Main::DEL_Field4": "on L_Start",
+      "MAIN:field:T_Child::DEL_Field2": "VL_DelField",
+      "MAIN:field:T_Child::DEL_Field3": "S_Main step 17",
+      "MAIN:tableOccurrence:DEL_TO": "R6, c_DelTO, S_Main step 15, portal on L_Start",
+      "MAIN:tableOccurrence:DEL_TO3": "R7, S_Main step 17",
+      "MAIN:valueList:DEL_VL_Val": "f_ValDelVL validation",
+      "MAIN:valueList:DEL_VL_Fmt": "pop-up on L_Start",
+      "MAIN:customFunction:DEL_CF": "c_DelCF",
+      "MAIN:script:DEL_Script": "S_Main step 3, button on L_Start",
+      "MAIN:script:DEL_Script_FileTrig": "file trigger",
+      "MAIN:script:DEL_Script_LayTrig": "L_Start layout trigger",
+      "MAIN:script:DEL_Script_ObjTrig": "object trigger on L_Start",
+      "MAIN:script:DEL_Script_Menu": "M_Custom menu item",
+      "MAIN:layout:DEL_Layout": "S_Main step 10",
+      "EXT:script:DEL_ES_Script": "MAIN S_Main step 5 (cross-file)",
+      "EXT:layout:DEL_EL_Layout": "MAIN S_Main step 14 (cross-file; unverified, see sources)",
+      "MAIN:field:T_Main::DEL_Field": "c_DelField (in this snapshot)"
+    },
+    "_note": "Same list as the final snapshot: every DEL_ object is referenced."
+  },
+  "brokenSources": {
+    "_rule": "Objects with at least one broken outbound edge. A \"/**\" entry is satisfied by the object or any of its descendants. Must equal this set.",
+    "exact": [],
+    "mustNotBeBroken": {
+      "MAIN:file:TEST_MAIN": "broken only after the deletions",
+      "MAIN:tableOccurrence:TO_DelDS": "broken only after the deletions",
+      "MAIN:tableOccurrence:TO_Broken": "broken only after the deletions",
+      "MAIN:field:T_Main::f_ValDelVL": "broken only after the deletions",
+      "MAIN:field:T_Main::c_DelCF": "broken only after the deletions",
+      "MAIN:field:T_Main::c_DelField": "broken only after the deletions",
+      "MAIN:field:T_Main::c_DelTO": "broken only after the deletions",
+      "MAIN:valueList:VL_ExtDeleted": "broken only after the deletions",
+      "MAIN:valueList:VL_DelField": "broken only after the deletions",
+      "MAIN:script:S_Main": "broken only after the deletions",
+      "MAIN:layout:L_Start/**": "broken only after the deletions",
+      "MAIN:customMenu:M_Custom/**": "broken only after the deletions",
+      "MAIN:tableOccurrence:TO_ExtMissing": "TEST_GONE exists but isn't loaded: unresolved, not broken",
+      "MAIN:tableOccurrence:TO_VarPath": "variable path: unresolved, not broken",
+      "MAIN:field:T_Main::f_ValAll": "self-reference is fine",
+      "MAIN:customFunction:CF_Recursive": "self-call is fine"
+    }
+  },
+  "globalVariables": {
+    "$$GLOBAL_A": ["MAIN:script:S_Main", "MAIN:field:T_Main::c_Global"],
+    "$$ONLY_SET": ["MAIN:script:S_Main"],
+    "$$RESULT": ["MAIN:script:S_Main"],
+    "$$MERGE_VAR": ["MAIN:layout:L_Start/**"],
+    "$$path": ["MAIN:script:S_SetPath", "MAIN:externalDataSource:DS_VarPath"]
+  },
+  "reportCard": {
+    "fileCount": 2,
+    "accountsNoPasswordCount": 1,
+    "unstoredCalculationCount": 4,
+    "deepCalcCount": 1,
+    "globalFieldCount": 1,
+    "globalVariableCount": 5,
+    "_notes": {
+      "accountsNoPasswordCount": "acc_NoPwd only. TestGroup isn't FileMaker-auth; acc_Inactive is inactive; Admin/autologin have passwords.",
+      "unstoredCalculationCount": "c_Unstored, c_Deep, c_Ext, c_DelTO (calcs through a relationship are always unstored)",
+      "deepCalcCount": "c_Deep (c_DelTO is one hop)"
+    }
+  },
+  "parseErrors": {"exports/TEST_MAIN_intact.xml + exports/TEST_EXT_intact.xml": []},
+  "mainAlone": {
+    "_scenario": "Load exports/TEST_MAIN_intact.xml without TEST_EXT. Everything above holds, except these edges become unresolved (neither resolved nor broken), and EXT objects don't exist.",
+    "unresolvedEdges": [
+      {"from": "MAIN:field:T_Main::c_Ext", "to": "unresolved:field"},
+      {"from": "MAIN:relationship:TO_Main → TO_Ext", "to": "unresolved:field"},
+      {"from": "MAIN:script:S_Main", "step": 4, "to": "unresolved:script"},
+      {"from": "MAIN:script:S_Main", "step": 5, "to": "unresolved:script"},
+      {"from": "MAIN:script:S_Main", "step": 6, "to": "unresolved:script"},
+      {"from": "MAIN:script:S_Main", "step": 13, "to": "unresolved:layout"},
+      {"from": "MAIN:script:S_Main", "step": 14, "to": "unresolved:layout"},
+      {"from": "MAIN:script:S_Main", "step": 24, "to": "unresolved:field"},
+      {"from": "MAIN:tableOccurrence:TO_DelDS", "to": "unresolved:table"},
+      {"from": "MAIN:tableOccurrence:TO_Ext", "to": "unresolved:table"},
+      {"from": "MAIN:valueList:VL_ExtDeleted", "to": "unresolved:valueList"},
+      {"from": "MAIN:valueList:VL_External", "to": "unresolved:valueList"}
+    ],
+    "unreferenced": "Same MAIN entries as above; no EXT entries.",
+    "brokenSources": "Same MAIN entries as above.",
+    "reportCard": {"fileCount": 1}
+  },
+  "variants": [{"note": "Export variants (no DDR, split, partial, binary, FM 21) are specified for the final snapshot in expected.json."}],
+  "openQuestions": [
+    {
+      "id": "tableview",
+      "about": "MAIN:field:T_Main::f_TableViewOnly",
+      "question": "Does a Table View column whose field isn't on the form count as a use? Decide, then move the field into or out of 'unreferenced.exact'."
+    },
+    {
+      "id": "guest-login",
+      "about": "EXT:file:TEST_EXT autoLogin",
+      "question": "Which <Login type> does FileMaker write for 'log in using Guest'? Compare with AF_SHARE (type -1)."
+    },
+    {"id": "gtrr-external-layout", "about": "S_Main step 13", "question": "How FM 26 writes a GTRR that uses the external table's layouts."},
+    {
+      "id": "ds-path-variable",
+      "about": "MAIN:externalDataSource:DS_VarPath",
+      "question": "Confirm the parser should count $$path in a data-source path as a global-variable use."
+    },
+    {
+      "id": "container-location",
+      "about": "MAIN:field:T_Main::f_ContOpen",
+      "question": "Open storage records a folder-path calculation (\"TestDir/\") under the base directory; the parser keeps only the base directory (containerStorage). Decide whether the folder path should be stored too."
+    },
+    {
+      "id": "validation-message",
+      "about": "MAIN:field:T_Main::f_ValAll validationMessage",
+      "question": "FM 26 stores a literal message as a quoted calculation (\"Bad value\"); decide whether the stored value should keep the quotes."
+    },
+    {
+      "id": "merge-field",
+      "about": "L_Start merge field <<DEL_TO::c_Name>>",
+      "question": "Does FileMaker write a merge field inside a text object as a structural field reference? If not, the edge can only come from scanning the text."
+    }
+  ],
+  "todo": [
+    {
+      "id": "themes",
+      "what": "Theme coverage is left out for now: rename each file's default theme (TH_Used in TEST_MAIN, TH_Ext in TEST_EXT), import TH_Unused into TEST_MAIN and apply it to nothing, and have every layout use its file's one theme.",
+      "expect": "Each layout → its file's theme (kind theme); TH_Used/TH_Ext referenced, TH_Unused unreferenced. When added back, remove \"theme\" from ignoredTypes and restore these expectations."
+    },
+    {
+      "id": "auto-login-label",
+      "what": "Parser fix (pinned): read <Login type> for the auto-login label — 1 = named account, 0 = Guest account, -1 = no automatic login. Today the label depends on whether an account name is present.",
+      "expect": "EXT:file:TEST_EXT autoLogin = \"Guest account\" (fails until fixed)."
+    }
+  ]
+}
