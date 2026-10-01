@@ -129,6 +129,7 @@ function parseAll(
   }
 
   addMissingCalcFieldRefs(objects, references);
+  addMissingTargetTableRefs(objects, references);
   addMissingCustomFunctionRefs(objects, references);
   addBrokenTableOccurrenceRefs(objects, references);
   addGlobalVariables(objects, references);
@@ -165,6 +166,8 @@ interface OccurrenceInfo {
    * lives in another file) and for broken ones. */
   localBaseTableId?: string;
   external: boolean;
+  /** External, with its base table recorded: its file was open at export. */
+  fileOpenAtExport?: boolean;
 }
 
 /**
@@ -264,6 +267,7 @@ function buildChunkContext(
     const source = asArray(isRecord(to) ? to["BaseTableSourceReference"] : undefined)[0];
     const baseTableId = attr(asArray(isRecord(source) ? source["BaseTableReference"] : undefined)[0], "id");
     const info: OccurrenceInfo = { id, external, ...(!external && baseTableId != null ? { localBaseTableId: baseTableId } : {}) };
+    if (external && baseTableId != null) info.fileOpenAtExport = true;
     if (!toByName.has(name)) toByName.set(name, info);
     toById.set(id, info);
   }
@@ -319,7 +323,8 @@ function dedupeRefs(refs: RawReference[]): RawReference[] {
  * the formula itself only for a calc whose chunk list is unusable. Layout text
  * can also merge a variable (`<<$$name>>`), which no chunk records, so those are
  * picked up here from the full layout text (before compactLayoutText trims it).
- * Each distinct name becomes one navigable object per file (the same $$x in two
+ * So is a data source whose path list names a variable (`$$path`), which
+ * FileMaker resolves when it opens the file. Each distinct name becomes one navigable object per file (the same $$x in two
  * files is two objects), so a variable lists its users and each script/calc the
  * globals it touches. Best-effort: a variable handled by name is only caught when
  * the whole name is one string literal (`Map.Clear ( "$$_MAP" )`); names built
@@ -327,7 +332,23 @@ function dedupeRefs(refs: RawReference[]): RawReference[] {
  */
 const MERGE_VARIABLE_RE = /<<(\$\$[^<>]+)>>/g;
 
+/** The `$$globals` a data source's path list names. A variable is a whole path
+ * entry; entries are space-separated but may contain spaces themselves, so split
+ * where the next entry's scheme prefix (or `$`) begins. */
+function pathListGlobals(pathList: string): string[] {
+  return pathList
+    .split(/\s+(?=(?:file|filemac|filewin|filelinux|fmnet|fmp)\s*:|\$)/i)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.startsWith("$$"));
+}
+
 function addGlobalVariables(objects: FmObject[], references: RawReference[]): void {
+  for (const obj of objects) {
+    if (obj.type !== "externalDataSource") continue;
+    for (const name of pathListGlobals(obj.attributes.path ?? "")) {
+      references.push({ fromUid: obj.uid, toType: "globalVariable", toId: name, toName: name, kind: "globalVariable" });
+    }
+  }
   for (const obj of objects) {
     if ((obj.type !== "layout" && obj.type !== "layoutObject") || !obj.text.includes("<<$$")) continue;
     const names = new Set<string>();
@@ -375,14 +396,13 @@ const MISSING_TABLE_ID = "<missing>";
  * Record that missing base table as an explicitly broken reference so the
  * occurrence is flagged broken like any other dangling reference.
  *
- * External occurrences are skipped: one whose data source was deleted is
- * already flagged by its own (broken) `<DataSourceReference>` edge, and one that
+ * An external occurrence counts only when its data source was deleted; one that
  * merely couldn't be resolved at export time isn't broken at all
  * (isUnresolvedTableOccurrence).
  */
 function addBrokenTableOccurrenceRefs(objects: FmObject[], references: RawReference[]): void {
   for (const obj of objects) {
-    if (!isBrokenTableOccurrence(obj) || obj.attributes.externalDataSource != null) continue;
+    if (!isBrokenTableOccurrence(obj)) continue;
     references.push({
       fromUid: obj.uid,
       toType: "table",
@@ -508,6 +528,46 @@ function addMissingCalcFieldRefs(objects: FmObject[], references: RawReference[]
 }
 
 /**
+ * A step whose target field AND its occurrence were deleted (e.g. Set Field)
+ * keeps only a blank `<FieldReference id="0" name="">` — which the element scan
+ * skips, because Import Records writes that same placeholder for every unmapped
+ * column — and renders its target as a bare `<Table Missing>` (no `::Field`
+ * after it, unlike a field read through a deleted occurrence). The same bare
+ * placeholder marks a merge field whose occurrence was deleted
+ * (`<<<Table Missing>>>`) and a portal whose occurrence was deleted. Emit one
+ * explicitly broken edge per such step (or object) — to a table occurrence for
+ * a portal, to a field otherwise — so it's flagged like any other dangling
+ * reference. Skips steps already carrying a broken field edge.
+ */
+function addMissingTargetTableRefs(objects: FmObject[], references: RawReference[]): void {
+  const alreadyBroken = new Set<string>();
+  for (const r of references) {
+    if (r.toType === "field" && (r.forceBroken || r.toName === "")) alreadyBroken.add(`${r.fromUid} ${r.fromStep ?? ""}`);
+  }
+  forEachPlaceholderUse(objects, MISSING_TABLE_TOKEN, (obj, text, fromStep, disabled) => {
+    if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(`${obj.uid} ${fromStep ?? ""}`)) return;
+    const isPortal = obj.detail?.kind === "layoutObject" && obj.detail.portalTable === MISSING_TABLE_TOKEN;
+    const toType = isPortal ? "tableOccurrence" : "field";
+    const ref: RawReference = {
+      fromUid: obj.uid,
+      toType,
+      toId: MISSING_REF_ID,
+      toName: MISSING_TABLE_TOKEN,
+      kind: toType,
+      forceBroken: true,
+    };
+    if (fromStep != null) ref.fromStep = fromStep;
+    if (disabled) ref.disabled = true;
+    references.push(ref);
+  });
+}
+
+const MISSING_TABLE_TOKEN = "<Table Missing>";
+/** `<Table Missing>` not followed by `::` — a deleted target, not a field read
+ * through a deleted occurrence (`<Table Missing>::Field`, handled structurally). */
+const BARE_MISSING_TABLE_RE = /<Table Missing>(?!::)/;
+
+/**
  * The custom-function analog of addMissingCalcFieldRefs: when a calculation,
  * script step, or custom-function body calls a *deleted* custom function,
  * FileMaker leaves only a literal `<Function Missing>` placeholder (no resolvable
@@ -539,6 +599,9 @@ interface Container {
   /** The sibling <Metadata> section, which holds file-level options and the
    * file's own script triggers (File Options). */
   metadata: unknown;
+  /** FM 22's <Structure><ModifyAction>: second-pass edits to catalogs defined in
+   * AddAction (FM 26 exports have no such block). */
+  modifyAction: unknown;
   name: string;
   source: string;
   /** FileMaker application version that produced the export, if present. */
@@ -558,6 +621,7 @@ function locateContainers(root: unknown, source: string): Container[] {
         node: addAction ?? structure,
         ddrInfo: saveAs["DDR_INFO"],
         metadata: saveAs["Metadata"],
+        modifyAction: isRecord(structure) ? structure["ModifyAction"] : undefined,
         name: decodeEntities(attr(saveAs, "File") ?? "Untitled").replace(/\.fmp12$/i, ""),
         source,
         // The FileMaker app version lives in `Source`; `version` is the schema.
@@ -573,6 +637,8 @@ interface FileContext {
   file: FmFile;
   fileObject: FmObject;
   refTags: RefTags;
+  /** Button layout targets recorded only in FM 22's <ModifyAction>, by layout id. */
+  deferredLayoutTargets: ReadonlyMap<string, DeferredButton[]>;
 }
 
 function makeFileContext(container: Container, index: number): FileContext {
@@ -586,17 +652,23 @@ function makeFileContext(container: Container, index: number): FileContext {
     name: container.name,
     fileUid: uid,
     fileName: container.name,
-    attributes,
+    attributes: { ...attributes, ...fileAccessOptions(container.node), ...defaultMenuSet(container.node) },
     text: container.name,
   };
   if (triggers.length) fileObject.detail = { kind: "file", triggers };
-  return { file, fileObject, refTags: FMSAVEAS_REF_TAGS };
+  return {
+    file,
+    fileObject,
+    refTags: FMSAVEAS_REF_TAGS,
+    deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
+  };
 }
 
 /**
  * File Options, from the <Metadata><AddAction> block beside <Structure>: the
  * file's own script triggers, plus the high-signal scalar options (auto-login
- * account, encryption, minimum version) lifted into `attributes` for display.
+ * account, encryption, minimum version, stored credentials, sharing visibility)
+ * lifted into `attributes` for display.
  * The trigger script references are wired separately by scanning this block.
  */
 function fileMetadata(metadata: unknown): { attributes: Record<string, string>; triggers: LayoutTriggerInfo[] } {
@@ -617,8 +689,51 @@ function fileMetadata(metadata: unknown): { attributes: Record<string, string>; 
     // Minimum FileMaker version allowed to open the file.
     const minVersion = attr(asArray(add["Minimum"])[0], "version");
     if (minVersion) attributes.minimumVersion = minVersion;
+    // Sign-in and sharing switches (absent from some exports, so only set when present).
+    for (const [element, flag, key] of FILE_OPTION_FLAGS) {
+      const value = attr(asArray(add[element])[0], flag);
+      if (value != null) attributes[key] = value === "True" ? "Yes" : "No";
+    }
   }
   return { attributes, triggers: layoutTriggers(isRecord(add) ? add["ScriptTriggers"] : undefined) };
+}
+
+/** On/off file options in <Metadata>: [element, its True/False attribute, attribute key]. */
+const FILE_OPTION_FLAGS: ReadonlyArray<readonly [string, string, string]> = [
+  // File Options ▸ Open.
+  ["SavePassword", "keychain", "allowStoredCredentials"],
+  ["SavePassword", "requireMobile", "requirePasscode"],
+  ["ShowSignInFields", "enable", "showSignInFields"],
+  // Sharing settings: the file is left out of these file lists.
+  ["HideClientSharing", "enable", "hiddenInLaunchCenter"],
+  ["HideWebDirectSharing", "enable", "hiddenOnWebDirectHomepage"],
+];
+
+/**
+ * Manage Security ▸ File Access: whether other files need authorization to
+ * reference this one, and whether authorized files must share its host. Both
+ * are attributes of the <FileAccessCatalog> itself (in <Structure>), not of the
+ * authorized-file entries under it.
+ */
+/**
+ * The file's default menu set (Manage ▸ Custom Menus ▸ "Default menu set for
+ * this file"): a <CustomMenuSetReference> directly under <CustomMenuSetCatalog>
+ * (in <Structure>), beside the menu sets themselves.
+ */
+function defaultMenuSet(containerNode: unknown): Record<string, string> {
+  const catalog = isRecord(containerNode) ? containerNode["CustomMenuSetCatalog"] : undefined;
+  const name = attr(asArray(isRecord(catalog) ? catalog["CustomMenuSetReference"] : undefined)[0], "name");
+  return name ? { defaultMenuSet: decodeEntities(name) } : {};
+}
+
+function fileAccessOptions(containerNode: unknown): Record<string, string> {
+  const catalog = asArray(isRecord(containerNode) ? containerNode["FileAccessCatalog"] : undefined)[0];
+  const options: Record<string, string> = {};
+  const required = attr(catalog, "required");
+  if (required != null) options.requireFileAuthorization = required === "True" ? "Yes" : "No";
+  const sameHost = attr(catalog, "sameHost");
+  if (sameHost != null) options.authorizedFilesSameHost = sameHost === "True" ? "Yes" : "No";
+  return options;
 }
 
 interface CatalogSpec {
@@ -634,7 +749,8 @@ const CATALOGS: CatalogSpec[] = [
   { catalogKey: "AccountsCatalog", itemTag: "Account", type: "account", scanRefs: true },
   { catalogKey: "TableOccurrenceCatalog", itemTag: "TableOccurrence", type: "tableOccurrence", scanRefs: true },
   { catalogKey: "RelationshipCatalog", itemTag: "Relationship", type: "relationship", scanRefs: true },
-  { catalogKey: "ValueListCatalog", itemTag: "ValueList", type: "valueList", scanRefs: true },
+  // Scanned by attachValueListFields, which skips the switched-off parts.
+  { catalogKey: "ValueListCatalog", itemTag: "ValueList", type: "valueList", scanRefs: false },
   { catalogKey: "CustomFunctionCatalog", itemTag: "CustomFunction", type: "customFunction", scanRefs: true },
   { catalogKey: "CustomFunctionsCatalog", itemTag: "CustomFunction", type: "customFunction", scanRefs: true },
   { catalogKey: "ExtendedPrivilegesCatalog", itemTag: "ExtendedPrivilege", type: "extendedPrivilege", scanRefs: false },
@@ -664,6 +780,12 @@ function parseFile(
     // the <Metadata> block, scanned against the file object itself — inside the
     // chunk context, so a trigger parameter's calc references resolve too.
     scanRefs(container.metadata, ctx.fileObject.uid, {}, ctx.refTags, references);
+    // The file's default menu set sits in the menu-set catalog, not <Metadata>
+    // (see defaultMenuSet); "[Standard FileMaker Menus]" is skipped as a pseudo set.
+    const menuSetCatalog = containerNode["CustomMenuSetCatalog"];
+    if (isRecord(menuSetCatalog) && menuSetCatalog["CustomMenuSetReference"] != null) {
+      scanRefs({ CustomMenuSetReference: menuSetCatalog["CustomMenuSetReference"] }, ctx.fileObject.uid, {}, ctx.refTags, references);
+    }
     parseFileBody(containerNode, ctx, objects, references, stepTextByUuid);
     // Parse layouts one at a time to avoid holding a huge object-tree for the
     // full LayoutCatalog (which can be 80-90% of a large DDR file).
@@ -875,12 +997,13 @@ function findScriptReferenceName(node: unknown): string | undefined {
 }
 
 /**
- * A "from field" value list's field binding lives in OptionsForValueLists (keyed
- * back to the value list by reference), not in the ValueListCatalog entry that
- * became the object — mirror attachCustomFunctionCalcs and scan that block's
- * <Field> binding against the already-created value-list object. Only the
- * <Field> (Primary/SecondaryField) is scanned, never the leading
- * <ValueListReference> (that's the binding key, not a dependency).
+ * A value list's contents (custom values, "from field" binding) live in one of
+ * two places: FM 22 exports keep them in OptionsForValueLists (keyed back to the
+ * value list by reference), FM 26 exports inline them on the ValueListCatalog
+ * entry that became the object. Either way, attach the detail to the
+ * already-created value-list object and scan the block's <Field> binding
+ * against it. Only the <Field> (Primary/SecondaryField) is scanned, never the
+ * leading <ValueListReference> (that's the binding key, not a dependency).
  *
  * A value list can instead source its values from a value list in ANOTHER file
  * (Source = External): the external value list is a real dependency, recorded
@@ -894,7 +1017,8 @@ function attachValueListFields(
   objects: FmObject[],
   references: RawReference[],
 ): void {
-  const blocks = collectCatalogItems(containerNode["OptionsForValueLists"], "ValueList");
+  const optionBlocks = collectCatalogItems(containerNode["OptionsForValueLists"], "ValueList");
+  const blocks = optionBlocks.length > 0 ? optionBlocks : collectCatalogItems(containerNode["ValueListCatalog"], "ValueList");
   if (blocks.length === 0) return;
 
   const vlByUid = new Map<string, FmObject>();
@@ -904,7 +1028,8 @@ function attachValueListFields(
 
   for (const block of blocks) {
     if (!isRecord(block)) continue;
-    const ownerId = attr(block["ValueListReference"], "id");
+    // An OptionsForValueLists block names its list; an inline catalog entry is it.
+    const ownerId = attr(block["ValueListReference"], "id") ?? attr(block, "id");
     if (ownerId == null) continue;
     const owner = vlByUid.get(`${ctx.file.uid}:valueList:${ownerId}`);
     if (!owner) continue;
@@ -915,16 +1040,14 @@ function attachValueListFields(
   }
 }
 
-/** A value list's <Field> binding minus the parts that are switched off but still
- * recorded: a second field whose "Also display values from second field" is
- * unchecked (show="False"), and the occurrence of "Include only related values"
- * when that option is off. */
+/** A value list's <Field> binding minus the occurrence of "Include only related
+ * values" when that option is off. (A <SecondaryField> is always in use — see
+ * fieldSource — so it's kept.) */
 function activeValueListField(field: unknown): unknown {
   if (!isRecord(field)) return field;
-  const { SecondaryField, ShowRelated, ...rest } = field;
+  const { ShowRelated, ...rest } = field;
   return {
     ...rest,
-    ...(SecondaryField != null && attr(asArray(SecondaryField)[0], "show") !== "False" ? { SecondaryField } : {}),
     ...(ShowRelated != null && attr(asArray(ShowRelated)[0], "value") === "True" ? { ShowRelated } : {}),
   };
 }
@@ -956,10 +1079,12 @@ function addExternalValueListSource(block: Record<string, unknown>, ownerUid: st
   else ref.forceBroken = true;
   references.push(ref);
   // The data source itself is a dependency too (it lists this value list among
-  // its users). A nameless one is the dead link already flagged above.
+  // its users). A nameless one was deleted.
   const dsId = attr(dsRef, "id");
   if (dsId != null && dataSource) {
     references.push({ fromUid: ownerUid, toType: "externalDataSource", toId: dsId, toName: decodeEntities(dataSource), kind: "externalDataSource" });
+  } else if (dsId != null) {
+    references.push({ fromUid: ownerUid, toType: "externalDataSource", toId: dsId, toName: UNKNOWN_TARGET, kind: "externalDataSource", forceBroken: true });
   }
 }
 
@@ -1080,7 +1205,8 @@ function namesDeletedScript(stepText: string): boolean {
  *     broken edge).
  *   • Go to Layout / Go to Related Record whose specified layout was deleted
  *     (`[ <unknown> ]`, `Using layout: <unknown>`) — unless it's an External
- *     layout, whose file just wasn't available: unresolvable, not broken.
+ *     layout whose file wasn't open at export (the step's occurrence has no
+ *     base table): unresolvable, not broken.
  *   • Go to Related Record whose occurrence was deleted without a
  *     `<Table Missing>` reference left behind (`From table: <unknown>`).
  */
@@ -1097,20 +1223,24 @@ function addStepTargetRefs(step: Record<string, unknown>, fromUid: string, stepC
 
   if (isPerform) {
     if (findElement(step["ParameterValues"], "ScriptReference") != null) return;
+    // Checked before `from file:` — a deleted script in another file reads
+    // `“<unknown>” from file: “DS_Ext”` (quoted, no "(file not open)").
     const external = STEP_FROM_FILE_RE.exec(text);
-    if (external) {
+    if (namesDeletedScript(text)) {
+      pushRef(out, { fromUid, toType: "script", toId: MISSING_REF_ID, toName: UNKNOWN_TARGET, kind: "performScript", forceBroken: true }, stepCtx);
+    } else if (external) {
       const fileName = external[1]!;
       pushRef(out, { fromUid, toType: "script", toId: "", toName: fileName, kind: "performScript", toFileName: fileName }, stepCtx);
-    } else if (namesDeletedScript(text)) {
-      pushRef(out, { fromUid, toType: "script", toId: MISSING_REF_ID, toName: UNKNOWN_TARGET, kind: "performScript", forceBroken: true }, stepCtx);
     }
     return;
   }
 
   const container = findElement(step["ParameterValues"], "LayoutReferenceContainer");
+  const occurrenceId = attr(findElement(step["ParameterValues"], "TableOccurrenceReference"), "id");
+  const externalVerifiable = occurrenceId != null && chunkContext?.toById.get(occurrenceId)?.fileOpenAtExport === true;
   const layoutGone =
     isRecord(container) &&
-    attr(container, "External") !== "True" &&
+    (attr(container, "External") !== "True" || externalVerifiable) &&
     findElement(container, "LayoutReference") == null &&
     (name === "Go to Layout" ? text.includes(UNKNOWN_TARGET) : text.includes(`Using layout: ${UNKNOWN_TARGET}`));
   if (layoutGone) {
@@ -1235,6 +1365,8 @@ function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
     lo.valueListRef?.name,
     lo.info,
     lo.tooltip,
+    lo.hideWhen,
+    ...(lo.conditionalFormats ?? []),
     ...(lo.triggers ?? []).map((t) => t.scriptName),
   ].filter((s): s is string => !!s);
 }
@@ -1286,6 +1418,9 @@ function collectLayoutObjectFmObjects(
       parentUid,
       attributes: (() => {
         const a: Record<string, string> = { loType: lo.type };
+        // The object's own name (Inspector ▸ Position ▸ Name), which the display
+        // name above replaces with the object's text or field when it has one.
+        if (lo.name.trim()) a.objectName = lo.name;
         if (lo.hash) a.hash = lo.hash;
         if (lo.bounds) a.position = `${lo.bounds.left}, ${lo.bounds.top} → ${lo.bounds.right}, ${lo.bounds.bottom}`;
         if (lo.info && lo.type !== "Web Viewer" && lo.type !== "Text") {
@@ -1293,6 +1428,8 @@ function collectLayoutObjectFmObjects(
           if (bare) a.label = bare;
         }
         if (lo.tooltip) a.tooltip = lo.tooltip;
+        if (lo.hideWhen) a.hideWhen = lo.hideInFind ? `${lo.hideWhen} (also in Find mode)` : lo.hideWhen;
+        if (lo.conditionalFormats) a.conditionalFormats = lo.conditionalFormats.join("\n");
         if (lo.portalTable) a.portalOccurrence = lo.portalTable;
         if (lo.portalRows != null) a.portalRows = String(lo.portalRows);
         return a;
@@ -1308,6 +1445,9 @@ function collectLayoutObjectFmObjects(
         actionStep: lo.actionStep,
         triggers: lo.triggers,
         tooltip: lo.tooltip,
+        hideWhen: lo.hideWhen,
+        hideInFind: lo.hideInFind,
+        conditionalFormats: lo.conditionalFormats,
         bounds: lo.bounds,
         style: lo.style,
         portalTable: lo.portalTable,
@@ -1432,6 +1572,7 @@ function parseLayouts(
     }
     objects.push(obj);
     scanRefs(layout, obj.uid, {}, ctx.refTags, references);
+    addDeferredLayoutRefs(layout, obj, ctx, references);
   }
 }
 
@@ -1580,6 +1721,133 @@ function processOneLayout(
   }
   objects.push(obj);
   scanRefs(layout, obj.uid, {}, ctx.refTags, references);
+  addDeferredLayoutRefs(layout, obj, ctx, references);
+}
+
+/** A button (or grouped button) whose action targets a layout FM 22 names only
+ * in <ModifyAction>. */
+interface DeferredButton {
+  /** The layout object's id (unique within its layout in every sample). */
+  id: string;
+  uuid: string;
+  steps: DeferredLayoutStep[];
+}
+
+interface DeferredLayoutStep {
+  /** Which action the step belongs to: "Button" or "GroupedButton". */
+  owner: string;
+  /** 0-based position within that action. */
+  index: number;
+  stepName: string;
+  layoutId: string;
+  layoutName: string;
+}
+
+const BUTTON_ACTION_KEYS = ["Button", "GroupedButton"] as const;
+
+/**
+ * FM 22 exports write layouts in two passes: <AddAction> defines them, then
+ * <ModifyAction> fills in each button's layout target. When that target is a
+ * layout in another file, the AddAction step keeps only the data source
+ * (<LayoutReferenceContainer External="True"><DataSourceReference>), so the
+ * layout's id is recorded only here. Its `name`, though, is whatever layout has
+ * that id in the *current* file — FileMaker's own step text reads "Using
+ * layout: <unknown>" — so only the id identifies the target. ModifyAction lists
+ * every such object flat under its layout, whatever its nesting in AddAction.
+ */
+function deferredLayoutTargets(modifyAction: unknown): Map<string, DeferredButton[]> {
+  const byLayout = new Map<string, DeferredButton[]>();
+  for (const action of asArray(modifyAction)) {
+    const catalog = isRecord(action) ? action["LayoutCatalog"] : undefined;
+    for (const layout of collectCatalogItems(catalog, "Layout")) {
+      if (!isRecord(layout)) continue;
+      const layoutId = attr(asArray(layout["LayoutReference"])[0], "id");
+      if (layoutId == null) continue;
+      const buttons = collectElements(layout, "LayoutObjectReference").flatMap((node) => {
+        const id = attr(node, "id");
+        const steps = buttonSteps(node).flatMap(({ owner, index, step }) => {
+          const target = findElement(step, "LayoutReference");
+          const layoutTargetId = attr(target, "id");
+          if (layoutTargetId == null) return [];
+          const layoutName = decodeEntities(attr(target, "name") ?? "");
+          return [{ owner, index, stepName: attr(step, "name") ?? "", layoutId: layoutTargetId, layoutName }];
+        });
+        return id != null && steps.length > 0 ? [{ id, uuid: collectText(node["UUID"]).trim(), steps }] : [];
+      });
+      if (buttons.length > 0) byLayout.set(layoutId, [...(byLayout.get(layoutId) ?? []), ...buttons]);
+    }
+  }
+  return byLayout;
+}
+
+/** The action steps of a layout object's button / grouped button, in order. */
+function buttonSteps(node: Record<string, unknown>): { owner: string; index: number; step: Record<string, unknown> }[] {
+  return BUTTON_ACTION_KEYS.flatMap((owner) => {
+    const button = asArray(node[owner])[0];
+    const action = asArray(isRecord(button) ? button["action"] : undefined)[0];
+    return asArray(isRecord(action) ? action["Step"] : undefined)
+      .filter(isRecord)
+      .map((step, index) => ({ owner, index, step }));
+  });
+}
+
+/** Every `tag` element anywhere under `node`. */
+function collectElements(node: unknown, tag: string, out: Record<string, unknown>[] = []): Record<string, unknown>[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collectElements(item, tag, out);
+    return out;
+  }
+  if (!isRecord(node)) return out;
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith(ATTR_PREFIX) || key === "#text") continue;
+    if (key === tag) out.push(...asArray(value).filter(isRecord));
+    collectElements(value, tag, out);
+  }
+  return out;
+}
+
+/**
+ * Emit the layout references FM 22 records only in <ModifyAction> (see
+ * deferredLayoutTargets): join each deferred button to its AddAction object by
+ * id (and UUID, if the id is ambiguous), and each step by position and name.
+ * The reference comes from the layout, like the ones the layout-level scan
+ * emits, and resolves in the file the AddAction step's data source names.
+ * Steps whose AddAction copy already names the layout are left to that scan.
+ */
+function addDeferredLayoutRefs(layout: unknown, layoutObj: FmObject, ctx: FileContext, references: RawReference[]): void {
+  const deferred = ctx.deferredLayoutTargets.get(layoutObj.id);
+  if (!deferred) return;
+  const objects = collectElements(layout, "LayoutObject");
+  for (const button of deferred) {
+    const byId = objects.filter((o) => attr(o, "id") === button.id);
+    const matches = byId.length > 1 ? byId.filter((o) => collectText(o["UUID"]).trim() === button.uuid) : byId;
+    const [match] = matches;
+    if (matches.length !== 1 || !match) continue;
+    const steps = buttonSteps(match);
+    for (const target of button.steps) {
+      const step = steps.find((s) => s.owner === target.owner && s.index === target.index)?.step;
+      if (!step || attr(step, "name") !== target.stepName || findElement(step, "LayoutReference") != null) continue;
+      const container = findElement(step, "LayoutReferenceContainer");
+      const dataSource = asArray(isRecord(container) ? container["DataSourceReference"] : undefined)[0];
+      const fileName = decodeEntities(attr(dataSource, "name") ?? "");
+      const isExternal = dataSource != null && !namesCurrentFile(attr(dataSource, "id"), fileName);
+      // Marked external but with no data source: the target file is unknown, and
+      // resolving it here would land on an unrelated local layout.
+      if (!isExternal && attr(container, "External") === "True") continue;
+      references.push({
+        fromUid: layoutObj.uid,
+        toType: "layout",
+        toId: target.layoutId,
+        // An external target's recorded name is a local lookup (see
+        // deferredLayoutTargets); resolution goes by id.
+        toName: isExternal ? UNKNOWN_TARGET : target.layoutName,
+        kind: edgeKind("layout", target.stepName),
+        fromStep: target.index + 1,
+        ...(isExternal ? { toFileName: fileName } : {}),
+        ...(attr(step, "enable") === "False" ? { disabled: true } : {}),
+      });
+    }
+  }
 }
 
 /**
@@ -1786,8 +2054,8 @@ function annotateField(fieldNode: unknown, fieldObj: FmObject): void {
 
 /**
  * Surface a field's validation requirements (the nested <Validation> block):
- * which checks are required, when they run, and whether the user can override.
- * Skipped entirely when no requirement is set, so the default (empty) validation
+ * which checks are required, when they run, whether the user can override, and
+ * the validation formula and custom failure message, if any. Skipped entirely when no requirement is set, so the default (empty) validation
  * every field carries doesn't clutter the inspector.
  */
 function annotateFieldValidation(fieldNode: Record<string, unknown>, fieldObj: FmObject): void {
@@ -1795,22 +2063,63 @@ function annotateFieldValidation(fieldNode: Record<string, unknown>, fieldObj: F
   if (!isRecord(validation)) return;
 
   const requirements: string[] = [];
+  const strict = collectText(validation["Strict"]).trim();
+  if (strict) requirements.push(STRICT_TYPE_LABELS[strict] ?? `Strict data type: ${strict}`);
   if (attr(validation, "notEmpty") === "True") requirements.push("Not empty");
   if (attr(validation, "unique") === "True") requirements.push("Unique");
   if (attr(validation, "existing") === "True") requirements.push("Existing value");
-  const maxLength = attr(validation, "maxLength");
-  if (maxLength) requirements.push(`Max ${maxLength} characters`);
-  const valueListName = attr(asArray(validation["ValueListReference"])[0], "name");
-  if (valueListName) requirements.push(`In value list “${decodeEntities(valueListName)}”`);
-  if (validation["Range"] != null) requirements.push("In range");
-  if (validation["Calculation"] != null) requirements.push("By calculation");
+  // Newer exports write a `maxLength` attribute, FM 22 a <MaximumSize> element;
+  // for a container field the limit is in kilobytes.
+  const maxLength = attr(validation, "maxLength") ?? collectText(validation["MaximumSize"]).trim();
+  if (maxLength) {
+    const unit = attr(fieldNode, "datatype") === "Binary" ? "KB" : maxLength === "1" ? "character" : "characters";
+    requirements.push(`Max ${maxLength} ${unit}`);
+  }
+  // A deleted value list stays referenced, as id -1 with an empty name.
+  const valueListRef = asArray(validation["ValueListReference"])[0];
+  if (valueListRef != null) requirements.push(`In value list “${decodeEntities(attr(valueListRef, "name") ?? "") || UNKNOWN_TARGET}”`);
+  const range = asArray(validation["Range"])[0];
+  if (range != null) {
+    const from = attr(range, "from");
+    const to = attr(range, "to");
+    requirements.push(from != null && to != null ? `In range ${decodeEntities(from)} to ${decodeEntities(to)}` : "In range");
+  }
+  // Validation by calculation: <Calculated><Calculation>, left in place with
+  // enable="False" when the option is switched off.
+  const calculated = asArray(validation["Calculated"])[0];
+  const isCalculated = isRecord(calculated) && attr(calculated, "enable") !== "False";
+  if (isCalculated) requirements.push("By calculation");
 
   if (requirements.length === 0) return;
   fieldObj.attributes.validation = requirements.join(", ");
+  const formula = isCalculated ? calculationText(calculated["Calculation"]) : "";
+  if (formula) fieldObj.attributes.validationCalculation = formula;
+  const message = validationMessage(validation);
+  if (message) fieldObj.attributes.validationMessage = message;
   fieldObj.attributes.validateWhen =
     attr(validation, "type") === "Always" ? "Always" : "Only during data entry";
   fieldObj.attributes.validationOverride =
     attr(validation, "allowOverride") === "True" ? "User can override" : "Strict (no override)";
+}
+
+/** Validation's "Strict data type" option (<Strict>). */
+const STRICT_TYPE_LABELS: Readonly<Record<string, string>> = {
+  Numeric: "Strict data type: numeric only",
+  FourDigitYear: "Strict data type: 4-digit year date",
+  Time: "Strict data type: time of day",
+};
+
+/**
+ * The custom message shown when validation fails. FM 26 writes it as a
+ * calculation (<MessageCalc>, enable="False" when the option is off) or as
+ * <Message> text; FM 22 writes both, with no `enable`. Prefer the calculation.
+ */
+function validationMessage(validation: Record<string, unknown>): string {
+  const messageCalc = asArray(validation["MessageCalc"])[0];
+  if (isRecord(messageCalc)) {
+    return attr(messageCalc, "enable") === "False" ? "" : calculationText(messageCalc["Calculation"]);
+  }
+  return decodeEntities(collectText(validation["Message"]).trim());
 }
 
 /**
@@ -1855,22 +2164,15 @@ function annotatePrivilegeSet(node: unknown, obj: FmObject): void {
   if (description) obj.attributes.description = decodeEntities(description);
   const access = asArray(node["access"])[0];
   if (!isRecord(access)) return;
-  // Custom record access has no View/Create/Edit/Delete attributes on <Records>
-  // itself (those live per-table under <Custom>), so accessLevel() alone would
-  // read it as granting nothing — call out "Custom" explicitly instead.
-  if (attr(access["Records"], "Custom") === "True") {
-    obj.attributes.recordsAccess = "Custom";
-    const detail = privilegeSetDetail(access["Records"]);
-    if (detail) obj.detail = detail;
-  } else {
-    const records = accessLevel(access["Records"]);
-    if (records) obj.attributes.recordsAccess = records;
-  }
-  const layouts = accessLevel(access["Layouts"]);
+  const detail = privilegeSetDetail(access);
+  if (detail) obj.detail = detail;
+  const records = categoryAccess(access["Records"]);
+  if (records) obj.attributes.recordsAccess = records;
+  const layouts = categoryAccess(access["Layouts"]);
   if (layouts) obj.attributes.layoutsAccess = layouts;
-  const valueLists = accessLevel(access["ValueLists"]);
+  const valueLists = categoryAccess(access["ValueLists"]);
   if (valueLists) obj.attributes.valueListsAccess = valueLists;
-  const scripts = accessLevel(access["Scripts"]);
+  const scripts = categoryAccess(access["Scripts"]);
   if (scripts) obj.attributes.scriptsAccess = scripts;
   if (attr(access, "default") === "True") obj.attributes.defaultPrivilegeSet = "Yes";
 
@@ -1881,6 +2183,8 @@ function annotatePrivilegeSet(node: unknown, obj: FmObject): void {
   const OTHER_PRIVILEGES: ReadonlyArray<[string, string]> = [
     ["Print", "Printing"],
     ["Export", "Exporting"],
+    ["manageDatabase", "Manage database"],
+    ["manageCustomMenus", "Manage custom menus"],
     ["manageAccounts", "Manage accounts"],
     ["manageExtPrivs", "Manage extended privileges"],
     ["allowOverride", "Override data validation"],
@@ -1913,6 +2217,17 @@ function recordAccessCalcs(node: unknown): unknown[] {
     }
   }
   return calcs;
+}
+
+/** A permission category's summary. Custom privileges carry no
+ * View/Create/Edit/Delete attributes on the category node itself (those live
+ * per table / per object under <Custom>, see privilegeSetDetail), so
+ * accessLevel() would read them as granting nothing — call out "Custom"
+ * instead, plus ", Create" when new objects of that kind may be created. */
+function categoryAccess(node: unknown): string {
+  if (attr(node, "Custom") !== "True") return accessLevel(node);
+  const custom = asArray(isRecord(node) ? node["Custom"] : undefined)[0];
+  return attr(custom, "Create") === "True" ? "Custom, Create" : "Custom";
 }
 
 /** Summarize a permission category node, e.g. <Records Create="True" Edit="True">
@@ -2263,6 +2578,8 @@ interface ScanCtx {
   stepIndex?: number;
   /** The enclosing <Step> is disabled (enable="False"). */
   disabled?: boolean;
+  /** Inside a <ScriptTrigger>: its script reference is a "trigger" edge. */
+  inTrigger?: boolean;
 }
 
 /** A `<DataSourceReference id="0">` names the current file ("Current File" in
@@ -2356,6 +2673,16 @@ function scanRefs(
       continue;
     }
 
+    // Import Records lists every field of the target table as a <Map>: kind 0
+    // "import to", kind 2 "match with" (update matching records), and kind 1
+    // "not import to" — which isn't a use of the field.
+    if (key === "Map") {
+      for (const el of asArray(value)) {
+        if (attr(el, "kind") !== "1") scanRefs(el, fromUid, ctx, refTags, out, inChunkList);
+      }
+      continue;
+    }
+
     // A script trigger whose script was deleted keeps its event but loses its
     // <ScriptReference> (FileMaker shows the script as <unknown>).
     if (key === "ScriptTrigger") {
@@ -2363,7 +2690,7 @@ function scanRefs(
         if (isRecord(el) && el["ScriptReference"] == null) {
           pushRef(out, { fromUid, toType: "script", toId: MISSING_REF_ID, toName: UNKNOWN_TARGET, kind: "trigger", forceBroken: true }, ctx);
         }
-        scanRefs(el, fromUid, ctx, refTags, out, inChunkList);
+        scanRefs(el, fromUid, { ...ctx, inTrigger: true }, refTags, out, inChunkList);
       }
       continue;
     }
@@ -2403,7 +2730,7 @@ function scanRefs(
             toType: targetType,
             toId: id,
             toName: name,
-            kind: edgeKind(targetType, ctx.stepName),
+            kind: ctx.inTrigger && targetType === "script" ? "trigger" : edgeKind(targetType, ctx.stepName),
           };
           // The data source itself is this file's own catalog entry, not a target
           // inside the external file.
@@ -2601,11 +2928,15 @@ function activeAutoEnter(node: unknown): unknown {
   return active;
 }
 
-/** A <Validation> without a validation-by-calculation that's switched off (the
- * same node when it's on or absent). */
+/** A <Validation> without a validation-by-calculation or custom-message
+ * calculation that's switched off (the same node when neither is). */
 function activeValidation(node: unknown): unknown {
-  if (!isRecord(node) || attr(asArray(node["Calculated"])[0], "enable") !== "False") return node;
-  return withoutKey(node, "Calculated");
+  if (!isRecord(node)) return node;
+  let active = node;
+  for (const key of ["Calculated", "MessageCalc"]) {
+    if (attr(asArray(active[key])[0], "enable") === "False") active = withoutKey(active, key);
+  }
+  return active;
 }
 
 /** A field element with only its in-effect auto-enter / validation options (the

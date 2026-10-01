@@ -312,6 +312,7 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
       parts.push(`field: ${d.field.primaryField}`);
       if (d.field.sort)            parts.push(`sort: true`);
       if (d.field.secondaryField)  parts.push(`display: ${d.field.secondaryField}`);
+      if (d.field.showOnlySecondary) parts.push(`displayOnly: true`);
       if (d.field.showRelatedFrom) parts.push(`relatedFrom: ${d.field.showRelatedFrom}`);
     }
   } else if (d?.kind === "layout") {
@@ -330,6 +331,8 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
     if (d.portalTable) parts.push(`portal: ${d.portalTable}${d.portalRows != null ? ` (${d.portalRows} rows)` : ""}`);
     if (d.info)        parts.push(`info: ${d.info}`);
     if (d.tooltip)     parts.push(`tooltip: ${d.tooltip}`);
+    if (d.hideWhen)    parts.push(`hide when: ${d.hideWhen}${d.hideInFind ? " (also in Find mode)" : ""}`);
+    for (const c of d.conditionalFormats ?? []) parts.push(`conditional format: ${c}`);
     if (d.style)       parts.push("style:", ...d.style.split("\n").map((l) => `  ${l}`));
     for (const t of d.triggers ?? []) {
       parts.push(`trigger: ${t.action} → ${t.scriptName}${t.parameter ? ` param: ${t.parameter}` : ""}`);
@@ -342,6 +345,16 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
       parts.push(`${t.table}: view=${view} edit=${edit} create=${t.create} delete=${del} fields=${t.fieldsAccess}`);
       for (const f of t.fields ?? []) {
         parts.push(`  ${t.table}.${f.field}: ${f.access}`);
+      }
+    }
+    const objectGrants = [
+      ["layout", d.layouts],
+      ["script", d.scripts],
+      ["value list", d.valueLists],
+    ] as const;
+    for (const [category, grants] of objectGrants) {
+      for (const g of grants ?? []) {
+        parts.push(`${category} ${g.name}: ${g.access}${g.records ? ` records=${g.records}` : ""}`);
       }
     }
   } else {

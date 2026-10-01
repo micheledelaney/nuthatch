@@ -9,6 +9,7 @@ import {
   type LayoutTriggerInfo,
   type ObjectDetail,
   type ObjectType,
+  type PrivilegeSetObjectAccess,
   type PrivilegeSetTableAccess,
   type SolutionModel,
 } from "@/types/ddr";
@@ -124,6 +125,8 @@ const ATTR_LABELS: Record<string, string> = {
   validation: "Validation",
   validateWhen: "Validate when",
   validationOverride: "Override",
+  validationCalculation: "Validation calculation",
+  validationMessage: "Validation message",
   indexing: "Indexing",
   autoIndex: "Auto-index",
   indexLanguage: "Index language",
@@ -143,9 +146,12 @@ const ATTR_LABELS: Record<string, string> = {
   siriShortcut: "Siri shortcut",
   // Layout object properties.
   loType: "Object type",
+  objectName: "Object name",
   position: "Position",
   label: "Label",
   tooltip: "Tooltip",
+  hideWhen: "Hide object when",
+  conditionalFormats: "Conditional formatting",
   portalOccurrence: "Table occurrence",
   portalRows: "Portal rows",
   // Layout options.
@@ -163,6 +169,14 @@ const ATTR_LABELS: Record<string, string> = {
   autoLogin: "Auto-login",
   encryption: "Encryption",
   minimumVersion: "Minimum version",
+  defaultMenuSet: "Default menu set",
+  allowStoredCredentials: "Allow stored credentials",
+  requirePasscode: "Require iOS/iPadOS passcode",
+  showSignInFields: "Show sign-in fields with OAuth/AD FS",
+  hiddenInLaunchCenter: "Hidden in Launch Center",
+  hiddenOnWebDirectHomepage: "Hidden on WebDirect homepage",
+  requireFileAuthorization: "Require full access to reference file",
+  authorizedFilesSameHost: "Authorized files on same host only",
 };
 
 /** A single color value (e.g. a table occurrence's graph box) as a swatch + hex. */
@@ -675,12 +689,62 @@ export function Detail({
   return <ValueListDetail detail={detail} refIndex={refIndex} model={model} fileUid={owner.fileUid} onGo={onGo} />;
 }
 
-/** A privilege set's custom per-table record access — one row per table, with
- * an expandable per-field breakdown for any table whose field access is
- * itself Custom (potentially hundreds of fields, so it starts collapsed). */
+/** A privilege set's custom privileges: per-table record access (with an
+ * expandable per-field breakdown), then per-layout, per-script and
+ * per-value-list access for whichever of those categories is Custom. */
 function PrivilegeSetDetail({ detail }: { detail: Extract<ObjectDetail, { kind: "privilegeSet" }> }) {
   return (
-    <Section title="Table & field access" count={detail.tables.length}>
+    <>
+      {detail.tables.length > 0 && <PrivilegeTableAccess tables={detail.tables} />}
+      {detail.layouts && <PrivilegeObjectAccess title="Layout access" column="Layout" grants={detail.layouts} showRecords />}
+      {detail.scripts && <PrivilegeObjectAccess title="Script access" column="Script" grants={detail.scripts} />}
+      {detail.valueLists && <PrivilegeObjectAccess title="Value list access" column="Value list" grants={detail.valueLists} />}
+    </>
+  );
+}
+
+/** Custom per-layout / per-script / per-value-list grants, one row per object. */
+function PrivilegeObjectAccess({
+  title,
+  column,
+  grants,
+  showRecords = false,
+}: {
+  title: string;
+  column: string;
+  grants: PrivilegeSetObjectAccess[];
+  showRecords?: boolean;
+}) {
+  return (
+    <Section title={title} count={grants.length}>
+      <table className="comparison-table privilege-access-table">
+        <thead>
+          <tr>
+            <th>{column}</th>
+            <th>Access</th>
+            {showRecords && <th>Records</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {grants.map((g, i) => (
+            <tr key={i}>
+              <td>{g.name}</td>
+              <td>{g.access}</td>
+              {showRecords && <td>{g.records ?? ""}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Section>
+  );
+}
+
+/** Custom per-table record access — one row per table, with an expandable
+ * per-field breakdown for any table whose field access is itself Custom
+ * (potentially hundreds of fields, so it starts collapsed). */
+function PrivilegeTableAccess({ tables }: { tables: PrivilegeSetTableAccess[] }) {
+  return (
+    <Section title="Table & field access" count={tables.length}>
       <table className="comparison-table privilege-access-table">
         <thead>
           <tr>
@@ -693,7 +757,7 @@ function PrivilegeSetDetail({ detail }: { detail: Extract<ObjectDetail, { kind: 
           </tr>
         </thead>
         <tbody>
-          {detail.tables.map((t, i) => (
+          {tables.map((t, i) => (
             <tr key={i}>
               <td>{t.table}</td>
               <td>
@@ -1267,6 +1331,7 @@ function LayoutObjectTree({
         title={[
           obj.fieldRef,
           obj.tooltip ? `Tooltip: ${obj.tooltip}` : "",
+          obj.hideWhen ? `Hide when: ${obj.hideWhen}` : "",
           obj.bounds ? `${obj.bounds.left}, ${obj.bounds.top} → ${obj.bounds.right}, ${obj.bounds.bottom}` : "",
         ]
           .filter(Boolean)
@@ -1455,6 +1520,17 @@ function LayoutObjectRow({
         );
       })()}
       {obj.tooltip && <div className="layout-obj-info layout-obj-tooltip">Tooltip: {obj.tooltip}</div>}
+      {obj.hideWhen && (
+        <div className="layout-obj-info layout-obj-tooltip">
+          Hide when: {obj.hideWhen}
+          {obj.hideInFind ? " (also in Find mode)" : ""}
+        </div>
+      )}
+      {obj.conditionalFormats?.map((c, i) => (
+        <div key={i} className="layout-obj-info layout-obj-tooltip">
+          Conditional format: {c}
+        </div>
+      ))}
       {obj.triggers && obj.triggers.length > 0 && (
         <div className="layout-obj-trigger-lines">
           {obj.triggers.map((t, i) => {
@@ -1621,7 +1697,7 @@ function ValueListDetail({
           </dd>
           {field.secondaryField && (
             <>
-              <dt>Also displays</dt>
+              <dt>{field.showOnlySecondary ? "Displays only" : "Also displays"}</dt>
               <dd>
                 <FieldRefLink qualified={field.secondaryField} model={model} fileUid={fileUid} onGo={onGo} />
               </dd>
