@@ -333,7 +333,7 @@ Also: note what AF_SHARE's File Options ▸ "Log in using" shows. That settles t
 
 ## Running the test
 
-`npm test` (or `npm run test:watch`) runs [tests/test-solution.test.ts](../../test-solution.test.ts). It parses the exports in `XML FM26/` and `XML FM22/` and checks them against the expected output. The same build must give the same model whichever FileMaker version exported it.
+`npm test` (or `npm run test:watch`) runs [tests/test-solution.test.ts](../../test-solution.test.ts). It parses the exports in `XML FM26/`, `XML FM22/` and `XML FM21/` and checks them against the expected output. The same build must give the same model whichever FileMaker version exported it.
 
 | Scenario | Exports | Expected output |
 |---|---|---|
@@ -352,5 +352,7 @@ A scenario whose exports are missing is skipped. Checks tied to a pinned to-do r
 
 ## To do
 
-- **Parser: auto-login label** (pinned): the parser decides the File Options auto-login label by whether an account name is present, not by `<Login type>` (1 = named account, 0 = Guest, -1 = off). TEST_EXT (Guest) shows `Account “[Guest]”` instead of "Guest account", and a file with no automatic login (AF_SHARE, `type="-1"`) shows "Guest account". Until fixed, the `EXT:file:TEST_EXT autoLogin` check fails.
+- **Parser: auto-login label** (pinned): the parser decides the File Options auto-login label by whether an account name is present, not by `<Login type>` (1 = named account, 0 = Guest, -1 = off). TEST_EXT (Guest) shows `Account “[Guest]”` instead of "Guest account", and a file with no automatic login (AF_SHARE, `type="-1"`) shows "Guest account". Until fixed, the `EXT:file:TEST_EXT autoLogin` check fails. Still to decide: whether `-1` shows nothing or "Off".
+- **Two broken edges for one deletion**: a deleted data source gives TO_DelDS two broken edges (data source and table), and VL_ExtDeleted two (value list and data source). The report card counts objects, so it's unaffected, but the object page and the browse list show "2 broken refs". Decide whether to keep both.
+- **FM 22 export with TEST_EXT closed**: would confirm the closed-file shape the parser relies on (TO_Ext without its base table, step 13 without a layout id). It could also become a test scenario.
 - **Themes** (left out of the tests for now): rename each file's default theme (**TH_Used** in TEST_MAIN, **TH_Ext** in TEST_EXT), import a second theme into TEST_MAIN as **TH_Unused** and apply it to nothing, and have every layout use its file's one theme. Then remove `"theme"` from `ignoredTypes` in both expected files and add the theme expectations back (see `todo` there).
