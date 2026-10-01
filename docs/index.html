@@ -407,6 +407,107 @@
         }
       }
 
+      /* Export for AI and Command line: text sections between the features and install. */
+      .topic {
+        border-top: 1px solid var(--border);
+        padding: 96px 0;
+        scroll-margin-top: 57px;
+      }
+      .topic.alt {
+        background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
+      }
+      /* Centered heading and intro above the stats. */
+      .topic-head {
+        max-width: 680px;
+        margin: 0 auto 48px;
+        text-align: center;
+      }
+      .topic-head p {
+        color: var(--text-dim);
+        margin: 0;
+      }
+      .topic-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 64px;
+        align-items: center;
+      }
+      /* Let the terminal scroll instead of widening its column past the screen. */
+      .topic-split > * {
+        min-width: 0;
+      }
+      .topic h2 {
+        font-size: 28px;
+        line-height: 1.2;
+        font-weight: 700;
+        margin: 0 0 12px;
+        text-wrap: balance;
+      }
+      .topic-split p {
+        color: var(--text-dim);
+        margin: 0;
+      }
+      .terminal {
+        margin: 0;
+        padding: 16px 20px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-deep);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--text-dim);
+        overflow-x: auto;
+      }
+      .terminal .cmd {
+        color: var(--text);
+      }
+      .terminal .cmd::before {
+        content: "$ ";
+        color: var(--accent);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0;
+        list-style: none;
+      }
+      .stats li {
+        padding: 28px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--bg-elevated) 45%, transparent);
+      }
+      .stats .num {
+        display: block;
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 6px;
+      }
+      .stats .label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .stats p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--text-dim);
+      }
+      .topic .method {
+        max-width: 680px;
+        margin: 24px auto 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+
       /* Closing: pointer to the install guide, then how to get in touch. */
       .closing {
         padding: 72px 16px;
@@ -460,6 +561,16 @@
         .row.flip .text {
           order: 0;
         }
+        .topic {
+          padding: 64px 0;
+        }
+        .topic-split {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        .stats {
+          grid-template-columns: 1fr;
+        }
       }
       @media (max-width: 560px) {
         .nav-links a.optional {
@@ -478,6 +589,8 @@
         <a class="brand" href="#top"><img src="bird.svg" alt="" />nuthatch</a>
         <nav class="nav-links">
           <a class="optional" href="#features">Features</a>
+          <a class="optional" href="#ai">AI</a>
+          <a class="optional" href="#cli">CLI</a>
           <a class="optional" href="#install">Install</a>
           <a href="https://github.com/micheledelaney/nuthatch">GitHub</a>
         </nav>
@@ -583,6 +696,63 @@
           </div>
         </div>
       </div>
+
+      <section class="topic" id="ai">
+        <div class="wrap">
+          <div class="topic-head">
+            <span class="eyebrow">Export for AI</span>
+            <h2>Give your AI assistant the answers, not the XML</h2>
+            <p>
+              Choose <strong>Export for AI…</strong> on any saved analysis, or run
+              <a href="#cli">the command-line tool</a>. nuthatch writes a compact index of your solution
+              into your project folder, with every reference already resolved, so your assistant looks
+              answers up instead of searching the raw XML.
+            </p>
+          </div>
+          <ul class="stats">
+            <li>
+              <span class="num">55% fewer</span>
+              <span class="label">Tokens over 20 questions</span>
+              <p>An AI assistant answered the same 20 dependency questions twice: once from the export, once from the XML.</p>
+            </li>
+            <li>
+              <span class="num">20 of 20</span>
+              <span class="label">Answers right</span>
+              <p>Against 11 of 20 from the XML, where it credited references to the wrong script, counted steps from 0, or missed deleted objects.</p>
+            </li>
+            <li>
+              <span class="num">18× faster</span>
+              <span class="label">Per lookup</span>
+              <p>0.07 s against 1.25 s to search the XML. The one-time export takes 8 seconds.</p>
+            </li>
+          </ul>
+          <p class="method">
+            Measured on a 127 MB production solution with 21,867 objects. The questions asked what
+            calls a script, what references a field (and whether it can be deleted), what goes to a
+            layout, where a custom function, value list or table occurrence is used, what a script
+            references, and whether a script references anything deleted. A single lookup such as
+            “What uses this field?” returns a median of 116 tokens, against 1,177 for a search of the
+            XML (estimated as characters divided by 4).
+          </p>
+        </div>
+      </section>
+
+      <section class="topic alt" id="cli">
+        <div class="wrap topic-split">
+          <div>
+            <span class="eyebrow">Command line</span>
+            <h2>Export from the terminal</h2>
+            <p>
+              The standalone <code>nuthatch</code> command runs the same parser without opening the
+              app, and it doesn't need Node installed. Re-export after every change to your solution,
+              or add it to a script.
+            </p>
+          </div>
+          <pre class="terminal"><span class="cmd">nuthatch export-ai Solution.xml</span>
+Exported 21867 objects and 46949 references
+to ~/my-project/nuthatch</pre>
+        </div>
+      </section>
 
       <div class="wrap closing" id="install">
         <h2>Installation</h2>

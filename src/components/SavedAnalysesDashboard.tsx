@@ -252,6 +252,7 @@ function AnalysisRow({
 }) {
   const openSaved = useStore((s) => s.openSaved);
   const removeSaved = useStore((s) => s.removeSaved);
+  const exportForAi = useStore((s) => s.exportForAi);
   const openEdit = useStore((s) => s.openEdit);
   const rowRef = useRef<HTMLLIElement>(null);
 
@@ -292,6 +293,7 @@ function AnalysisRow({
             label: item.note ? "Edit note" : "Add note",
             onSelect: () => openEdit({ target: { kind: "analysis-note", id: item.id }, initialValue: item.note ?? "" }),
           },
+          { label: "Export for AI…", onSelect: () => void exportForAi(item.id) },
           { label: "Delete", danger: true, onSelect: () => void removeSaved(item.id) },
         ]}
       />

@@ -19,6 +19,8 @@ import {
   type ProjectRecord,
   type SavedMeta,
 } from "@/state/savedAnalyses";
+import { buildAiExport } from "@/core/export/aiExport";
+import { chooseExportDestination } from "@/state/exportAnalysis";
 
 /** What the shared edit dialog is currently editing. */
 export type EditTarget =
@@ -97,6 +99,8 @@ interface AppState {
   /** Display name of the analysis currently open (shown in the main header). */
   analysisName: string | null;
   error: string | null;
+  /** Informational banner (e.g. where an export was written), dismissible. */
+  notice: string | null;
 
   /** Saved analyses for the landing dashboard, newest first. */
   savedItems: SavedMeta[];
@@ -207,6 +211,9 @@ interface AppState {
   openSaved: (id: string) => Promise<void>;
   /** Delete a saved analysis by id. */
   removeSaved: (id: string) => Promise<void>;
+  /** Export a saved analysis as AI-readable files into a folder the user picks. */
+  exportForAi: (id: string) => Promise<void>;
+  dismissNotice: () => void;
   /** Compare two saved analyses (ordered oldest → newest) and show the diff. */
   compareAnalyses: (idA: string, idB: string) => Promise<void>;
   /** Close the comparison view. */
@@ -370,6 +377,7 @@ export const useStore = create<AppState>((set, get) => ({
   model: null,
   analysisName: null,
   error: null,
+  notice: null,
   savedItems: [],
   projects: [],
   lastResult: null,
@@ -528,6 +536,42 @@ export const useStore = create<AppState>((set, get) => ({
     await deleteSaved(id);
     set({ savedItems: await listSaved() });
   },
+
+  exportForAi: async (id) => {
+    const meta = get().savedItems.find((i) => i.id === id);
+    if (!meta) return;
+    set({ error: null, notice: null });
+    try {
+      // Pick the destination first: the browser folder picker needs the
+      // click's user activation, which the model build below would outlast.
+      const destination = await chooseExportDestination(`${meta.name} - nuthatch.zip`);
+      if (!destination) return;
+      const result = await loadSaved(id);
+      if (!result) {
+        set({ error: "That saved analysis could not be found.", savedItems: await listSaved() });
+        return;
+      }
+      const files = buildAiExport(buildModel(result), {
+        analysisName: meta.name,
+        projectName: meta.projectName,
+        savedAt: meta.savedAt,
+        exportedAt: Date.now(),
+      });
+      const outcome = await destination.write(files);
+      const hint = `Add "FileMaker analysis data is in nuthatch/ — read nuthatch/README.md first." to the project's CLAUDE.md or AGENTS.md so AI assistants find it.`;
+      set({
+        notice:
+          outcome.kind === "folder"
+            ? `Exported "${meta.name}" to ${outcome.location}. ${hint}`
+            : `Downloaded ${outcome.fileName}. Unzip it into your project folder. ${hint}`,
+      });
+    } catch (err) {
+      // Tauri command errors arrive as plain strings, not Error objects.
+      set({ error: `Export failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  },
+
+  dismissNotice: () => set({ notice: null }),
 
   compareAnalyses: async (idA, idB) => {
     const { savedItems } = get();
