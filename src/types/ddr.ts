@@ -179,6 +179,12 @@ export type ObjectDetail =
       triggers?: LayoutTriggerInfo[];
       /** Tooltip calculation text. */
       tooltip?: string;
+      /** "Hide object when" calculation text. */
+      hideWhen?: string;
+      /** The hide condition also applies in Find mode. */
+      hideInFind?: boolean;
+      /** Conditional-formatting condition calculations, in evaluation order. */
+      conditionalFormats?: string[];
       /** Absolute position on the layout. */
       bounds?: LayoutBounds;
       /** Normalized per-object styling from `<LocalCSS>` (fill/text/border colors,
@@ -210,12 +216,31 @@ export type ObjectDetail =
       triggers: LayoutTriggerInfo[];
     }
   | {
-      /** A privilege set whose record access is `<Records Custom="True">` —
-       * FileMaker's "Custom privileges" option, one row per table plus (when
-       * that table's field access is itself Custom) a per-field breakdown. */
+      /** A privilege set with at least one category set to FileMaker's "Custom
+       * privileges" option. Records (`<Records Custom="True">`): one row per
+       * table plus (when that table's field access is itself Custom) a
+       * per-field breakdown; empty when record access isn't Custom. Layouts,
+       * scripts, value lists: one row per object, present only when that
+       * category is Custom. */
       kind: "privilegeSet";
       tables: PrivilegeSetTableAccess[];
+      layouts?: PrivilegeSetObjectAccess[];
+      scripts?: PrivilegeSetObjectAccess[];
+      valueLists?: PrivilegeSetObjectAccess[];
     };
+
+/** One layout's, script's or value list's custom access within a privilege set. */
+export interface PrivilegeSetObjectAccess {
+  /** Object name, or "(new layouts)" / "(new scripts)" / "(new value lists)"
+   * for the default applied to objects created after this privilege set was
+   * defined. */
+  name: string;
+  /** "Modifiable" | "View only" (layouts, value lists) / "Executable only"
+   * (scripts) | "No access". */
+  access: string;
+  /** Layouts only: access to records viewed through the layout. */
+  records?: string;
+}
 
 /** One table's custom record/field access within a privilege set. */
 export interface PrivilegeSetTableAccess {
@@ -348,6 +373,12 @@ export interface LayoutObjectInfo {
   triggers?: LayoutTriggerInfo[];
   /** Tooltip calculation text. */
   tooltip?: string;
+  /** "Hide object when" calculation text. */
+  hideWhen?: string;
+  /** The hide condition also applies in Find mode. */
+  hideInFind?: boolean;
+  /** Conditional-formatting condition calculations, in evaluation order. */
+  conditionalFormats?: string[];
   /** Normalized per-object styling from `<LocalCSS>` (colors, fonts, borders, …),
    * one declaration per line. */
   style?: string;
@@ -390,6 +421,9 @@ export interface ValueListFieldSource {
   sort: boolean;
   /** Optional second field shown alongside, as "TableOccurrence::Field". */
   secondaryField?: string;
+  /** "Show values only from second field": the list displays the second field's
+   * values instead of the primary field's. */
+  showOnlySecondary?: boolean;
   /** When set, only related values are shown, anchored from this occurrence. */
   showRelatedFrom?: string;
 }

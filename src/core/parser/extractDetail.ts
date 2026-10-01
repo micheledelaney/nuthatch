@@ -5,6 +5,7 @@ import type {
   LayoutTriggerInfo,
   ObjectDetail,
   PrivilegeSetFieldAccess,
+  PrivilegeSetObjectAccess,
   PrivilegeSetTableAccess,
   RelationshipSide,
   ScriptStep,
@@ -202,14 +203,97 @@ export function relationshipDetail(node: unknown): ObjectDetail | undefined {
 }
 
 /**
- * Extract a privilege set's per-table (and, when defined, per-field) custom
- * record access from `<Records Custom="True"><Custom><ObjectList><Table>…`.
- * Each `<Table>` carries View/Edit/Create/Delete access plus a `<Fields>`
- * summary that expands into per-`<Field>` grants only when that table's field
- * access is itself "Custom" — otherwise every field shares the one grant.
+ * Extract a privilege set's custom privileges from its `<access>` node: the
+ * per-table (and, when defined, per-field) record access from
+ * `<Records Custom="True"><Custom><ObjectList><Table>…`, and the per-object
+ * grants of any Custom layout / script / value-list category. Each `<Table>`
+ * carries View/Edit/Create/Delete access plus a `<Fields>` summary that expands
+ * into per-`<Field>` grants only when that table's field access is itself
+ * "Custom" — otherwise every field shares the one grant. Undefined when no
+ * category is Custom.
  */
-export function privilegeSetDetail(recordsNode: unknown): ObjectDetail | undefined {
-  if (!isRecord(recordsNode) || attr(recordsNode, "Custom") !== "True") return undefined;
+export function privilegeSetDetail(accessNode: unknown): ObjectDetail | undefined {
+  if (!isRecord(accessNode)) return undefined;
+  const tables = customTableAccess(accessNode["Records"]);
+  const layouts = customObjectAccess(accessNode["Layouts"], LAYOUT_GRANTS);
+  const scripts = customObjectAccess(accessNode["Scripts"], SCRIPT_GRANTS);
+  const valueLists = customObjectAccess(accessNode["ValueLists"], VALUE_LIST_GRANTS);
+  if (tables.length === 0 && !layouts && !scripts && !valueLists) return undefined;
+  return {
+    kind: "privilegeSet",
+    tables,
+    ...(layouts ? { layouts } : {}),
+    ...(scripts ? { scripts } : {}),
+    ...(valueLists ? { valueLists } : {}),
+  };
+}
+
+/** How one Custom category (<Layouts>, <Scripts>, <ValueLists>) lists its
+ * per-object grants: `<Custom><ObjectList><Layout access records type>
+ * <LayoutReference/>…`, with `type="New"` for the new-objects default. */
+interface ObjectGrantSpec {
+  itemTag: string;
+  refTag: string;
+  newLabel: string;
+  /** Label for `access="ReadOnly"`, which FileMaker words per category. */
+  readOnlyLabel: string;
+}
+
+const LAYOUT_GRANTS: ObjectGrantSpec = {
+  itemTag: "Layout",
+  refTag: "LayoutReference",
+  newLabel: "(new layouts)",
+  readOnlyLabel: "View only",
+};
+const SCRIPT_GRANTS: ObjectGrantSpec = {
+  itemTag: "Script",
+  refTag: "ScriptReference",
+  newLabel: "(new scripts)",
+  readOnlyLabel: "Executable only",
+};
+// No sample export has custom value-list privileges; assumed to follow the
+// layout/script shape.
+const VALUE_LIST_GRANTS: ObjectGrantSpec = {
+  itemTag: "ValueList",
+  refTag: "ValueListReference",
+  newLabel: "(new value lists)",
+  readOnlyLabel: "View only",
+};
+
+/** The per-object grants of a category whose access is Custom, or undefined
+ * when it isn't Custom. */
+function customObjectAccess(categoryNode: unknown, spec: ObjectGrantSpec): PrivilegeSetObjectAccess[] | undefined {
+  const node = asArray(categoryNode)[0];
+  if (!isRecord(node) || attr(node, "Custom") !== "True") return undefined;
+  const custom = asArray(node["Custom"])[0];
+  const list = asArray(isRecord(custom) ? custom["ObjectList"] : undefined)[0];
+  return asArray(isRecord(list) ? list[spec.itemTag] : undefined)
+    .filter(isRecord)
+    .map((item) => {
+      const records = attr(item, "records");
+      return {
+        name:
+          attr(item, "type") === "New"
+            ? spec.newLabel
+            : decodeEntities(attr(asArray(item[spec.refTag])[0], "name") ?? ""),
+        access: objectGrantLabel(attr(item, "access"), spec.readOnlyLabel),
+        ...(records != null ? { records: objectGrantLabel(records, "View only") } : {}),
+      };
+    });
+}
+
+/** A per-object grant: ReadWrite → "Modifiable", ReadOnly → the category's
+ * read-only wording, anything else (NoAccess) → "No access". */
+function objectGrantLabel(raw: string | undefined, readOnlyLabel: string): string {
+  if (raw === "ReadWrite") return "Modifiable";
+  if (raw === "ReadOnly") return readOnlyLabel;
+  return "No access";
+}
+
+/** Custom record access (`<Records Custom="True">`): one row per table, or none
+ * when record access isn't Custom. */
+function customTableAccess(recordsNode: unknown): PrivilegeSetTableAccess[] {
+  if (!isRecord(recordsNode) || attr(recordsNode, "Custom") !== "True") return [];
   const custom = asArray(recordsNode["Custom"])[0];
   const list = isRecord(custom) ? custom["ObjectList"] : undefined;
   const tables: PrivilegeSetTableAccess[] = [];
@@ -232,7 +316,7 @@ export function privilegeSetDetail(recordsNode: unknown): ObjectDetail | undefin
       ...tableFieldsAccess(table["Fields"]),
     });
   }
-  return tables.length ? { kind: "privilegeSet", tables } : undefined;
+  return tables;
 }
 
 /** View/Edit/Create/Delete grant on a `<Records>` table row: ReadWrite → "Yes",
@@ -254,14 +338,16 @@ function recordGrantCondition(node: unknown): string | undefined {
 }
 
 /** The `<Fields access=…>` summary for one table, expanded into per-field
- * grants only when that summary is "Custom". */
+ * grants when it is "Custom" — or, as FM 21 writes custom access, when a
+ * per-field list follows another summary. */
 function tableFieldsAccess(fieldsWrapper: unknown): { fieldsAccess: string; fields?: PrivilegeSetFieldAccess[] } {
   const node = asArray(fieldsWrapper)[0];
   const raw = attr(node, "access");
-  const fieldsAccess = fieldsSummaryLabel(raw);
-  if (raw !== "Custom" || !isRecord(node)) return { fieldsAccess };
+  const fieldNodes = isRecord(node) ? asArray(node["Field"]) : [];
+  if (raw !== "Custom" && fieldNodes.length === 0) return { fieldsAccess: fieldsSummaryLabel(raw) };
+  const fieldsAccess = "Custom";
   const fields: PrivilegeSetFieldAccess[] = [];
-  for (const field of asArray(node["Field"])) {
+  for (const field of fieldNodes) {
     if (!isRecord(field)) continue;
     const name = attr(asArray(field["FieldReference"])[0], "name");
     fields.push({
@@ -492,14 +578,20 @@ function layoutObjects(container: unknown, fileUid?: string, stepTextByUuid?: Ma
       if (children.length > 0) info.children = children;
     }
 
-    // Popover Button: objects inside the popover panel become children
+    // Popover Button: objects inside the popover panel become children. The
+    // panel is a <LayoutObject type="PopoverPanel"> under <PopoverButton> (or a
+    // bare <PopoverPanel> element); either way the panel itself is skipped and
+    // its objects hang off the button.
     const popoverButtonNode = asArray(obj["PopoverButton"])[0];
     if (isRecord(popoverButtonNode)) {
-      const panel = asArray(popoverButtonNode["PopoverPanel"])[0];
-      if (isRecord(panel)) {
-        const children = layoutObjects(panel["ObjectList"], fileUid, stepTextByUuid);
-        if (children.length > 0) info.children = children;
-      }
+      const panels = [
+        ...asArray(popoverButtonNode["PopoverPanel"]),
+        ...asArray(popoverButtonNode["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
+      ];
+      const children = panels.flatMap((panel) =>
+        isRecord(panel) ? layoutObjects(panel["ObjectList"], fileUid, stepTextByUuid) : [],
+      );
+      if (children.length > 0) info.children = children;
     }
 
     // Object-level script triggers (separate from layout-level triggers)
@@ -511,6 +603,24 @@ function layoutObjects(container: unknown, fileUid?: string, stepTextByUuid?: Ma
     if (isRecord(tooltipNode)) {
       const tip = calculationText(tooltipNode["Calculation"]);
       if (tip) info.tooltip = stripOuterQuotes(tip);
+    }
+
+    // Hide-object-when and conditional-formatting calculations:
+    // <Conditions><Hide findMode=…><Calculation> and
+    // <Conditions><Formatting><Condition><Calculation>.
+    const conditions = asArray(obj["Conditions"])[0];
+    if (isRecord(conditions)) {
+      const hide = asArray(conditions["Hide"])[0];
+      const hideCalc = isRecord(hide) ? calculationText(hide["Calculation"]) : "";
+      if (hideCalc) {
+        info.hideWhen = hideCalc;
+        if (attr(hide, "findMode") === "True") info.hideInFind = true;
+      }
+      const formatting = asArray(conditions["Formatting"])[0];
+      const formats = asArray(isRecord(formatting) ? formatting["Condition"] : undefined)
+        .map((c) => (isRecord(c) ? calculationText(c["Calculation"]) : ""))
+        .filter((c) => c !== "");
+      if (formats.length > 0) info.conditionalFormats = formats;
     }
 
     out.push(info);
@@ -536,7 +646,8 @@ export function layoutTriggers(container: unknown): LayoutTriggerInfo[] {
     const info: LayoutTriggerInfo = {
       action: attr(trigger, "action") ?? "ScriptTrigger",
       id: attr(trigger, "id"),
-      scriptName: decodeEntities(attr(script, "name") ?? ""),
+      // A trigger whose script was deleted keeps its event but loses the <ScriptReference>.
+      scriptName: decodeEntities(attr(script, "name") ?? "") || "<unknown>",
       scriptId: attr(script, "id"),
       scriptUuid: attr(script, "UUID"),
       modes: triggerModes(trigger),
@@ -732,12 +843,12 @@ function fieldSource(node: unknown): ValueListFieldSource | undefined {
   const primary = asArray(node["PrimaryField"])[0];
   if (!isRecord(primary)) return undefined;
 
-  // show="False": "Also display values from second field" is unchecked, though
-  // FileMaker keeps the field it last pointed at.
+  // A <SecondaryField> is always in use: unchecking "Also display values from
+  // second field" removes the element. Its `show` (the opposite of the primary
+  // field's) records "Show values only from second field".
   const secondaryWrap = asArray(node["SecondaryField"])[0];
-  const secondaryField = isRecord(secondaryWrap) && attr(secondaryWrap, "show") !== "False"
-    ? qualifiedField(secondaryWrap["FieldReference"])
-    : undefined;
+  const secondaryField = isRecord(secondaryWrap) ? qualifiedField(secondaryWrap["FieldReference"]) : undefined;
+  const showOnlySecondary = isRecord(secondaryWrap) && attr(secondaryWrap, "show") === "True";
 
   const showRelated = asArray(node["ShowRelated"])[0];
   const showRelatedFrom =
@@ -750,6 +861,7 @@ function fieldSource(node: unknown): ValueListFieldSource | undefined {
     primaryField: qualifiedField(primary["FieldReference"]),
     sort: attr(primary, "sort") === "True",
     secondaryField: secondaryField || undefined,
+    ...(showOnlySecondary ? { showOnlySecondary } : {}),
     showRelatedFrom,
   };
 }
@@ -766,8 +878,10 @@ export function qualifiedField(wrapper: unknown): string {
   return field ? (to ? `${to}::${field}` : field) : to ? `${to}::<Field Missing>` : "<Field Missing>";
 }
 
-/** Calculation text from a <Calculation> node (the formula lives in <Text>). */
+/** Calculation text from a <Calculation> node (the formula lives in <Text>; FM 21
+ * sometimes writes it as the node's own text, which the XML parser gives as a string). */
 export function calculationText(calc: unknown): string {
+  if (typeof calc === "string") return calc.trim();
   if (!isRecord(calc)) return "";
   return (collectText(calc["Text"]) || collectText(calc)).trim();
 }

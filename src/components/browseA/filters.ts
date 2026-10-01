@@ -103,6 +103,12 @@ export function matchesPrivCap(o: FmObject, filter: PrivCapFilter): boolean {
       if (t.delete !== "No") parts.push("Delete");
     }
   }
+  // Likewise custom layout / script / value-list access: a "Modifiable" object
+  // is one the set can edit. (Creating new ones is already in the summary.)
+  if (o.detail?.kind === "privilegeSet") {
+    const { layouts = [], scripts = [], valueLists = [] } = o.detail;
+    if ([...layouts, ...scripts, ...valueLists].some((g) => g.access === "Modifiable")) parts.push("Edit");
+  }
   const access = parts.filter(Boolean).join(" | ");
   if (filter === "create") return /\bCreate\b/.test(access);
   if (filter === "edit") return /\bEdit\b/.test(access);
