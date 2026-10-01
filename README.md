@@ -77,6 +77,36 @@ This writes the app and installer to `src-tauri/target/release/bundle/`. On
 macOS that's `macos/nuthatch.app` (drag it to Applications) and a `.dmg` in
 `dmg/`. The first build compiles the Rust side and takes a few minutes.
 
+### ⌨️ Option C — Command-line tool
+
+A standalone `nuthatch` command that writes the "Export for AI" files without
+opening the app. Building it needs Node.js 25.5+ (macOS or Linux); the result
+runs without Node.
+
+```bash
+npm run build:cli   # → dist-cli/nuthatch
+```
+
+The first build downloads the official Node binary for your Node version from
+nodejs.org (checksum-verified) and caches it. Then put the command on your
+`PATH` — linking rather than copying means a rebuild updates it:
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf "$PWD/dist-cli/nuthatch" ~/.local/bin/nuthatch
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # bash: ~/.bashrc
+source ~/.zshrc
+nuthatch --version
+```
+
+Then, from the project you want an AI assistant to understand:
+
+```bash
+nuthatch export-ai /path/to/Solution.xml   # writes ./nuthatch/
+```
+
+Run `nuthatch --help` for options (output folder, analysis and project names).
+
 ### Then
 
 Use **+ New project** to load your own FileMaker "Save a Copy as XML" file(s).
@@ -222,6 +252,7 @@ See [Install](#install) to get it running.
 | `npm run typecheck`  | `tsc --noEmit`                                       |
 | `npm run tauri:dev`  | Run the desktop app in development                   |
 | `npm run tauri:build`| Build a native desktop binary                        |
+| `npm run build:cli`  | Build the standalone `nuthatch` command-line tool    |
 
 ---
 

@@ -12,3 +12,4 @@ dist-ssr
 
 # Tauri (Rust build artifacts)
 src-tauri/target
+/dist-cli

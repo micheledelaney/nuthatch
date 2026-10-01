@@ -2918,6 +2918,26 @@ ul.rel-cascade li {
   color: var(--high);
   border-bottom: 1px solid var(--high);
 }
+.banner-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.banner-notice span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.banner-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Browse A — "Library + Object Page"

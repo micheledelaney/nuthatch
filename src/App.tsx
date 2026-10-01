@@ -16,6 +16,8 @@ import { SidebarResizer, useSidebarWidth } from "@/components/SidebarResizer";
 export function App() {
   const status = useStore((s) => s.status);
   const error = useStore((s) => s.error);
+  const notice = useStore((s) => s.notice);
+  const dismissNotice = useStore((s) => s.dismissNotice);
   const model = useStore((s) => s.model);
   const comparison = useStore((s) => s.comparison);
   const view = useStore((s) => s.view);
@@ -41,6 +43,14 @@ export function App() {
         )}
         <section className="main">
           {error && <div className="banner">{error}</div>}
+          {notice && (
+            <div className="banner banner-notice">
+              <span>{notice}</span>
+              <button className="banner-close" aria-label="Dismiss" onClick={dismissNotice}>
+                ×
+              </button>
+            </div>
+          )}
           {comparison ? (
             <ComparisonView />
           ) : (!model || showDashboard) && status !== "parsing" ? (
