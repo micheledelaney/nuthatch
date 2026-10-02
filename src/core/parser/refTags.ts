@@ -27,17 +27,14 @@ export const FMSAVEAS_REF_TAGS: Readonly<Record<string, ObjectType>> = {
   // Each account names the privilege set it's granted via <PrivilegeSetReference>.
   PrivilegeSetReference: "privilegeSet",
   // Layouts, Install Menu Set steps, and File Options name a custom menu set.
-  // The built-in "[File Default]" / "[Standard FileMaker Menus]" entries are
-  // pseudo references and are skipped by scanRefs.
+  // The built-in PSEUDO_MENU_SETS entries are pseudo references and are
+  // skipped by scanRefs.
   CustomMenuSetReference: "customMenuSet",
   // External table occurrences, cross-file steps (Perform Script, Go to Related
   // Record, Open File, …), and external value lists all name the external data
   // source they go through.
   DataSourceReference: "externalDataSource",
 };
-
-/** Built-in menu-set names that aren't objects in the file's catalog. */
-export const PSEUDO_MENU_SETS: ReadonlySet<string> = new Set(["[File Default]", "[Standard FileMaker Menus]"]);
 
 /**
  * Refine the edge "kind" for display, based on the containing script step's

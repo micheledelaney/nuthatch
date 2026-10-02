@@ -31,6 +31,72 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Whether an object-tree key names a child element — not an attribute or the
+ * node's own text. */
+export function isElementKey(key: string): boolean {
+  return !key.startsWith(ATTR_PREFIX) && key !== "#text";
+}
+
+/** The first `key` child element of a node (fast-xml-parser gives a single
+ * child as a value and several as an array), or undefined. */
+export function child(node: unknown, key: string): unknown {
+  return isRecord(node) ? asArray(node[key])[0] : undefined;
+}
+
+/** Every `key` child element of a node. */
+export function children(node: unknown, key: string): unknown[] {
+  return isRecord(node) ? asArray(node[key]) : [];
+}
+
+/** A copy of `node` without its `key` child. */
+export function withoutKey<V>(node: Record<string, V>, key: string): Record<string, V> {
+  const { [key]: _omitted, ...rest } = node;
+  return rest;
+}
+
+/** The first `tag` element anywhere under `node`, depth-first, checking a node's
+ * own children before descending. */
+export function findElement(node: unknown, tag: string): unknown {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findElement(item, tag);
+      if (found != null) return found;
+    }
+    return undefined;
+  }
+  if (!isRecord(node)) return undefined;
+  if (node[tag] != null) return asArray(node[tag])[0];
+  for (const [key, value] of Object.entries(node)) {
+    if (!isElementKey(key)) continue;
+    const found = findElement(value, tag);
+    if (found != null) return found;
+  }
+  return undefined;
+}
+
+/** Every `tag` element anywhere under `node`. */
+export function collectElements(node: unknown, tag: string, out: Record<string, unknown>[] = []): Record<string, unknown>[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collectElements(item, tag, out);
+    return out;
+  }
+  if (!isRecord(node)) return out;
+  for (const [key, value] of Object.entries(node)) {
+    if (!isElementKey(key)) continue;
+    if (key === tag) {
+      for (const el of asArray(value)) if (isRecord(el)) out.push(el);
+    }
+    collectElements(value, tag, out);
+  }
+  return out;
+}
+
+/** The labels of the `[attribute, label]` pairs whose attribute is "True" on
+ * `node`, in list order. */
+export function enabledLabels(node: unknown, pairs: ReadonlyArray<readonly [string, string]>): string[] {
+  return pairs.filter(([name]) => attr(node, name) === "True").map(([, label]) => label);
+}
+
 /**
  * Recursively gather all human-readable text from a node: text nodes and the
  * values of `name`/calculation-bearing attributes. Used to build the full-text
@@ -67,7 +133,7 @@ function gatherText(node: unknown, out: string[]): void {
       // identical object would otherwise show as "changed" on the hash alone).
       if (key === "DDRREF") continue;
       // The per-object <UUID modifications userName accountName timestamp>guid</UUID>
-      // wrapper is identity/modification-tracking metadata, not content — parseDdr's
+      // wrapper is identity/modification-tracking metadata, not content — makeObject's
       // liftUuidMeta already lifts it onto obj.attributes (uuid, lastModifiedBy/
       // Account/At, modifications), where it's excluded from diffs unless opted in.
       // Left in here, its raw guid text leaks into obj.text uncontrolled by that

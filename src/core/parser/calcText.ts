@@ -1,4 +1,4 @@
-import { asArray, attr, isRecord } from "./xmlUtils";
+import { asArray, attr, children, isRecord } from "./xmlUtils";
 import { decodeEntities } from "./entities";
 
 /**
@@ -47,7 +47,7 @@ const SKIPPABLE_CHARS = new Set([..."();=&+-*/^,[]≠≤≥<>:¶"]);
  * characters that don't line up are a mismatch.
  */
 export function chunkListMatchesText(chunkList: unknown, calcText: string): boolean {
-  const chunks = asArray(isRecord(chunkList) ? chunkList["Chunk"] : undefined);
+  const chunks = children(chunkList, "Chunk");
   const target = squash(calcText);
   if (chunks.length === 0) return target === "";
   let pos = 0;
@@ -149,8 +149,7 @@ export function longestNameEndingAt(text: string, end: number, names: readonly s
   let best: string | undefined;
   for (const name of names) {
     if (best != null && best.length >= name.length) continue;
-    if (name.length > end) continue;
-    if (text.slice(end - name.length, end) !== name) continue;
+    if (name.length > end || !text.startsWith(name, end - name.length)) continue;
     if (isWordChar(text[end - name.length - 1])) continue;
     best = name;
   }
@@ -188,6 +187,16 @@ export function quotedGlobalVariables(text: string): string[] {
 
 const KEYWORD_RE = /^(?:and|or|xor|not)$/i;
 
+/** One space and the next word of a variable name, matched at `lastIndex`. */
+const NEXT_NAME_WORD_RE = / ([^\s"$=≠≤≥<>+\-*/&;,(){}[\]^¶:]+)/uy;
+
+/** The index of the first non-whitespace character at or after `from`. */
+export function skipWhitespace(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && /\s/.test(text[i]!)) i++;
+  return i;
+}
+
 /**
  * `$$global` names in a formula. FileMaker allows spaces inside variable names
  * (`$$_Leitweg ID`), so a following word is part of the name unless it's an
@@ -203,11 +212,12 @@ export function globalVariablesInText(text: string): string[] {
     let name = m[0];
     let end = m.index + name.length;
     for (;;) {
-      const next = /^ ([^\s"$=≠≤≥<>+\-*/&;,(){}[\]^¶:]+)/u.exec(text.slice(end));
+      NEXT_NAME_WORD_RE.lastIndex = end;
+      const next = NEXT_NAME_WORD_RE.exec(text);
       if (!next) break;
       const word = next[1]!;
-      const after = text.slice(end + next[0].length).trimStart();
-      if (KEYWORD_RE.test(word) || after.startsWith("(") || after.startsWith("::")) break;
+      const after = skipWhitespace(text, end + next[0].length);
+      if (KEYWORD_RE.test(word) || text.startsWith("(", after) || text.startsWith("::", after)) break;
       name += next[0];
       end += next[0].length;
     }
