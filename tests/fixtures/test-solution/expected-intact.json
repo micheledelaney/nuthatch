@@ -92,6 +92,13 @@
       "MAIN:account:Admin": {"password": "Yes", "privilegeSet": "[Full Access]"},
       "MAIN:extendedPrivilege:xpTest": {"description": "Test keyword"},
       "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}},
+      "MAIN:customMenuItem:Paste": {"itemType": "Command", "_note": "M_Sub's item"},
+      "MAIN:customMenuItem:Copy": {"itemType": "Command"},
+      "MAIN:customMenuItem:Run S_Main": {"itemType": "Performs script", "overrides": {"contains": "Name"}, "_note": "named by its title calculation, not by the script it runs"},
+      "MAIN:customMenuItem:M_Sub": {"itemType": "Submenu"},
+      "MAIN:customMenuItem:Shortcut item": {"itemType": "Command", "shortcut": {"present": true}, "_note": "BUILD.md: command Select All, shortcut ⌘⇧K. The exports have neither (pinned)."},
+      "MAIN:customMenuItem:Conditional item": {"itemType": "Command", "installCondition": "Get ( WindowMode ) = 0"},
+      "MAIN:customMenuItem:Deleted script item": {"itemType": "Performs script"},
       "MAIN:valueList:VL_External": {"source": "External"},
       "MAIN:externalDataSource:DEL_DS": {"path": {"contains": "TEST_EXT"}},
       "MAIN:field:T_Main::c_DelField": {"unstored": {"absent": true}}

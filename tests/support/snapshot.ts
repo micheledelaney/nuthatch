@@ -64,6 +64,10 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
       refOf.set(o.uid, `${file}:field:${table}::${o.name}`);
     } else if (o.type === "relationship" && o.detail?.kind === "relationship") {
       refOf.set(o.uid, `${file}:relationship:${o.detail.leftTable} → ${o.detail.rightTable}`);
+    } else if (o.type === "layoutObject" && o.attributes.objectName) {
+      // A named layout object goes by its object name (Inspector ▸ Position ▸
+      // Name): its display name ("Portal (TO_Child)") can repeat on a layout.
+      refOf.set(o.uid, `${file}:layoutObject:${o.attributes.objectName}`);
     } else {
       refOf.set(o.uid, `${file}:${o.type}:${o.name}`);
     }
