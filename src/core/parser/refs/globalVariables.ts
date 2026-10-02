@@ -15,6 +15,7 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { objectUid } from "../uid";
+import { newObject } from "../objects/catalogItems";
 import { globalVariableRef } from "./refBuilders";
 
 const MERGE_VARIABLE_RE = /<<(\$\$[^<>]+)>>/g;
@@ -56,14 +57,14 @@ export function globalVariableObjects(fp: FileParse): FmObject[] {
     if (ref.toType !== "globalVariable" || layoutObjectUids.has(ref.fromUid)) continue;
     counts.set(ref.toId, (counts.get(ref.toId) ?? 0) + 1);
   }
-  return [...counts].map(([name, count]) => ({
-    uid: objectUid(fp.file.uid, "globalVariable", name),
-    type: "globalVariable",
-    id: name,
-    name,
-    fileUid: fp.file.uid,
-    fileName: fp.file.name,
-    attributes: { occurrences: String(count) },
-    text: name,
-  }));
+  return [...counts].map(([name, count]) =>
+    newObject(fp.file, {
+      uid: objectUid(fp.file.uid, "globalVariable", name),
+      type: "globalVariable",
+      id: name,
+      name,
+      attributes: { occurrences: String(count) },
+      text: name,
+    }),
+  );
 }

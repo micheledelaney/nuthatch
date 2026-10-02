@@ -10,11 +10,14 @@ import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 // accept straight quotes too for robustness across export versions.
 const STEP_FROM_FILE_RE = /from file:\s*[“"]([^”"]+)[”"]/;
 
+/** An unquoted `[ <unknown>` that isn't followed by `from file`. */
+const BARE_UNKNOWN_SCRIPT_RE = new RegExp(`\\[\\s*${UNKNOWN_TARGET}(?!\\s*from file)`);
+
 /** Whether a Perform Script step's rendered text names a deleted script —
  * `Perform Script [ “<unknown>” ]` — as opposed to one in a file that wasn't
  * open (`<unknown> from file: …`) or chosen by name at run time (`By name`). */
 function namesDeletedScript(stepText: string): boolean {
-  return stepText.includes(`“${UNKNOWN_TARGET}”`) || /\[\s*<unknown>(?!\s*from file)/.test(stepText);
+  return stepText.includes(`“${UNKNOWN_TARGET}”`) || BARE_UNKNOWN_SCRIPT_RE.test(stepText);
 }
 
 /**

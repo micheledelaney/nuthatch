@@ -167,8 +167,12 @@ export function quotedGlobalVariables(text: string): string[] {
 
 const KEYWORD_RE = /^(?:and|or|xor|not)$/i;
 
+/** One word of a variable name: anything up to whitespace, a quote, `$`, or an
+ * operator / delimiter. */
+const VARIABLE_WORD = String.raw`[^\s"$=≠≤≥<>+\-*/&;,(){}[\]^¶:]+`;
+
 /** One space and the next word of a variable name, matched at `lastIndex`. */
-const NEXT_NAME_WORD_RE = / ([^\s"$=≠≤≥<>+\-*/&;,(){}[\]^¶:]+)/uy;
+const NEXT_NAME_WORD_RE = new RegExp(` (${VARIABLE_WORD})`, "uy");
 
 /** The index of the first non-whitespace character at or after `from`. */
 export function skipWhitespace(text: string, from: number): number {
@@ -186,7 +190,7 @@ export function skipWhitespace(text: string, from: number): number {
  */
 export function globalVariablesInText(text: string): string[] {
   const out: string[] = [];
-  const re = /\$\$[^\s"$=≠≤≥<>+\-*/&;,(){}[\]^¶:]+/gu;
+  const re = new RegExp(String.raw`\$\$${VARIABLE_WORD}`, "gu");
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     let name = m[0];

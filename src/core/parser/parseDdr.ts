@@ -151,16 +151,18 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
 }
 
-/** Drop exact-duplicate references (same source, target, occurrence context, and
- * originating step). The text-based passes can rediscover an edge another pass
- * already recorded; collapsing them keeps reference counts honest. Distinct step
- * usages (different fromStep) are preserved, since broken-step flagging needs them. */
+/** Drop exact-duplicate references (same source, target, kind, occurrence
+ * context, and originating step). The text-based passes can rediscover an edge
+ * another pass already recorded; collapsing them keeps reference counts honest.
+ * Distinct step usages (different fromStep) are preserved, since broken-step
+ * flagging needs them, and so are distinct kinds (a Set Field that both sets
+ * and reads a field). */
 function dedupeRefs(refs: RawReference[]): RawReference[] {
   const seen = new Set<string>();
   const out: RawReference[] = [];
   for (const r of refs) {
     // Name-based references share an empty toId, so their name is the identity.
-    const key = `${r.fromUid}|${r.toType}|${r.toId}|${r.byName ? r.toName : ""}|${r.viaToId ?? ""}|${r.viaBaseTableId ?? ""}|${r.fromStep ?? ""}|${r.toFileName ?? ""}`;
+    const key = `${r.fromUid}|${r.toType}|${r.toId}|${r.kind}|${r.byName ? r.toName : ""}|${r.viaToId ?? ""}|${r.viaBaseTableId ?? ""}|${r.fromStep ?? ""}|${r.toFileName ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);

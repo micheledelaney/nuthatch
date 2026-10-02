@@ -114,7 +114,7 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
     // Real layout: parse the single element and process it immediately so the
     // parsed object-tree can be GC'd before the next layout is parsed.
     const layoutNode = parseLayoutElement(fp, catalogXml.slice(lt, endPos), openTag);
-    if (layoutNode === null) {
+    if (layoutNode == null) {
       order++;
       continue;
     }

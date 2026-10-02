@@ -3,6 +3,7 @@ import type { FileParse } from "../context";
 import { attr, child, displayText, isRecord, textAttr } from "../xmlUtils";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
+import { newObject } from "./catalogItems";
 import { scriptTriggers } from "./common";
 
 /** On/off file options in <Metadata>: [element, its True/False attribute, attribute key]. */
@@ -20,17 +21,15 @@ const FILE_OPTION_FLAGS: ReadonlyArray<readonly [string, string, string]> = [
  * settings, default menu set, and its own script triggers. */
 export function makeFileObject(file: FmFile, containerNode: unknown, metadata: unknown): FmObject {
   const { attributes, triggers } = fileMetadata(metadata);
-  return {
+  return newObject(file, {
     uid: objectUid(file.uid, "file", file.uid),
     type: "file",
     id: file.uid,
     name: file.name,
-    fileUid: file.uid,
-    fileName: file.name,
     attributes: { ...attributes, ...fileAccessOptions(containerNode), ...defaultMenuSet(containerNode) },
     text: file.name,
     ...(triggers.length ? { detail: { kind: "file", triggers } } : {}),
-  };
+  });
 }
 
 /**

@@ -31,13 +31,13 @@ export function textAttr(node: unknown, name: string): string | undefined {
 }
 
 /** Collect every attribute on a node into a plain string map, entity-decoded
- * (the parser runs with entity expansion off). */
+ * (the parser runs with entity expansion off, and trims the values). */
 export function attributes(node: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!isRecord(node)) return out;
   for (const [k, v] of Object.entries(node)) {
     if (k.startsWith(ATTR_PREFIX) && v != null) {
-      out[k.slice(ATTR_PREFIX.length)] = decodeEntities(String(v).trim());
+      out[k.slice(ATTR_PREFIX.length)] = decodeEntities(String(v));
     }
   }
   return out;
@@ -139,9 +139,9 @@ export function enabledLabels(node: unknown, pairs: ReadonlyArray<readonly [stri
 }
 
 /**
- * Recursively gather all human-readable text from a node: text nodes and the
- * values of `name`/calculation-bearing attributes. Used to build the full-text
- * search index and to detect global variables.
+ * Recursively gather all human-readable text from a node: text nodes, CDATA,
+ * and `name` attribute values. Used to build the full-text search index and to
+ * detect global variables.
  */
 export function collectText(node: unknown): string {
   const out: string[] = [];

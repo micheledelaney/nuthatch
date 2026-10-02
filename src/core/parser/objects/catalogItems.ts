@@ -1,4 +1,4 @@
-import type { FmObject, ObjectType } from "@/types/ddr";
+import type { FmFile, FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { attr, attributes, child, collectText, textAttr, uuidText } from "../xmlUtils";
 import { objectUid } from "../uid";
@@ -18,17 +18,20 @@ export function makeObject(
 ): FmObject | null {
   const id = attr(node, "id");
   if (id == null) return null;
-  return {
+  return newObject(fp.file, {
     uid: objectUid(fp.file.uid, type, idNamespace ? `${idNamespace}.${id}` : id),
     type,
     id,
     name: textAttr(node, "name") ?? `(${type} ${id})`,
-    fileUid: fp.file.uid,
-    fileName: fp.file.name,
     attributes: { ...attributes(node), ...uuidMeta(node) },
     text: collectText(node),
     ...(parentUid ? { parentUid } : {}),
-  };
+  });
+}
+
+/** An object of `file`: `fields` plus the file it belongs to. */
+export function newObject(file: FmFile, fields: Omit<FmObject, "fileUid" | "fileName">): FmObject {
+  return { ...fields, fileUid: file.uid, fileName: file.name };
 }
 
 /**

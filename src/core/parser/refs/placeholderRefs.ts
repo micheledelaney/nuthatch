@@ -78,6 +78,12 @@ function siteKey(uid: string, fromStep: number | undefined): string {
   return `${uid} ${fromStep ?? ""}`;
 }
 
+/** A field read through an occurrence whose file wasn't available at export:
+ * FileMaker blanks its name, but it's unverifiable, not broken. */
+function throughUnresolvedOccurrence(r: RawReference, index: FileIndex): boolean {
+  return r.viaToId != null && index.toById.get(r.viaToId)?.unresolved === true;
+}
+
 /**
  * A reference to a deleted field is never recorded structurally: FileMaker
  * omits the `<FieldReference>` (and its chunk entry) and leaves only the
@@ -97,8 +103,13 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
   // blank name/UUID instead of omitting it outright — already scanned
   // structurally (blank toName) — while its rendered text *also* carries the
   // "<Field Missing>" placeholder. Without this check, that single dangling
-  // field would be counted and displayed twice.
-  const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && r.toName === "");
+  // field would be counted and displayed twice. A blank name behind an
+  // unavailable file is no such field: it doesn't hide a placeholder.
+  const alreadyBroken = sitesWith(
+    fp.references,
+    refStart,
+    (r) => r.toType === "field" && r.toName === "" && !throughUnresolvedOccurrence(r, fp.index),
+  );
   forEachPlaceholderUse(fp, batch, MISSING_FIELD_TOKEN, (obj, text, site) => {
     if (alreadyBroken.has(siteKey(obj.uid, site.stepIndex))) return;
     const deleted = deletedFieldVia(text, fp.index);
@@ -142,7 +153,11 @@ function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } |
  * edge, and a portal whose own scan recorded its dead occurrence (id -1).
  */
 function addMissingTargetTableRefs(fp: FileParse, batch: readonly FmObject[], refStart: number): void {
-  const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && (r.forceBroken === true || r.toName === ""));
+  const alreadyBroken = sitesWith(
+    fp.references,
+    refStart,
+    (r) => r.toType === "field" && (r.forceBroken === true || (r.toName === "" && !throughUnresolvedOccurrence(r, fp.index))),
+  );
   const deadOccurrence = sitesWith(fp.references, refStart, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
   forEachPlaceholderUse(fp, batch, MISSING_TABLE_TOKEN, (obj, text, site) => {
     const key = siteKey(obj.uid, site.stepIndex);

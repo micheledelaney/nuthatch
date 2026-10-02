@@ -13,6 +13,11 @@ export function calculationText(calc: unknown): string {
   return ownText(calc).trim();
 }
 
+/** The formula of a node's <Calculation> child, "" when it has none. */
+export function calcOf(node: unknown): string {
+  return isRecord(node) ? calculationText(node["Calculation"]) : "";
+}
+
 /** A "TableOccurrence::Field" label from a <FieldReference> (with its nested TO).
  * A deleted field can leave <FieldReference> in place with the TO still named
  * but its own `name` attribute empty — flag it the way a broken reference reads
@@ -51,7 +56,7 @@ export function scriptTriggers(container: unknown): LayoutTriggerInfo[] {
   for (const trigger of children(container, "ScriptTrigger")) {
     if (!isRecord(trigger)) continue;
     const script = child(trigger, "ScriptReference");
-    const parameter = isRecord(script) ? calculationText(script["Calculation"]) : "";
+    const parameter = calcOf(script);
     const parameterFieldName = textAttr(trigger, "scriptParameterFieldName");
     out.push({
       action: attr(trigger, "action") ?? "ScriptTrigger",

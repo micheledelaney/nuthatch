@@ -2,7 +2,7 @@ import type { FmFile, FmObject, RawReference } from "@/types/ddr";
 import { asArray, attr, child, isElementKey, isRecord, textAttr } from "./xmlUtils";
 import { makeNameIndex, type NameIndex } from "./calcText";
 import { collectCatalogItems, fieldCatalogs } from "./catalogWalk";
-import { occurrenceSource, type OccurrenceSource } from "./occurrences";
+import { occurrenceSource } from "./occurrences";
 import type { DeferredButton } from "./objects/deferredLayouts";
 
 /**
@@ -18,7 +18,9 @@ export interface FileParse {
   readonly deferredLayoutTargets: ReadonlyMap<string, DeferredButton[]>;
   /** Field uid → the text of its in-effect calcs, for a field whose XML still
    * carries disabled auto-enter / validation calcs. The text-based passes scan
-   * this instead of `obj.text`, as the element scan skips those calcs too. */
+   * this instead of `obj.text`, as the element scan skips those calcs too.
+   * While its layout is processed, it also maps each layout object to its
+   * terms plus its own element's text: what its element scan read. */
   readonly activeText: Map<string, string>;
   /** How many times each layout-object uid has been assigned. FileMaker can
    * clone a whole layout-object subtree without regenerating any identifier in
@@ -50,8 +52,6 @@ export interface FileIndex {
   toByName: Map<string, OccurrenceInfo>;
   /** Table occurrences by id (a calc's context occurrence → its base table). */
   toById: Map<string, OccurrenceInfo>;
-  /** Where each table occurrence's records come from, by occurrence id. */
-  occurrenceSources: Map<string, OccurrenceSource>;
   /** Occurrence names, for longest-match before a `::`. */
   toNames: string[];
   /** Local base-table id → its fields (name → id), plus a longest-match index. */
@@ -95,7 +95,7 @@ export function buildFileIndex(containerNode: Record<string, unknown>, ddrInfo: 
     if (id != null) dataSourceIds.add(id);
   }
   const cfByName = customFunctionIds(containerNode);
-  const { toByName, toById, occurrenceSources } = occurrenceIndex(containerNode, dataSourceIds);
+  const { toByName, toById } = occurrenceIndex(containerNode, dataSourceIds);
   return {
     lists: chunkListBlocks(ddrInfo),
     cfByName,
@@ -103,7 +103,6 @@ export function buildFileIndex(containerNode: Record<string, unknown>, ddrInfo: 
     stepTextByHash: stepTextByHash(ddrInfo),
     toByName,
     toById,
-    occurrenceSources,
     toNames: [...toByName.keys()],
     fieldsByTable: fieldIndex(containerNode),
     dataSourceIds,
@@ -178,17 +177,14 @@ function customFunctionIds(containerNode: Record<string, unknown>): Map<string, 
 function occurrenceIndex(
   containerNode: Record<string, unknown>,
   dataSourceIds: ReadonlySet<string>,
-): Pick<FileIndex, "toByName" | "toById" | "occurrenceSources"> {
+): Pick<FileIndex, "toByName" | "toById"> {
   const toByName = new Map<string, OccurrenceInfo>();
   const toById = new Map<string, OccurrenceInfo>();
-  const occurrenceSources = new Map<string, OccurrenceSource>();
   for (const to of collectCatalogItems(containerNode["TableOccurrenceCatalog"], "TableOccurrence")) {
     const id = attr(to, "id");
     if (id == null) continue;
     const source = occurrenceSource(to, dataSourceIds);
-    occurrenceSources.set(id, source);
     const name = textAttr(to, "name") ?? "";
-    if (!name) continue;
     const info: OccurrenceInfo = {
       id,
       external: source.external,
@@ -196,10 +192,10 @@ function occurrenceIndex(
       ...(!source.external && source.baseTableId != null ? { localBaseTableId: source.baseTableId } : {}),
       ...(source.external && source.baseTableId != null ? { fileOpenAtExport: true } : {}),
     };
-    if (!toByName.has(name)) toByName.set(name, info);
-    toById.set(id, info);
+    if (name && !toByName.has(name)) toByName.set(name, info);
+    if (!toById.has(id)) toById.set(id, info);
   }
-  return { toByName, toById, occurrenceSources };
+  return { toByName, toById };
 }
 
 /** Local base-table id → its fields by name (first wins), plus a longest-match index. */

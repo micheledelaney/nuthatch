@@ -1,4 +1,4 @@
-import type { ObjectType, RawReference } from "@/types/ddr";
+import type { ObjectType, RawReference, RefKind } from "@/types/ddr";
 import { MISSING_REF_ID } from "../sentinels";
 
 /** The object a scan attributes the references it finds to. */
@@ -33,7 +33,7 @@ export function pushRef(out: RawReference[], ref: RawReference, ctx: ScanContext
 
 /** A reference whose target the export itself shows was deleted: it resolves as
  * broken whatever the target lookup would find. */
-export function brokenRef(fromUid: string, toType: ObjectType, toName: string, kind: string = toType): RawReference {
+export function brokenRef(fromUid: string, toType: ObjectType, toName: string, kind: RefKind = toType): RawReference {
   return { fromUid, toType, toId: MISSING_REF_ID, toName, kind, forceBroken: true };
 }
 

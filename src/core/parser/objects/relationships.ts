@@ -3,8 +3,8 @@ import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 
 // Keys match the `type` attribute FileMaker writes on <JoinPredicate>.
 // Confirmed from DDR output: Equal, NotEqual, LessOrEqual, GreaterOrEqual,
-// CartesianProduct. Strict < / > don't appear in sample DDRs; both plausible
-// spellings are mapped so they render correctly whichever FileMaker emits.
+// CartesianProduct, Less, Greater. The LessThan / GreaterThan spellings are
+// mapped too, in case FileMaker emits them; any other type shows as written.
 const JOIN_OPERATORS: Readonly<Record<string, string>> = {
   Equal: "=",
   NotEqual: "≠",
@@ -25,11 +25,14 @@ export function annotateRelationship(node: Record<string, unknown>, obj: FmObjec
   const rightToId = occurrenceId(right);
   const predicates: JoinPredicate[] = children(node["JoinPredicateList"], "JoinPredicate")
     .filter(isRecord)
-    .map((predicate) => ({
-      leftField: fieldName(predicate["LeftField"]),
-      operator: JOIN_OPERATORS[attr(predicate, "type") ?? ""] ?? "=",
-      rightField: fieldName(predicate["RightField"]),
-    }));
+    .map((predicate) => {
+      const type = attr(predicate, "type");
+      return {
+        leftField: fieldName(predicate["LeftField"]),
+        operator: type == null ? "=" : (JOIN_OPERATORS[type] ?? type),
+        rightField: fieldName(predicate["RightField"]),
+      };
+    });
   return {
     ...obj,
     detail: {

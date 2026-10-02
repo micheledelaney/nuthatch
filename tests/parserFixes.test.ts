@@ -101,6 +101,27 @@ describe("layout objects record what they use", () => {
   it("counts each merge-variable use once, not again for its layout object", () => {
     expect(object(result, "F0:globalVariable:$$X").attributes.occurrences).toBe("2");
   });
+
+  it("flags a deleted field in a portal's filter on the portal, not only on its layout", () => {
+    // As in the Order.xml sample: the filter names a field of a deleted
+    // occurrence, so its chunk list is empty.
+    const filtered = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(`
+          <LayoutObject id="7" type="Portal" name=""><Portal>
+            <TableOccurrenceReference id="1" name="T"></TableOccurrenceReference>
+            <Options show="5"></Options>
+            <Calculation><DDRREF kind="ChunkList" hash="H7">_P7</DDRREF><Text><![CDATA[<Table Missing>::<Field Missing> = 1]]></Text></Calculation>
+            <ObjectList></ObjectList>
+          </Portal></LayoutObject>`)}</AddAction>`,
+        `<Calcs><_P7 hash="H7"><ChunkList></ChunkList></_P7></Calcs>`,
+      ),
+    );
+    const broken = buildModel(filtered).brokenReferences;
+    expect(broken.filter((r) => r.fromUid === "F0:layoutObject:10.7")).toHaveLength(1);
+    expect(broken.filter((r) => r.fromUid === "F0:layout:10")).toHaveLength(1);
+  });
 });
 
 describe("export shapes no sample has", () => {
@@ -148,6 +169,20 @@ describe("export shapes no sample has", () => {
     );
     expect(object(result, "F0:script:2").folder).toBe("Admin");
     expect(object(result, "F0:layout:2").folder).toBe("Admin");
+  });
+
+  it("recovers an FM 21 install condition's references from its text, like an FM 26 one", () => {
+    // FM 21 puts the pointer beside a <Calculation> holding bare CDATA; FM 26
+    // puts it inside the <Calculation>, beside its <Text>. The chunk list is
+    // empty because the condition names a deleted field.
+    const menu = (install: string): string =>
+      `<AddAction>${TABLE}<CustomMenuCatalog><CustomMenu id="5" name="M"><Conditions><Install>${install}</Install></Conditions></CustomMenu></CustomMenuCatalog></AddAction>`;
+    const emptyList = `<Calcs><_P3 hash="H3"><ChunkList></ChunkList></_P3></Calcs>`;
+    const formula = "T::b and T::<Field Missing>";
+    const fm21 = parse(doc("MAIN", menu(`<DDRREF kind="ChunkList" hash="H3">_P3</DDRREF><Calculation><![CDATA[${formula}]]></Calculation>`), emptyList));
+    const fm26 = parse(doc("MAIN", menu(`<Calculation><DDRREF kind="ChunkList" hash="H3">_P3</DDRREF><Text><![CDATA[${formula}]]></Text></Calculation>`), emptyList));
+    expect(refsFrom(fm21, "F0:customMenu:5")).toContain("field:2 via 1 field");
+    expect(refsFrom(fm21, "F0:customMenu:5")).toEqual(refsFrom(fm26, "F0:customMenu:5"));
   });
 });
 
@@ -261,6 +296,112 @@ describe("what gets parsed", () => {
       "field:2 via 1 step 1 field",
       "tableOccurrence:1 step 1 tableOccurrence",
     ]);
+  });
+
+  it("keeps a Set Field's target and its value's read of the same field", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>
+            <Step id="1" name="Set Field" enable="True"><ParameterValues>
+              <Parameter type="FieldReference"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter>
+              <Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation>
+                <DDRREF kind="ChunkList" hash="H2">_P2</DDRREF><Text><![CDATA[T::a + 1]]></Text>
+              </Calculation></Calculation></Parameter>
+            </ParameterValues></Step>
+          </ObjectList></Script></StepsForScripts>
+        </AddAction>`,
+        `<Calcs><_P2 hash="H2"><ChunkList><Chunk type="FieldRef"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Chunk><Chunk type="NoRef">+ 1</Chunk></ChunkList></_P2></Calcs>`,
+      ),
+    );
+    expect(refsFrom(result, "F0:script:1")).toEqual([
+      "field:1 via 1 step 1 field",
+      "field:1 via 1 step 1 setField",
+      "tableOccurrence:1 step 1 tableOccurrence",
+    ]);
+  });
+
+  it("flags a deleted field in a step whose other field sits behind an unavailable file", () => {
+    // As in the SampleB.xml sample: the target's file wasn't available at
+    // export, so FileMaker blanks its name; the value reads a deleted occurrence.
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>
+          <ExternalDataSourceCatalog><ExternalDataSource id="1" name="Other"></ExternalDataSource></ExternalDataSourceCatalog>
+          <TableOccurrenceCatalog>
+            <TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference><DataSourceReference id="1" name="Other"></DataSourceReference></BaseTableSourceReference></TableOccurrence>
+          </TableOccurrenceCatalog>
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>
+            <Step id="76" name="Set Field" enable="True"><DDRREF kind="StepText" hash="S1"></DDRREF><ParameterValues>
+              <Parameter type="FieldReference"><FieldReference id="137" name="" UUID=""><TableOccurrenceReference id="2" name="X"></TableOccurrenceReference></FieldReference></Parameter>
+              <Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation>
+                <DDRREF kind="ChunkList" hash="H1">_P1</DDRREF><Text><![CDATA[<Table Missing>::<Field Missing>]]></Text>
+              </Calculation></Calculation></Parameter>
+            </ParameterValues></Step>
+          </ObjectList></Script></StepsForScripts>
+        </AddAction>`,
+        `<Calcs><_P1 hash="H1"><ChunkList></ChunkList></_P1></Calcs>` +
+          `<Script><ObjectList><_ datatype="StepText" hash="S1">Set Field [ X::&lt;File Missing&gt;; &lt;Table Missing&gt;::&lt;Field Missing&gt; ]</_></ObjectList></Script>`,
+      ),
+    );
+    const broken = buildModel(result).brokenReferences.filter((r) => r.fromUid === "F0:script:1");
+    expect(broken.map((r) => `${r.toName} step ${r.fromStep}`)).toEqual(["<Field Missing> step 1"]);
+  });
+
+  it("names a custom menu item by its title and types it by what it does", () => {
+    // The shapes of the test solution's M_Custom items: FM 22 / 26, and FM 21
+    // (no <action> wrapper, bare-CDATA title).
+    const title = (text: string): string =>
+      `<Name><Calculation><DDRREF kind="ChunkList" hash=""></DDRREF><Text><![CDATA["${text}"]]></Text></Calculation></Name>`;
+    const step = (script: string): string =>
+      `<Step index="0" id="1" name="Perform Script" enable="True"><ParameterValues><Parameter type="List"><List name="From list" value="1">${script}</List></Parameter></ParameterValues></Step>`;
+    const performScript = (script: string): string => `<action>${step(script)}</action>`;
+    const S_MAIN = `<ScriptReference id="8" name="S_Main"></ScriptReference>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><CustomMenuCatalog><CustomMenu id="30" name="M_Custom"><MenuItemList>
+          <CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False"><Command name="Copy" id="57634"></Command></CustomMenuItem>
+          <CustomMenuItem index="1" isSubMenuItem="False" isSeparatorItem="False">${performScript(S_MAIN)}${title("Run S_Main")}<Command id="0"></Command></CustomMenuItem>
+          <CustomMenuItem index="4" isSubMenuItem="False" isSeparatorItem="False">${title("Shortcut item")}<Command id="0"></Command></CustomMenuItem>
+          <CustomMenuItem index="5" isSubMenuItem="False" isSeparatorItem="False">${title("Conditional item")}<Command name="Undo" id="49320"></Command></CustomMenuItem>
+          <CustomMenuItem index="6" isSubMenuItem="False" isSeparatorItem="False">${performScript("")}${title("Deleted script item")}<Command id="0"></Command></CustomMenuItem>
+          <CustomMenuItem index="7" isSubMenuItem="False" isSeparatorItem="False">${step(S_MAIN)}<Name><Calculation><![CDATA["Run S_Main (FM 21)"]]></Calculation></Name><Command id="0"></Command></CustomMenuItem>
+        </MenuItemList></CustomMenu></CustomMenuCatalog></AddAction>`,
+      ),
+    );
+    const item = (index: number): string => {
+      const o = object(result, `F0:customMenuItem:30.${index}`);
+      return `${o.name} (${o.attributes.itemType})`;
+    };
+    expect([0, 1, 4, 5, 6, 7].map(item)).toEqual([
+      "Copy (Command)",
+      "Run S_Main (Performs script)",
+      "Shortcut item (Custom)",
+      "Conditional item (Command)",
+      "Deleted script item (Performs script)",
+      "Run S_Main (FM 21) (Performs script)",
+    ]);
+  });
+
+  it("shows a join type it has no symbol for as written, not as =", () => {
+    const predicate = (type: string): string =>
+      `<JoinPredicate type="${type}"><LeftField><FieldReference id="1" name="x"></FieldReference></LeftField><RightField><FieldReference id="2" name="y"></FieldReference></RightField></JoinPredicate>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><RelationshipCatalog><Relationship id="1">
+          <LeftTable><TableOccurrenceReference id="1" name="A"></TableOccurrenceReference></LeftTable>
+          <RightTable><TableOccurrenceReference id="2" name="B"></TableOccurrenceReference></RightTable>
+          <JoinPredicateList>${predicate("Less")}${predicate("Unforeseen")}</JoinPredicateList>
+        </Relationship></RelationshipCatalog></AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:relationship:1").detail).toMatchObject({ predicates: [{ operator: "<" }, { operator: "Unforeseen" }] });
   });
 
   it("gives an empty formula no body, not its context occurrence's name", () => {

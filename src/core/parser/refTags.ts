@@ -1,4 +1,4 @@
-import type { ObjectType } from "@/types/ddr";
+import type { ObjectType, RefKind } from "@/types/ddr";
 import { GO_TO_LAYOUT_STEP, SET_FIELD_STEP, isPerformScriptStep } from "./stepNames";
 
 /**
@@ -44,7 +44,7 @@ export const FMSAVEAS_REF_TAGS: Readonly<Record<string, ObjectType>> = {
  * calculations read: those are plain uses (scanRefs scans them with
  * `inChunkList`).
  */
-export function edgeKind(targetType: ObjectType, stepName: string | undefined): string {
+export function edgeKind(targetType: ObjectType, stepName: string | undefined): RefKind {
   if (stepName == null) return targetType;
   if (targetType === "script" && isPerformScriptStep(stepName)) return "performScript";
   if (targetType === "layout" && stepName === GO_TO_LAYOUT_STEP) return "goToLayout";

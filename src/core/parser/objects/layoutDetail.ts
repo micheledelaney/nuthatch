@@ -1,7 +1,7 @@
 import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
 import { asArray, attr, child, children, collectText, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
-import { BUTTON_ACTION_TAGS, calculationText, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
+import { BUTTON_ACTION_TAGS, calcOf, calculationText, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
 import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
@@ -118,8 +118,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
   const portalOptions = child(portal, "Options");
   const kids = childObjects(obj, cx);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
-  const tooltipNode = child(obj, "Tooltip");
-  const tooltip = isRecord(tooltipNode) ? calculationText(tooltipNode["Calculation"]) : "";
+  const tooltip = calcOf(child(obj, "Tooltip"));
   return {
     type,
     name: panelLabel(obj) ?? textAttr(obj, "name") ?? "",
@@ -148,8 +147,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
 function panelLabel(obj: Record<string, unknown>): string | undefined {
   let label: string | undefined;
   for (const tag of ["TabPanel", "SlidePanel"]) {
-    const panel = child(obj, tag);
-    const text = isRecord(panel) ? calculationText(panel["Calculation"]) : "";
+    const text = calcOf(child(obj, tag));
     if (text) label = stripOuterQuotes(text);
   }
   return label;
@@ -230,9 +228,9 @@ function conditions(obj: Record<string, unknown>): Pick<LayoutObjectInfo, "hideW
   const conditionsNode = child(obj, "Conditions");
   if (!isRecord(conditionsNode)) return {};
   const hide = child(conditionsNode, "Hide");
-  const hideWhen = isRecord(hide) ? calculationText(hide["Calculation"]) : "";
+  const hideWhen = calcOf(hide);
   const formats = children(child(conditionsNode, "Formatting"), "Condition")
-    .map((c) => (isRecord(c) ? calculationText(c["Calculation"]) : ""))
+    .map((c) => calcOf(c))
     .filter((c) => c !== "");
   return {
     ...(hideWhen ? { hideWhen, ...(attr(hide, "findMode") === "True" ? { hideInFind: true } : {}) } : {}),

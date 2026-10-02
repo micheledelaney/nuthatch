@@ -58,8 +58,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       catalogKey: "TableOccurrenceCatalog",
       itemTag: "TableOccurrence",
       type: "tableOccurrence",
-      annotate: (item, obj) =>
-        annotateTableOccurrence(item, obj, fp.index.occurrenceSources.get(obj.id) ?? occurrenceSource(item, fp.index.dataSourceIds)),
+      annotate: (item, obj) => annotateTableOccurrence(item, obj, occurrenceSource(item, fp.index.dataSourceIds)),
     },
     { catalogKey: "RelationshipCatalog", itemTag: "Relationship", type: "relationship", annotate: annotateRelationship },
     {

@@ -4,7 +4,9 @@ import { attr, child, children, collectText, displayText, enabledLabels, findEle
 import { objectUid } from "../uid";
 import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { calculationText } from "./common";
+import { newObject } from "./catalogItems";
+import { isPerformScriptStep } from "../stepNames";
+import { calcOf, stripOuterQuotes } from "./common";
 
 const MENU_MODES: ReadonlyArray<readonly [string, string]> = [
   ["browseMode", "browse"],
@@ -39,8 +41,7 @@ export function annotateCustomMenu(node: Record<string, unknown>, obj: FmObject)
  * (<Conditions><Install><Calculation>), or "" when it is the trivial always-on
  * condition. */
 function installCondition(node: Record<string, unknown>): string {
-  const install = child(child(node, "Conditions"), "Install");
-  const calc = isRecord(install) ? calculationText(install["Calculation"]) : "";
+  const calc = calcOf(child(child(node, "Conditions"), "Install"));
   return calc && calc !== "1" ? calc : "";
 }
 
@@ -78,19 +79,17 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
       if (!isRecord(item)) continue;
       const index = attr(item, "index") ?? String(order);
       const isSeparator = attr(item, "isSeparatorItem") === "True";
-      const obj: FmObject = {
+      const obj = newObject(fp.file, {
         uid: objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`),
         type: "customMenuItem",
         id: index,
         name: menuItemName(item),
-        fileUid: fp.file.uid,
-        fileName: fp.file.name,
         parentUid: menuUid,
         attributes: menuItemAttributes(item, menuName),
         text: collectText(item),
         order: order++,
         ...(isSeparator ? { isSeparator: true } : {}),
-      };
+      });
       fp.objects.push(obj);
       if (isSeparator) continue;
       // A menu item exists only as part of its menu, so the menu is what
@@ -122,10 +121,14 @@ function menuItemAttributes(item: Record<string, unknown>, menuName: string): Re
   return a;
 }
 
-/** Best label for a custom menu item: a built-in command, a submenu it opens, or
- * the script it performs; falls back to a generic separator/item label. */
+/** Best label for a custom menu item: its custom title, a built-in command, a
+ * submenu it opens, or the script it performs; falls back to a generic
+ * separator/item label. */
 function menuItemName(item: Record<string, unknown>): string {
   if (attr(item, "isSeparatorItem") === "True") return "—";
+  // A custom title (Override name) is a calculation, usually a quoted literal.
+  const title = stripOuterQuotes(calcOf(child(item, "Name")));
+  if (title) return title;
   const command = textAttr(child(item, "Command"), "name");
   if (command) return command;
   const submenu = textAttr(child(item, "CustomMenuReference"), "name");
@@ -140,8 +143,13 @@ function menuItemName(item: Record<string, unknown>): string {
 function menuItemKind(item: Record<string, unknown>): string {
   if (attr(item, "isSeparatorItem") === "True") return "Separator";
   if (attr(item, "isSubMenuItem") === "True" || item["CustomMenuReference"]) return "Submenu";
-  if (item["Command"]) return "Command";
-  if (performedScriptName(item)) return "Performs script";
+  // By its action's step, so an item whose script was deleted still counts. FM
+  // 22 / 26 wrap the step in <action>; FM 21 puts it on the item itself.
+  const steps = [...children(child(item, "action"), "Step"), ...children(item, "Step")];
+  if (steps.some((step) => isPerformScriptStep(attr(step, "name") ?? ""))) return "Performs script";
+  // A Perform Script or untitled custom item carries an empty <Command id="0">.
+  const command = child(item, "Command");
+  if (textAttr(command, "name") || (attr(command, "id") ?? "0") !== "0") return "Command";
   return "Custom";
 }
 

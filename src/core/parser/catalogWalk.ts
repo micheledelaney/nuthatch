@@ -9,9 +9,8 @@ import { decodeEntities } from "./entities";
  * "Marker" closes it — both organizational, not objects. Anything else is an
  * item. */
 function folderMarker(flag: string | undefined): "open" | "close" | undefined {
-  if (flag == null) return undefined;
-  if (/^true$/i.test(flag)) return "open";
-  if (/^marker$/i.test(flag)) return "close";
+  if (flag === "True") return "open";
+  if (flag === "Marker") return "close";
   return undefined;
 }
 
@@ -33,15 +32,14 @@ export function folderPath(stack: readonly string[]): string {
 }
 
 /**
- * Collect leaf catalog items, descending through <Group>, <ObjectList>, and
- * folder items. Folders/containers are organizational and are not returned as
- * objects themselves.
+ * Collect leaf catalog items, descending through <Group> and <ObjectList>.
+ * Folder markers (see applyFolderMarker) and containers are organizational and
+ * are not returned as objects themselves.
  */
 export function collectCatalogItems(catalogNode: unknown, itemTag: string, out: unknown[] = []): unknown[] {
   if (!isRecord(catalogNode)) return out;
   for (const el of asArray(catalogNode[itemTag])) {
-    if (folderMarker(attr(el, "isFolder")) != null) collectCatalogItems(el, itemTag, out);
-    else out.push(el);
+    if (folderMarker(attr(el, "isFolder")) == null) out.push(el);
   }
   for (const container of [...asArray(catalogNode["Group"]), ...asArray(catalogNode["ObjectList"])]) {
     collectCatalogItems(container, itemTag, out);
@@ -72,8 +70,9 @@ export function collectOrderedWithFolders(
 }
 
 /** The block that belongs to each catalog object defined elsewhere (a script's
- * steps, a custom function's formula), by the id in its leading `ownerRefTag`
- * reference. FileMaker writes one block per owner; the first one wins. */
+ * steps, a custom function's formula, a value list's contents), by the id in
+ * its leading `ownerRefTag` reference. FileMaker writes one block per owner;
+ * the first one wins. */
 export function firstBlockByOwner(blocks: readonly unknown[], ownerRefTag: string): Map<string, Record<string, unknown>> {
   const byOwner = new Map<string, Record<string, unknown>>();
   for (const block of blocks) {

@@ -2,7 +2,7 @@ import type { FmObject, ObjectDetail, ValueListFieldSource } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { attr, child, collectText, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
-import { collectCatalogItems } from "../catalogWalk";
+import { collectCatalogItems, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { qualifiedField } from "./common";
 
@@ -14,14 +14,7 @@ import { qualifiedField } from "./common";
  */
 export function valueListContents(containerNode: Record<string, unknown>): Map<string, Record<string, unknown>> | null {
   const blocks = collectCatalogItems(containerNode["OptionsForValueLists"], "ValueList");
-  if (blocks.length === 0) return null;
-  const byOwner = new Map<string, Record<string, unknown>>();
-  for (const block of blocks) {
-    if (!isRecord(block)) continue;
-    const ownerId = attr(child(block, "ValueListReference"), "id") ?? attr(block, "id");
-    if (ownerId != null) byOwner.set(ownerId, block);
-  }
-  return byOwner;
+  return blocks.length === 0 ? null : firstBlockByOwner(blocks, "ValueListReference");
 }
 
 /** The block holding a value list's contents (see valueListContents). */
@@ -122,8 +115,9 @@ function valueListDetail(block: Record<string, unknown>): ObjectDetail {
   const source = attr(child(block, "Source"), "value") ?? "";
   const customNode = child(block, "CustomValues");
   const customText = isRecord(customNode) ? collectText(customNode["Text"]) : "";
-  // FileMaker stores custom values newline-separated; a blank line is a divider.
-  const customValues = customText ? customText.replace(/\r\n/g, "\n").replace(/\n+$/, "").split("\n") : [];
+  // FileMaker stores custom values CR-separated (the XML parser turns line
+  // endings into "\n"); a blank line is a divider.
+  const customValues = customText ? customText.replace(/\n+$/, "").split("\n") : [];
   return { kind: "valueList", source, customValues, field: fieldSource(block["Field"]) };
 }
 

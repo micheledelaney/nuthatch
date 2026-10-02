@@ -3,7 +3,7 @@ import type { FileParse } from "../context";
 import { displayText, textAttr } from "../xmlUtils";
 import { collectCatalogItems, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { calculationText } from "./common";
+import { calcOf } from "./common";
 
 type CalcBlocks = ReadonlyMap<string, Record<string, unknown>>;
 
@@ -19,10 +19,10 @@ export function customFunctionCalcs(containerNode: Record<string, unknown>): Cal
 export function annotateCustomFunction(item: Record<string, unknown>, obj: FmObject, calcs: CalcBlocks): FmObject {
   const signature = displayText(item["Display"]) || (textAttr(item, "name") ?? "");
   const block = calcs.get(obj.id);
-  const separateBody = block ? calculationText(block["Calculation"]) : undefined;
+  const separateBody = block ? calcOf(block) : undefined;
   return {
     ...obj,
-    detail: { kind: "calculation", signature, body: separateBody ?? calculationText(item["Calculation"]) },
+    detail: { kind: "calculation", signature, body: separateBody ?? calcOf(item) },
     ...(separateBody ? { text: obj.text ? `${obj.text}\n${separateBody}` : separateBody } : {}),
   };
 }

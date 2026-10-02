@@ -5,7 +5,7 @@ import { FILE_DEFAULT_MENU_SET } from "../sentinels";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
 import { addTextDerivedRefs } from "../refs/textRefs";
-import { makeObject, placeInCatalog } from "./catalogItems";
+import { makeObject, newObject, placeInCatalog } from "./catalogItems";
 import { stripOuterQuotes } from "./common";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
 import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./layoutDetail";
@@ -35,6 +35,7 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   const full = buildLayout(fp, layout, placeInCatalog(base, order, folder));
   const batch = [...fp.objects.slice(objStart), full];
   addTextDerivedRefs(fp, batch, refStart);
+  for (const obj of batch) fp.activeText.delete(obj.uid);
   fp.objects.push(full.detail?.kind === "layout" ? { ...full, text: compactLayoutText(full, full.detail) } : full);
 }
 
@@ -111,7 +112,12 @@ function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[]
       // triggers, and the calcs behind its label, tooltip, hide condition,
       // conditional formatting, web viewer, and button action — but not what
       // the objects inside it use: each of those reports its own.
-      scanRefs(fp, withoutNestedObjects(element), obj);
+      const own = withoutNestedObjects(element);
+      scanRefs(fp, own, obj);
+      // The placeholder passes read the same element: its listed terms miss the
+      // calcs only the element holds (a portal filter, a button step, a trigger
+      // parameter).
+      fp.activeText.set(uid, `${obj.text}\n${collectText(own)}`);
     }
     if (!lo.children || lo.children.length === 0) return withUid;
     return { ...withUid, children: addLayoutObjectTree(cx, lo.children, uid, chain ?? idChain) };
@@ -128,18 +134,16 @@ function uniqueLayoutObjectUid(fp: FileParse, idPart: string): string {
 }
 
 function layoutObjectFmObject(fp: FileParse, lo: LayoutObjectInfo, uid: string, parentUid: string): FmObject {
-  return {
+  return newObject(fp.file, {
     uid,
     type: "layoutObject",
     id: lo.id ?? "",
     name: nameForLayoutObj(lo),
-    fileUid: fp.file.uid,
-    fileName: fp.file.name,
     parentUid,
     attributes: layoutObjectAttributes(lo),
     text: layoutObjectTerms(lo).join(" "),
     detail: layoutObjectDetail(lo),
-  };
+  });
 }
 
 /** Everything the layout object shows, minus what identifies it (kept on the

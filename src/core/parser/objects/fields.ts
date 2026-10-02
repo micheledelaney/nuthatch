@@ -6,7 +6,7 @@ import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { activeFieldNode } from "../refs/activeOptions";
 import { makeObject } from "./catalogItems";
-import { calculationText, qualifiedField } from "./common";
+import { calcOf, calculationText, qualifiedField } from "./common";
 
 /**
  * Tables come from BaseTableCatalog; their fields live under a top-level
@@ -281,7 +281,7 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
   if (isCalculated) requirements.push("By calculation");
   if (requirements.length === 0) return {};
 
-  const formula = isCalculated ? calculationText(calculated["Calculation"]) : "";
+  const formula = isCalculated ? calcOf(calculated) : "";
   const message = validationMessage(validation);
   return {
     validation: requirements.join(", "),
@@ -300,7 +300,7 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
 function validationMessage(validation: Record<string, unknown>): string {
   const messageCalc = child(validation, "MessageCalc");
   if (isRecord(messageCalc)) {
-    return attr(messageCalc, "enable") === "False" ? "" : calculationText(messageCalc["Calculation"]);
+    return attr(messageCalc, "enable") === "False" ? "" : calcOf(messageCalc);
   }
   return displayText(validation["Message"]);
 }

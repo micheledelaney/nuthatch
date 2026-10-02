@@ -440,6 +440,12 @@ export interface JoinPredicate {
   rightField: string;
 }
 
+/** How a reference uses its target: the target's type for a plain use; what a
+ * script step or trigger does with it (performScript, goToLayout, setField,
+ * trigger); a menu's item (menuItem); a privilege set granting an extended
+ * privilege (extendedPrivilege). */
+export type RefKind = ObjectType | "performScript" | "goToLayout" | "setField" | "trigger" | "menuItem" | "extendedPrivilege";
+
 /** A directed dependency edge between two objects. */
 export interface FmReference {
   fromUid: string;
@@ -449,7 +455,7 @@ export interface FmReference {
   toId: string;
   toName: string;
   /** Human-readable edge kind, e.g. "performScript", "goToLayout", "field". */
-  kind: string;
+  kind: RefKind;
   /** True when the target type+id could not be resolved within its file. */
   broken: boolean;
   /** 1-based index of the script step this reference originates from, if any. */
@@ -521,7 +527,7 @@ export interface RawReference {
   toType: ObjectType;
   toId: string;
   toName: string;
-  kind: string;
+  kind: RefKind;
   /**
    * Name of the external data source (file) this reference targets, when the
    * reference sits beside a <DataSourceReference> (e.g. Perform Script in an

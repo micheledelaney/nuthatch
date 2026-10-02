@@ -1,10 +1,11 @@
-import type { ObjectType, RawReference } from "@/types/ddr";
+import type { ObjectType, RawReference, RefKind } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, children, displayText, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
+import { asArray, attr, child, children, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
 import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
 import { chunkListMatchesText, quotedGlobalVariables } from "../calcText";
+import { calculationText } from "../objects/common";
 import { activeAutoEnter, activeValidation } from "./activeOptions";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
@@ -185,7 +186,7 @@ function elementRef(
 /** A reference's edge kind: a trigger's script, a step's own target (see
  * edgeKind), or — for what a calculation reads, even inside a step — the plain
  * target type. (A Set Field's value calc reads fields; it doesn't set them.) */
-function refKind(targetType: ObjectType, ctx: ScanContext): string {
+function refKind(targetType: ObjectType, ctx: ScanContext): RefKind {
   if (ctx.inTrigger && targetType === "script") return "trigger";
   return ctx.inChunkList ? targetType : edgeKind(targetType, ctx.stepName);
 }
@@ -239,9 +240,10 @@ function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanCon
  */
 function followChunkLists(fp: FileParse, calc: Record<string, unknown>, pointers: unknown, owner: RefOwner, ctx: ScanContext): void {
   // The formula as written: CDATA verbatim (a chunk's text is entity-encoded,
-  // and chunkListMatchesText decodes that side).
-  const textNode = calc["Text"];
-  const calcText = textNode == null ? undefined : displayText(textNode);
+  // and chunkListMatchesText decodes that side). It's the calc's <Text>, or in
+  // FM 21 (install conditions, menu overrides) the bare-CDATA <Calculation>
+  // beside the pointer; a node that only lists pointers has none.
+  const calcText = calc["Text"] != null || calc["Calculation"] != null ? calculationText(calc) : undefined;
   for (const el of asArray(pointers)) {
     if (!isRecord(el) || attr(el, "kind") !== "ChunkList") continue;
     const ptr = el["#text"];

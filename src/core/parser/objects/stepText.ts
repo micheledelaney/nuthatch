@@ -2,7 +2,7 @@ import type { ScriptStep } from "@/types/ddr";
 import { renderedStepText } from "../context";
 import { INSERT_TEXT_STEP } from "../stepNames";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { charForCode, decodeEntities } from "../entities";
 
 /** Build the ordered step list shown in a script's inspector. */
 export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap<string, string>): ScriptStep[] {
@@ -36,6 +36,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   //   1. CR/LF entities → real newlines (decodeEntities would otherwise collapse
   //      them to spaces, flattening Import Records' per-mapping layout).
   //   2. Decode the rest of the entities (curly quotes, &quot;, &amp; …).
+  //      (Both are decodeEntities with keepLineBreaks.)
   //   3. Drop a leading `// ` — FileMaker prefixes a disabled step's StepText
   //      with this, but the line already wears the `disabled` class.
   //   4. Drop the step name prefix (or `#` for comments) — ScriptWorkspace
@@ -45,7 +46,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   //      `Go to Related Record [ … ]\n[ Show only related records ]` render
   //      on one line. Newlines INSIDE brackets (Import/Export's per-mapping
   //      layout) survive — the depth tracker only flattens at depth 0.
-  const decoded = decodeStepText(raw).trim();
+  const decoded = decodeEntities(raw, true).trim();
   const undisabled = decoded.replace(/^\/\/\s*/, "");
   const stripped = name.startsWith("#")
     ? undisabled.replace(/^#\s*/, "")
@@ -62,25 +63,9 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   return base;
 }
 
-/** Decode a piece of step text, keeping CR/LF entities as real newlines
- * (decodeEntities alone would collapse them to spaces, flattening Import
- * Records' per-mapping layout or an Insert Text value's lines). */
-function decodeStepText(raw: string): string {
-  return decodeEntities(raw.replace(/&#(?:13|10|x[Aa]|x[Dd]);/g, "\n"));
-}
-
 /** Decode FileMaker's {{charN}} attribute encoding to the actual character. */
 function decodeFmChars(s: string): string {
-  return s.replace(/{{char(\d+)}}/g, (_, n: string) => {
-    const code = parseInt(n, 10);
-    if (code === 13 || code === 10) return "\n";
-    if (code < 0x20) return " ";
-    try {
-      return String.fromCodePoint(code);
-    } catch {
-      return "";
-    }
-  });
+  return s.replace(/{{char(\d+)}}/g, (_, n: string) => charForCode(parseInt(n, 10), true) ?? "");
 }
 
 /** Extract the literal text value from an Insert Text step's ParameterValues. */
@@ -90,7 +75,7 @@ function insertTextValue(step: Record<string, unknown>): string | undefined {
     const textEl = child(param, "Text");
     if (!isRecord(textEl)) continue;
     const raw = attr(textEl, "value");
-    return raw == null ? undefined : decodeFmChars(decodeStepText(raw));
+    return raw == null ? undefined : decodeFmChars(decodeEntities(raw, true));
   }
   return undefined;
 }

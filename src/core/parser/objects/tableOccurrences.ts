@@ -4,8 +4,8 @@ import type { OccurrenceSource } from "../occurrences";
 
 /**
  * Capture a table occurrence's base table and — for an external occurrence —
- * the data source (file) name it reads from (`source`, read once for the
- * file's index; see occurrenceSource). buildModel uses these to resolve
+ * the data source (file) name it reads from (`source`, see occurrenceSource).
+ * buildModel uses these to resolve
  * references that read through the occurrence, including references that cross
  * into another file when that file is also loaded. Also its box on the
  * relationship graph.

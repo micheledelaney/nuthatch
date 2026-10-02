@@ -68,6 +68,14 @@ const OTHER_PRIVILEGES: ReadonlyArray<readonly [string, string]> = [
   ["disconnectIdle", "Disconnect idle users"],
 ];
 
+/** The permission categories under <access>: [element, attribute key]. */
+const ACCESS_CATEGORIES: ReadonlyArray<readonly [string, string]> = [
+  ["Records", "recordsAccess"],
+  ["Layouts", "layoutsAccess"],
+  ["ValueLists", "valueListsAccess"],
+  ["Scripts", "scriptsAccess"],
+];
+
 /** The grants on one <Records> table row, each possibly gated by a calculation. */
 const RECORD_GRANT_VERBS = ["View", "Edit", "Create", "Delete"] as const;
 
@@ -83,14 +91,10 @@ export function annotatePrivilegeSet(node: Record<string, unknown>, obj: FmObjec
   if (!isRecord(access)) return described;
   const detail = privilegeSetDetail(access);
   const a: Record<string, string> = {};
-  const records = categoryAccess(child(access, "Records"));
-  if (records) a.recordsAccess = records;
-  const layouts = categoryAccess(child(access, "Layouts"));
-  if (layouts) a.layoutsAccess = layouts;
-  const valueLists = categoryAccess(child(access, "ValueLists"));
-  if (valueLists) a.valueListsAccess = valueLists;
-  const scripts = categoryAccess(child(access, "Scripts"));
-  if (scripts) a.scriptsAccess = scripts;
+  for (const [element, key] of ACCESS_CATEGORIES) {
+    const level = categoryAccess(child(access, element));
+    if (level) a[key] = level;
+  }
   if (attr(access, "default") === "True") a.defaultPrivilegeSet = "Yes";
 
   // The <Other> block holds the extended management privileges and the menu
