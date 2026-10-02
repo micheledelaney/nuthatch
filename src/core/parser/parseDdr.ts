@@ -1,5 +1,5 @@
 import type { FmFile, FmObject, ParseResult, RawReference } from "@/types/ddr";
-import { buildFileIndex, type FileParse } from "./context";
+import { buildFileIndex, type FileParse, type TextScan } from "./context";
 import { xmlParser } from "./xmlParser";
 import { attr, isRecord, textAttr } from "./xmlUtils";
 import { fileUidAt } from "./uid";
@@ -9,7 +9,7 @@ import { parseCatalogs } from "./objects/catalogs";
 import { deferredLayoutTargets } from "./objects/deferredLayouts";
 import { parseTablesAndFields } from "./objects/fields";
 import { addFileRefs, makeFileObject } from "./objects/fileObject";
-import { parseLayoutsStreaming, splitLayoutCatalog } from "./objects/layoutStream";
+import { parseLayoutsInTree, parseLayoutsStreaming, splitLayoutCatalog } from "./objects/layoutStream";
 import { parseCustomMenuItems } from "./objects/menus";
 import { parseScripts } from "./objects/scripts";
 
@@ -50,6 +50,10 @@ interface ParsedFile {
 }
 
 function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): ParsedFile | null {
+  if (isTruncated(doc.content)) {
+    errors.push(`${doc.name}: the file is incomplete — it ends before </${ROOT_TAG}> (an interrupted export or copy), so it was left out. Export or copy it again.`);
+    return null;
+  }
   const { rest, layoutCatalog } = splitLayoutCatalog(doc.content);
   let root: unknown;
   try {
@@ -72,6 +76,9 @@ function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): Par
       `${doc.name}: missing <DDR_INFO> — references inside calculations and script steps cannot be resolved. Re-export with "Include details for analysis tools" enabled.`,
     );
   }
+  if (container.splitCatalogs) {
+    errors.push(`${doc.name}: saved with split catalogs (split_catalogs="True"), which this app doesn't support — some objects may be missing.`);
+  }
   try {
     return parseFile(container, fileIndex, errors, layoutCatalog);
   } catch (err) {
@@ -79,6 +86,20 @@ function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): Par
     errors.push(`${doc.name}: parsing stopped and this file was left out — ${(err as Error).message}`);
     return null;
   }
+}
+
+const ROOT_TAG = "FMSaveAsXML";
+const ROOT_CLOSE = `</${ROOT_TAG}>`;
+
+/** Whether a "Save a Copy as XML" document stops before its closing root tag:
+ * an interrupted export or copy. The XML parser reads such a document without
+ * complaint when the cut lands in the right place, and the layout catalog then
+ * can't be cut out, so whole catalogs would go missing without a word. Any
+ * other document is left to the checks below. */
+function isTruncated(xml: string): boolean {
+  if (/<([A-Za-z_][\w.:-]*)/.exec(xml)?.[1] !== ROOT_TAG) return false;
+  const end = xml.lastIndexOf(ROOT_CLOSE);
+  return end === -1 || xml.slice(end + ROOT_CLOSE.length).trim() !== "";
 }
 
 interface Container {
@@ -97,6 +118,8 @@ interface Container {
   source: string;
   /** FileMaker application version that produced the export, if present. */
   version?: string;
+  /** The root's split_catalogs="True": an export format no sample has. */
+  splitCatalogs: boolean;
 }
 
 /** The catalog-bearing <FMSaveAsXML> container, if this is one. */
@@ -113,6 +136,7 @@ function locateContainer(root: unknown, source: string): Container | null {
     source,
     // The FileMaker app version lives in `Source`; `version` is the schema.
     version: attr(saveAs, "Source"),
+    splitCatalogs: attr(saveAs, "split_catalogs") === "True",
   };
 }
 
@@ -133,22 +157,23 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     fileObject,
     index: buildFileIndex(node, container.ddrInfo),
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
-    scanText: new Map(),
     layoutObjectUidCounts: new Map(),
     objects: [fileObject],
     references: [],
     errors,
   };
+  // The catalog objects, each with the text the text-based passes read for it.
+  const scans: TextScan[] = [];
   addFileRefs(fp, node, container.metadata);
-  parseTablesAndFields(fp, node);
-  parseScripts(fp, node);
-  parseCatalogs(fp, node);
-  parseCustomMenuItems(fp, node);
-  // Text-derived references for everything so far; each streamed layout gets
-  // its own pass (processOneLayout), so its full text can be dropped right after.
-  addTextDerivedRefs(fp, fp.objects, 0);
-  fp.scanText.clear();
-  if (layoutCatalog) parseLayoutsStreaming(fp, layoutCatalog);
+  parseTablesAndFields(fp, node, scans);
+  parseScripts(fp, node, scans);
+  parseCatalogs(fp, node, scans);
+  parseCustomMenuItems(fp, node, scans);
+  // Text-derived references for everything so far; each layout gets its own
+  // pass (processOneLayout), so its full text can be dropped right after.
+  addTextDerivedRefs(fp, scans, 0);
+  const nextOrder = layoutCatalog ? parseLayoutsStreaming(fp, layoutCatalog) : 0;
+  parseLayoutsInTree(fp, node["LayoutCatalog"], nextOrder);
   return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
 }
 
@@ -157,16 +182,21 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
  * another pass already recorded; collapsing them keeps reference counts honest.
  * Distinct step usages (different fromStep) are preserved, since broken-step
  * flagging needs them, and so are distinct kinds (a Set Field that both sets
- * and reads a field). */
+ * and reads a field). Of a disabled and an enabled duplicate — a layout's
+ * copies of the same use by two of its buttons — the enabled one is kept. */
 function dedupeRefs(refs: RawReference[]): RawReference[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const out: RawReference[] = [];
   for (const r of refs) {
     // Name-based references share an empty toId, so their name is the identity.
     const key = `${r.fromUid}|${r.toType}|${r.toId}|${r.kind}|${r.byName ? r.toName : ""}|${r.viaToId ?? ""}|${r.viaBaseTableId ?? ""}|${r.fromStep ?? ""}|${r.toFileName ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
+    const at = seen.get(key);
+    if (at == null) {
+      seen.set(key, out.length);
+      out.push(r);
+    } else if (out[at]!.disabled && !r.disabled) {
+      out[at] = r;
+    }
   }
   return out;
 }

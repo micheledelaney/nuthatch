@@ -1,22 +1,19 @@
 import type { ScriptStep } from "@/types/ddr";
-import { INSERT_TEXT_STEP, renderedStepText } from "../steps";
+import { INSERT_TEXT_STEP, renderedStepText, stepNodes } from "../steps";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 import { charForCode, decodeEntities } from "../entities";
 
 /** Build the ordered step list shown in a script's inspector. */
 export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap<string, string>): ScriptStep[] {
-  const steps: ScriptStep[] = [];
-  for (const step of children(stepsContainer, "Step")) {
-    if (!isRecord(step)) continue;
+  return stepNodes(stepsContainer).map((step, i) => {
     const name = textAttr(step, "name") ?? "(step)";
-    steps.push({
-      index: steps.length + 1,
+    return {
+      index: i + 1,
       name,
       enabled: (attr(step, "enable") ?? "True") !== "False",
       params: stepParams(step, name, stepTextByHash),
-    });
-  }
-  return steps;
+    };
+  });
 }
 
 /**

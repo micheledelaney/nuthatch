@@ -13,7 +13,7 @@
  * list can name one (`$$path`), which FileMaker resolves when it opens the file.
  */
 import type { FmObject } from "@/types/ddr";
-import type { FileParse } from "../context";
+import type { FileParse, TextScan } from "../context";
 import { objectUid } from "../uid";
 import { newObject } from "../objects/catalogItems";
 import { globalVariableRef } from "./refBuilders";
@@ -31,8 +31,8 @@ function pathListGlobals(pathList: string): string[] {
 }
 
 /** The `$$globals` the data sources in a batch of objects name in their path lists. */
-export function addDataSourcePathGlobalRefs(fp: FileParse, batch: readonly FmObject[]): void {
-  for (const obj of batch) {
+export function addDataSourcePathGlobalRefs(fp: FileParse, batch: readonly TextScan[]): void {
+  for (const { obj } of batch) {
     if (obj.type !== "externalDataSource") continue;
     for (const name of pathListGlobals(obj.attributes.path ?? "")) fp.references.push(globalVariableRef(obj.uid, name));
   }

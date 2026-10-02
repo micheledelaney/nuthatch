@@ -6,6 +6,7 @@ import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
 import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
 import { chunkListMatchesText, quotedGlobalVariables } from "../calcText";
 import { calculationText } from "../objects/common";
+import { stepNodes } from "../steps";
 import { activeAutoEnter, activeValidation } from "./activeOptions";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
@@ -75,6 +76,9 @@ function scanSpecialElements(
     case "ScriptTrigger":
       scanTriggers(fp, value, owner, ctx);
       return true;
+    case "Step":
+      stepNodes(node).forEach((step, i) => scanStep(fp, step, i + 1, owner, ctx));
+      return true;
     case "Name":
     case "Variable":
       addVariableTargetRefs(fp, value, owner, ctx);
@@ -107,8 +111,21 @@ function addVariableTargetRefs(fp: FileParse, value: unknown, owner: RefOwner, c
   }
 }
 
+/** The `index`-th step of a step list (see stepNodes), setting the step context
+ * for everything inside it. */
+function scanStep(fp: FileParse, step: Record<string, unknown>, index: number, owner: RefOwner, ctx: ScanContext): void {
+  const stepCtx: ScanContext = {
+    stepName: attr(step, "name") ?? ctx.stepName,
+    stepIndex: index,
+    ...(ctx.disabled || attr(step, "enable") === "False" ? { disabled: true } : {}),
+    ...(ctx.inChunkList ? { inChunkList: true } : {}),
+  };
+  addStepTargetRefs(fp, step, owner.uid, stepCtx);
+  scanRefs(fp, step, owner, stepCtx);
+}
+
 /** The elements under one key: a reference for each that is one, then their
- * subtrees (a <Step> setting the step context for its own). */
+ * subtrees. */
 function scanElements(
   fp: FileParse,
   key: string,
@@ -118,27 +135,15 @@ function scanElements(
   externalFileName: string | undefined,
 ): void {
   const targetType = FMSAVEAS_REF_TAGS[key];
-  let stepIndex = 0;
   for (const el of asArray(value)) {
     if (targetType && isRecord(el)) {
       const ref = elementRef(el, targetType, owner.uid, ctx, externalFileName);
       if (ref) pushRef(fp.references, ref, ctx);
     }
-    let childCtx = ctx;
-    if (key === "Step" && isRecord(el)) {
-      stepIndex += 1;
-      childCtx = {
-        stepName: attr(el, "name") ?? ctx.stepName,
-        stepIndex,
-        ...(ctx.disabled || attr(el, "enable") === "False" ? { disabled: true } : {}),
-        ...(ctx.inChunkList ? { inChunkList: true } : {}),
-      };
-      addStepTargetRefs(fp, el, owner.uid, childCtx);
-    }
     // A field read through a deleted occurrence (<Table Missing>, id -1) is one
     // broken reference, not two: don't also emit the dead occurrence itself.
     const deadOccurrence = targetType === "field" && isRecord(el) && attr(child(el, "TableOccurrenceReference"), "id") === "-1";
-    scanRefs(fp, deadOccurrence ? withoutKey(el, "TableOccurrenceReference") : el, owner, childCtx);
+    scanRefs(fp, deadOccurrence ? withoutKey(el, "TableOccurrenceReference") : el, owner, ctx);
   }
 }
 

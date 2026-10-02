@@ -1,8 +1,8 @@
 import type { FileParse } from "../context";
 import { xmlParser } from "../xmlParser";
-import { asArray, isRecord } from "../xmlUtils";
+import { asArray, isRecord, textAttr } from "../xmlUtils";
 import { decodeEntities } from "../entities";
-import { applyFolderMarker, folderPath } from "../catalogWalk";
+import { applyFolderMarker, collectOrderedWithFolders, folderPath } from "../catalogWalk";
 import { processOneLayout } from "./layouts";
 
 /**
@@ -85,8 +85,10 @@ function nextLayoutElement(xml: string, from: number): number {
  * Folder markers (isFolder="True" / "Marker") are handled without a full XML
  * parse — the name attribute is read with a simple regex — because folder
  * marker layouts contain no reference-bearing content.
+ *
+ * Returns the order the next layout takes.
  */
-export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
+export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): number {
   let order = 0;
   const folderStack: string[] = [];
   const closeTag = "</Layout>";
@@ -98,13 +100,14 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
     const gt = catalogXml.indexOf(">", lt);
     if (gt === -1) break;
     const openTag = catalogXml.slice(lt, gt + 1);
-    if (openTag.endsWith("/>")) {
-      pos = gt + 1;
-      continue;
+    // A self-closing <Layout …/> is an element too — a folder's closing marker
+    // can be one — read as the tree walk reads it (collectOrderedWithFolders).
+    let endPos = gt + 1;
+    if (!openTag.endsWith("/>")) {
+      const closePos = indexOutsideCdata(catalogXml, closeTag, gt + 1);
+      if (closePos === -1) break;
+      endPos = closePos + closeTag.length;
     }
-    const closePos = indexOutsideCdata(catalogXml, closeTag, gt + 1);
-    if (closePos === -1) break;
-    const endPos = closePos + closeTag.length;
     pos = endPos;
 
     // Folder markers: manage the stack but do not emit an object.
@@ -117,7 +120,37 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
     const layoutNode = parseLayoutElement(fp, catalogXml.slice(lt, endPos), openTag);
     if (layoutNode == null) continue;
     const folder = folderPath(folderStack);
-    for (const node of asArray(layoutNode)) if (processOneLayout(fp, node, folder, order)) order++;
+    for (const node of asArray(layoutNode)) if (readLayout(fp, node, folder, order)) order++;
+  }
+  return order;
+}
+
+/** processOneLayout, or — when reading the layout throws — nothing but an
+ * error for the user: what it had already added is taken back out, so the rest
+ * of the file still loads. */
+function readLayout(fp: FileParse, node: unknown, folder: string, order: number): boolean {
+  const objStart = fp.objects.length;
+  const refStart = fp.references.length;
+  try {
+    return processOneLayout(fp, node, folder, order);
+  } catch (err) {
+    fp.objects.length = objStart;
+    fp.references.length = refStart;
+    const name = textAttr(node, "name");
+    fp.errors.push(`${fp.file.name}: layout ${name != null ? `“${name}” ` : ""}could not be read and was skipped — ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/** Layouts the streaming split left in the parsed tree — a second
+ * <LayoutCatalog>, or one it couldn't cut out — read the way scripts are,
+ * after the streamed ones. (The streamed catalog leaves an empty stub.) */
+export function parseLayoutsInTree(fp: FileParse, catalogs: unknown, firstOrder: number): void {
+  let order = firstOrder;
+  for (const catalog of asArray(catalogs)) {
+    for (const { node, folder } of collectOrderedWithFolders(catalog, "Layout")) {
+      if (readLayout(fp, node, folder, order)) order++;
+    }
   }
 }
 

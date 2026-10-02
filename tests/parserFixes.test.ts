@@ -171,6 +171,42 @@ describe("export shapes no sample has", () => {
     expect(object(result, "F0:layout:2").folder).toBe("Admin");
   });
 
+  it("closes a folder at a self-closing marker, whether its catalog is streamed or not", () => {
+    const entries = (tag: string): string =>
+      `<${tag} id="90" name="Dev" isFolder="True"></${tag}><${tag} id="1" name="A"></${tag}>` +
+      `<${tag} id="91" name="" isFolder="Marker"/><${tag} id="2" name="B"></${tag}>`;
+    const folders = (result: ParseResult, type: string): string[] =>
+      result.objects.filter((o) => o.type === type).map((o) => `${o.name} ${o.folder ?? ""}`);
+    const streamed = parse(doc("MAIN", `<AddAction><LayoutCatalog>${entries("Layout")}</LayoutCatalog><ScriptCatalog>${entries("Script")}</ScriptCatalog></AddAction>`));
+    // An empty first catalog is the one streamed, so the second is read from the tree.
+    const inTree = parse(doc("MAIN", `<AddAction><LayoutCatalog></LayoutCatalog><LayoutCatalog>${entries("Layout")}</LayoutCatalog></AddAction>`));
+    expect(folders(streamed, "script")).toEqual(["A Dev", "B "]);
+    expect(folders(streamed, "layout")).toEqual(["A Dev", "B "]);
+    expect(folders(inTree, "layout")).toEqual(["A Dev", "B "]);
+  });
+
+  it("reads the layouts of a second LayoutCatalog after the streamed ones", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>
+          <LayoutCatalog><Layout id="1" name="L1"></Layout></LayoutCatalog>
+          <LayoutCatalog><Layout id="8" name="Dev" isFolder="True"></Layout><Layout id="2" name="L2"></Layout><Layout id="9" name="" isFolder="Marker"></Layout></LayoutCatalog>
+        </AddAction>`,
+      ),
+    );
+    expect(result.errors).toEqual([]);
+    const layouts = result.objects.filter((o) => o.type === "layout").map((o) => `${o.name} ${o.order} ${o.folder ?? ""}`);
+    expect(layouts).toEqual(["L1 0 ", "L2 1 Dev"]);
+  });
+
+  it("warns about an export saved with split catalogs", () => {
+    const content = doc("MAIN", `<AddAction><ScriptCatalog></ScriptCatalog></AddAction>`).content.replace(`<FMSaveAsXML `, `<FMSaveAsXML split_catalogs="True" `);
+    const result = parse({ name: "MAIN.xml", content });
+    expect(result.errors).toEqual([`MAIN.xml: saved with split catalogs (split_catalogs="True"), which this app doesn't support — some objects may be missing.`]);
+    expect(result.files.map((f) => f.name)).toEqual(["MAIN"]);
+  });
+
   it("recovers an FM 21 install condition's references from its text, like an FM 26 one", () => {
     // FM 21 puts the pointer beside a <Calculation> holding bare CDATA; FM 26
     // puts it inside the <Calculation>, beside its <Text>. The chunk list is
@@ -625,6 +661,47 @@ describe("what a layout reports", () => {
     expect(from("F0:script:1")).toBe(1);
     expect(from("F0:layoutObject:10.1")).toBe(1);
     expect(from("F0:layout:10")).toBe(1);
+  });
+
+  it("keeps a layout's use of a script enabled when only one of its buttons' steps is disabled", () => {
+    const button = (id: string, enable: string): string =>
+      `<LayoutObject id="${id}" type="Button" name="b${id}"><Button><action><Step id="1" name="Perform Script" enable="${enable}"><ParameterValues>` +
+      `<Parameter type="List"><List><ScriptReference id="1" name="S"></ScriptReference></List></Parameter></ParameterValues></Step></action></Button></LayoutObject>`;
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}<ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>${layout(button("1", "False") + button("2", "True"))}</AddAction>`));
+    const toScript = (uid: string): string[] =>
+      result.references.filter((r) => r.fromUid === uid && r.toType === "script").map((r) => (r.disabled ? "disabled" : "enabled"));
+    expect(toScript("F0:layoutObject:10.1")).toEqual(["disabled"]);
+    expect(toScript("F0:layoutObject:10.2")).toEqual(["enabled"]);
+    expect(toScript("F0:layout:10")).toEqual(["enabled"]);
+  });
+
+  it("labels a button whose calculated label is a literal, but not one whose label is computed", () => {
+    const button = (id: string, formula: string): string =>
+      `<LayoutObject id="${id}" type="Button" name=""><Button><Label><Calculation><Text><![CDATA[${formula}]]></Text></Calculation></Label></Button></LayoutObject>`;
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(button("1", `"Save"`) + button("2", `"Row " & Get ( RecordNumber )`))}</AddAction>`));
+    expect(object(result, "F0:layoutObject:10.1").name).toBe("Button (Save)");
+    expect(object(result, "F0:layoutObject:10.1").attributes.label).toBe("Save");
+    expect(object(result, "F0:layoutObject:10.2").name).toBe("Button");
+    expect(object(result, "F0:layoutObject:10.2").attributes.label).toBeUndefined();
+  });
+
+  it("flags a deleted field in an unlabeled button's step, which has no search text", () => {
+    // An icon button: no name, no label — only its step's calc shows the deleted field.
+    const setVariable =
+      `<Step id="1" name="Set Variable" enable="True"><ParameterValues>` +
+      `<Parameter type="Variable"><Name value="$x"></Name></Parameter>` +
+      `<Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation><DDRREF kind="ChunkList" hash="H6">_P6</DDRREF><Text><![CDATA[T::<Field Missing>]]></Text></Calculation></Calculation></Parameter>` +
+      `</ParameterValues></Step>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Button" name=""><Button><action>${setVariable}</action></Button></LayoutObject>`)}</AddAction>`,
+        `<Calcs>${emptyList("_P6", "H6")}</Calcs>`,
+      ),
+    );
+    expect(object(result, "F0:layoutObject:10.1").text).toBe("");
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1"]);
   });
 });
 

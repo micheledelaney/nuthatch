@@ -276,10 +276,18 @@ function behaviorLine(obj: Record<string, unknown>): string | undefined {
     const button = child(obj, tag);
     if (!isRecord(button)) continue;
     const label = firstTextValue(button["Label"]);
-    return label ? `"${label}"` : undefined;
+    if (label) return `"${label}"`;
+    // A calculated label (<Label><Calculation>) that is one string literal is a
+    // static label, already quoted. One that computes its text is left out: as
+    // the object's name it would read as code.
+    const formula = calcOf(button["Label"]).trim();
+    return STRING_LITERAL_RE.test(formula) ? formula : undefined;
   }
   return undefined;
 }
+
+/** A formula that is nothing but one string literal (`"Save"`, with `\"` escapes). */
+const STRING_LITERAL_RE = /^"(?:[^"\\]|\\[\s\S])*"$/;
 
 /** Script reference navigation target: id, name, UUID from an <action> element. */
 function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {

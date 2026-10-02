@@ -1,10 +1,11 @@
 import type { FmObject, ObjectType } from "@/types/ddr";
-import type { FileParse } from "../context";
-import { isRecord } from "../xmlUtils";
+import type { FileParse, TextScan } from "../context";
+import { cdataText, isRecord } from "../xmlUtils";
 import { collectCatalogItems } from "../catalogWalk";
+import { occurrenceSource } from "../occurrences";
 import { scanRefs } from "../refs/scanRefs";
 import { makeObject } from "./catalogItems";
-import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs } from "./customFunctions";
+import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs, customFunctionScanText } from "./customFunctions";
 import { annotateExternalDataSource } from "./dataSources";
 import { annotateCustomMenu, annotateCustomMenuSet } from "./menus";
 import { annotateRelationship } from "./relationships";
@@ -35,6 +36,8 @@ interface CatalogSpec {
   /** References recorded after the scan, from outside the item's own element
    * scan (a separately stored formula, the sets granting a privilege, …). */
   addRefs?: (item: Item, obj: FmObject) => void;
+  /** The text the text-based passes read for the item: its CDATA unless given. */
+  text?: (item: Item, obj: FmObject) => string;
 }
 
 /** The catalogs, in the order their objects are emitted. Missing catalogs are
@@ -58,7 +61,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       itemTag: "TableOccurrence",
       type: "tableOccurrence",
       // Every occurrence with an id is in the file index, which already read its source.
-      annotate: (item, obj) => annotateTableOccurrence(item, obj, fp.index.toById.get(obj.id)!),
+      annotate: (item, obj) => annotateTableOccurrence(item, obj, fp.index.toById.get(obj.id) ?? occurrenceSource(item, fp.index.dataSourceIds)),
     },
     {
       catalogKey: "RelationshipCatalog",
@@ -81,6 +84,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       type: "customFunction",
       annotate: (item, obj) => annotateCustomFunction(item, obj, cfCalcs),
       addRefs: (_item, obj) => addCustomFunctionCalcRefs(fp, obj, cfCalcs),
+      text: (item, obj) => customFunctionScanText(item, obj, cfCalcs),
     },
     {
       catalogKey: "ExtendedPrivilegesCatalog",
@@ -113,13 +117,14 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
 }
 
 /** Every object of the catalogs in catalogSpecs, with its references. */
-export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>): void {
+export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   for (const spec of catalogSpecs(fp, containerNode)) {
     for (const item of collectCatalogItems(containerNode[spec.catalogKey], spec.itemTag)) {
       const base = makeObject(fp, item, spec.type);
       if (!base || !isRecord(item)) continue;
       const obj = spec.annotate ? spec.annotate(item, base) : base;
       fp.objects.push(obj);
+      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(item) });
       if (spec.scan !== "none") scanRefs(fp, spec.scan ? spec.scan(item) : item, obj);
       spec.addRefs?.(item, obj);
     }

@@ -1,5 +1,5 @@
 import type { FmObject, ObjectDetail } from "@/types/ddr";
-import type { FileIndex, FileParse } from "../context";
+import type { FileIndex, FileParse, TextScan } from "../context";
 import { attr, cdataText, child, children, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
 import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
@@ -13,21 +13,22 @@ import { calcOf, calculationText, qualifiedField } from "./common";
  * FieldsForTables section, each FieldCatalog keyed back to its base table by a
  * leading <BaseTableReference>.
  */
-export function parseTablesAndFields(fp: FileParse, containerNode: Record<string, unknown>): void {
+export function parseTablesAndFields(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   const tableUidById = new Map<string, string>();
   for (const table of collectCatalogItems(containerNode["BaseTableCatalog"], "BaseTable")) {
     const tableObj = makeObject(fp, table, "table");
     if (!tableObj) continue;
     fp.objects.push(tableObj);
+    scans.push({ obj: tableObj, text: cdataText(table) });
     tableUidById.set(tableObj.id, tableObj.uid);
   }
   for (const catalog of fieldCatalogs(containerNode)) {
     const tableUid = tableUidById.get(catalog.tableId);
-    if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId);
+    if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId, scans);
   }
 }
 
-function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tableId: string): void {
+function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tableId: string, scans: TextScan[]): void {
   for (const field of collectCatalogItems(fieldContainer, "Field")) {
     // Field ids are unique only within a base table, so namespace the uid by
     // the owning table to keep object uids globally unique.
@@ -37,8 +38,7 @@ function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tab
     fp.objects.push(fieldObj);
     // The element scan skips disabled auto-enter / validation calcs; the
     // placeholder passes (which read text, not elements) must skip them too.
-    const active = activeFieldNode(field);
-    if (active !== field) fp.scanText.set(fieldObj.uid, cdataText(active));
+    scans.push({ obj: fieldObj, text: cdataText(activeFieldNode(field)) });
     scanRefs(fp, field, fieldObj);
   }
 }

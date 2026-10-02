@@ -1,5 +1,5 @@
 import type { FmObject, LayoutObjectInfo, ObjectDetail } from "@/types/ddr";
-import type { FileParse } from "../context";
+import type { FileParse, TextScan } from "../context";
 import { asArray, attr, cdataText, child, displayText, isElementKey, isRecord, textAttr } from "../xmlUtils";
 import { FILE_DEFAULT_MENU_SET } from "../sentinels";
 import { objectUid } from "../uid";
@@ -14,12 +14,14 @@ import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./lay
 /** What emitting one layout's objects needs: each object's own XML element (to
  * scan it), the elements of the objects that are listed on their own (which
  * every other element's own scan leaves out), and the uid each element ends up
- * with (for the FM 22 deferred button targets, which name the element). */
+ * with (for the FM 22 deferred button targets, which name the element) — and
+ * collects the objects' text for the text-based passes, in emission order. */
 interface LayoutObjectsContext {
   fp: FileParse;
   sources: LayoutObjectSources;
   listedElements: ReadonlySet<unknown>;
   uidOfElement: Map<Record<string, unknown>, string>;
+  scans: TextScan[];
 }
 
 /**
@@ -37,30 +39,29 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   if (!base) return false;
   const objStart = fp.objects.length;
   const refStart = fp.references.length;
-  const full = buildLayout(fp, layout, placeInCatalog(base, order, folder));
+  const { layout: full, scans } = buildLayout(fp, layout, placeInCatalog(base, order, folder));
   const layoutObjects = fp.objects.slice(objStart);
-  const batch = [...layoutObjects, full];
-  addTextDerivedRefs(fp, batch, refStart);
-  for (const obj of batch) fp.scanText.delete(obj.uid);
+  addTextDerivedRefs(fp, scans, refStart);
   // After the text passes, so the layout's placeholder check weighs only its own references.
   addObjectRefsToLayout(fp, layoutObjects, full.uid, refStart);
   fp.objects.push(full.detail?.kind === "layout" ? { ...full, text: compactLayoutText(full, full.detail) } : full);
   return true;
 }
 
-/** The layout object, after its layout objects and its own references. */
-function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): FmObject {
-  if (placed.isSeparator) return placed;
+/** The layout object, after its layout objects and its own references, with
+ * the batch the text-based passes read: its objects, then itself. */
+function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): { layout: FmObject; scans: TextScan[] } {
+  if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout) }] };
   const annotated = annotateLayout(layout, placed);
   const extracted = layoutDetail(layout, fp.index);
   const sources = extracted?.sources ?? new Map();
   const listedElements = new Set([...sources].filter(([lo]) => isListed(lo)).map(([, element]) => element));
-  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map() };
+  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map(), scans: [] };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
   // Its own settings, triggers and parts, and any object not listed on its own.
-  scanOwnElement(fp, ownElement(layout, listedElements), obj);
+  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(layout, listedElements), obj) });
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
-  return obj;
+  return { layout: obj, scans: cx.scans };
 }
 
 /** Copy every reference the layout's objects recorded (from `refStart` on)
@@ -74,15 +75,15 @@ function addObjectRefsToLayout(fp: FileParse, layoutObjects: readonly FmObject[]
   }
 }
 
-/** Record what an element holds for `owner`: its references, the globals
- * merged into its text, and the text the placeholder pass reads — after
- * `listedText`, the terms a layout object lists (a field binding whose
- * <FieldReference> is gone shows only there). */
-function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): void {
+/** Record what an element holds for `owner` — its references and the globals
+ * merged into its text — and return the text the placeholder pass reads for
+ * it: after `listedText`, the terms a layout object lists (a field binding
+ * whose <FieldReference> is gone shows only there). */
+function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): string {
   scanRefs(fp, own, owner);
   const literal = cdataText(own);
   addMergeVariableRefs(fp, owner.uid, literal);
-  fp.scanText.set(owner.uid, listedText ? `${listedText}\n${literal}` : literal);
+  return listedText ? `${listedText}\n${literal}` : literal;
 }
 
 /** Surface the table occurrence a layout shows records from (a nested
@@ -144,7 +145,7 @@ function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[]
       // placeholder pass reads the same element, after the listed terms (which
       // miss the calcs only the element holds: a portal filter, a button step,
       // a trigger parameter).
-      scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text);
+      cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text) });
     }
     if (!lo.children || lo.children.length === 0) return withUid;
     return { ...withUid, children: addLayoutObjectTree(cx, lo.children, uid, chain ?? idChain) };

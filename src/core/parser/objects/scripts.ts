@@ -1,6 +1,6 @@
 import type { FmObject } from "@/types/ddr";
-import type { FileParse } from "../context";
-import { attr, child, children, isRecord } from "../xmlUtils";
+import type { FileParse, TextScan } from "../context";
+import { attr, cdataText, child, children, isRecord } from "../xmlUtils";
 import { collectOrderedWithFolders, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { makeObject, placeInCatalog } from "./catalogItems";
@@ -11,7 +11,7 @@ import { scriptSteps } from "./stepText";
  * separator items); their steps live in a separate StepsForScripts section,
  * each block keyed to its script by a leading <ScriptReference>.
  */
-export function parseScripts(fp: FileParse, containerNode: Record<string, unknown>): void {
+export function parseScripts(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   const stepBlocks = firstBlockByOwner(children(containerNode["StepsForScripts"], "Script"), "ScriptReference");
   let order = 0;
   for (const { node, folder } of collectOrderedWithFolders(containerNode["ScriptCatalog"], "Script")) {
@@ -20,11 +20,15 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
     const placed = placeInCatalog(base, order++, folder);
     if (placed.isSeparator) {
       fp.objects.push(placed);
+      scans.push({ obj: placed, text: cdataText(node) });
       continue;
     }
     const block = stepBlocks.get(placed.id);
     const script = annotateScript(node, placed);
-    fp.objects.push(block ? withSteps(fp, script, block) : script);
+    const obj = block ? withSteps(fp, script, block) : script;
+    fp.objects.push(obj);
+    // A script with steps is read per step (its rendered text), not by this text.
+    scans.push({ obj, text: cdataText(node) });
   }
 }
 

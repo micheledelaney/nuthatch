@@ -1,10 +1,11 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, children, collectElements, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
+import { asArray, attr, child, collectElements, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { edgeKind } from "../refTags";
 import { UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
 import { collectCatalogItems } from "../catalogWalk";
 import { pushRef } from "../refs/refBuilders";
+import { stepNodes } from "../steps";
 import { BUTTON_ACTION_TAGS } from "./common";
 
 /** A button (or grouped button) whose action targets a layout FM 22 names only
@@ -66,11 +67,7 @@ function deferredButton(node: Record<string, unknown>): DeferredButton[] {
 
 /** The action steps of a layout object's button / grouped button, in order. */
 function buttonSteps(node: Record<string, unknown>): { owner: string; index: number; step: Record<string, unknown> }[] {
-  return BUTTON_ACTION_TAGS.flatMap((owner) =>
-    children(child(child(node, owner), "action"), "Step")
-      .filter(isRecord)
-      .map((step, index) => ({ owner, index, step })),
-  );
+  return BUTTON_ACTION_TAGS.flatMap((owner) => stepNodes(child(child(node, owner), "action")).map((step, index) => ({ owner, index, step })));
 }
 
 /**

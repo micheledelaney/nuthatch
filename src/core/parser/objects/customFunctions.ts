@@ -27,11 +27,17 @@ export function annotateCustomFunction(item: Record<string, unknown>, obj: FmObj
   };
 }
 
-/** The references in a separately stored formula (see customFunctionCalcs),
- * and its text for the text-based passes, beside the catalog entry's. */
+/** The references in a separately stored formula (see customFunctionCalcs). */
 export function addCustomFunctionCalcRefs(fp: FileParse, obj: FmObject, calcs: CalcBlocks): void {
   const block = calcs.get(obj.id);
   if (!block) return;
   scanRefs(fp, block["Calculation"], obj);
-  fp.scanText.set(obj.uid, `${fp.scanText.get(obj.uid) ?? ""}\n${cdataText(block["Calculation"])}`);
+}
+
+/** The text the text-based passes read for a custom function: its catalog
+ * entry's, then a separately stored formula's. */
+export function customFunctionScanText(item: Record<string, unknown>, obj: FmObject, calcs: CalcBlocks): string {
+  const block = calcs.get(obj.id);
+  const own = cdataText(item);
+  return block ? `${own}\n${cdataText(block["Calculation"])}` : own;
 }

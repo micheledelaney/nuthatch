@@ -1,5 +1,5 @@
 import type { FmObject } from "@/types/ddr";
-import type { FileParse } from "../context";
+import type { FileParse, TextScan } from "../context";
 import { attr, cdataText, child, children, displayText, enabledLabels, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { objectUid } from "../uid";
 import { collectCatalogItems } from "../catalogWalk";
@@ -67,7 +67,7 @@ export function annotateCustomMenuSet(node: Record<string, unknown>, obj: FmObje
  * <CustomMenuReference> submenu, or a Perform Script step's <ScriptReference>;
  * separators are kept (in order) and flagged like the script/layout dividers.
  */
-export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string, unknown>): void {
+export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   for (const menu of collectCatalogItems(containerNode["CustomMenuCatalog"], "CustomMenu")) {
     const menuId = attr(menu, "id");
     const list = child(menu, "MenuItemList");
@@ -80,7 +80,6 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
       const index = attr(item, "index") ?? String(order);
       const isSeparator = attr(item, "isSeparatorItem") === "True";
       const uid = objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`);
-      fp.scanText.set(uid, cdataText(item));
       const obj = newObject(fp.file, {
         uid,
         type: "customMenuItem",
@@ -93,6 +92,7 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
         ...(isSeparator ? { isSeparator: true } : {}),
       });
       fp.objects.push(obj);
+      scans.push({ obj, text: cdataText(item) });
       if (isSeparator) continue;
       // A menu item exists only as part of its menu, so the menu is what
       // "references" it — a containment edge (menu -> item) so the item lists
