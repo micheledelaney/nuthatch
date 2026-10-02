@@ -1,11 +1,11 @@
-import { asArray, attr, isRecord, withoutKey } from "../xmlUtils";
-
 /**
  * Switched-off auto-enter options (a calc or lookup) and validation calcs stay
  * in the XML — FileMaker even leaves a disabled lookup's references in place
  * after its source relationship is deleted. They're dead configuration, so the
  * scanners only look at what's in effect.
  */
+
+import { asArray, attr, isRecord, withoutKey } from "../xmlUtils";
 
 /** Whether an auto-enter option element is in effect. FileMaker 26 marks each
  * one enable="True|False"; older exports don't, so fall back to the AutoEnter's

@@ -5,14 +5,13 @@ import { edgeKind } from "../refTags";
 import {
   fieldNameCandidate,
   globalVariablesInText,
-  isWordChar,
   longestNameAt,
-  longestNameEndingAt,
   quotedGlobalVariables,
   skipWhitespace,
   stripLiteralsAndComments,
   type NameIndex,
 } from "../calcText";
+import { isNameChar, longestNameEndingAt } from "@/core/identifiers";
 import { globalVariableRef, pushRef, type RefOwner, type ScanCtx } from "./refBuilders";
 
 /**
@@ -89,7 +88,7 @@ export function scanCalcTextRefs(
  * by `(` is skipped too (that's a function, not a field). */
 function forEachBareName(text: string, index: NameIndex, notCall: boolean, emit: (name: string) => void): void {
   for (let p = 0; p < text.length; p++) {
-    if (!index.byFirst.has(text[p]!) || isWordChar(text[p - 1])) continue;
+    if (!index.byFirst.has(text[p]!) || isNameChar(text[p - 1])) continue;
     if (text[p - 1] === "$" || text.startsWith("::", p - 2)) continue;
     const name = longestNameAt(text, p, index);
     if (name == null) continue;

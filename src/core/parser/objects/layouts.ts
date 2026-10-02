@@ -1,17 +1,24 @@
 import type { FmObject, LayoutObjectInfo } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, collectText, isRecord } from "../xmlUtils";
+import { asArray, attr, child, collectText, isElementKey, isRecord } from "../xmlUtils";
 import { decodeEntities } from "../entities";
-import { FILE_DEFAULT_MENU_SET, MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
+import { FILE_DEFAULT_MENU_SET } from "../sentinels";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
-import { brokenRef } from "../refs/refBuilders";
 import { addPlaceholderRefs } from "../refs/placeholderRefs";
 import { addTextGlobalRefs } from "../refs/globalVariables";
-import { isPerformScriptStep, namesDeletedScript } from "../refs/stepTargets";
 import { makeObject, placeInCatalog } from "./catalogItems";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
-import { layoutDetail, type LayoutDetail } from "./layoutDetail";
+import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./layoutDetail";
+
+/** What emitting one layout's objects needs: each object's own XML element (to
+ * scan it), and the uid each element ends up with (for the FM 22 deferred
+ * button targets, which name the element). */
+interface LayoutObjectsCx {
+  fp: FileParse;
+  sources: LayoutObjectSources;
+  uidOfElement: Map<Record<string, unknown>, string>;
+}
 
 /**
  * One layout from LayoutCatalog (structured like ScriptCatalog: a flat
@@ -37,10 +44,12 @@ export function processOneLayout(layout: unknown, folder: string, order: number,
 function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): FmObject {
   if (placed.isSeparator) return placed;
   const annotated = annotateLayout(layout, placed);
-  const detail = layoutDetail(layout, fp.chunks.stepTextByHash);
-  const obj = detail ? { ...annotated, detail: addLayoutObjects(fp, detail, annotated) } : annotated;
+  const extracted = layoutDetail(layout, fp.chunks.stepTextByHash);
+  const cx: LayoutObjectsCx = { fp, sources: extracted?.sources ?? new Map(), uidOfElement: new Map() };
+  const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
+  // The layout lists everything on it, too: its own settings and every object's.
   scanRefs(fp, layout, obj);
-  addDeferredLayoutRefs(fp, layout, obj);
+  addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return obj;
 }
 
@@ -64,9 +73,9 @@ function annotateLayout(node: unknown, obj: FmObject): FmObject {
 /** Emit the layout's objects (and their references), returning its detail with
  * each object's uid filled in. Every part's objects come first, then the
  * off-layout ones — the order the duplicate-uid suffixes are counted in. */
-function addLayoutObjects(fp: FileParse, detail: LayoutDetail, layout: FmObject): LayoutDetail {
-  const parts = detail.parts.map((part) => ({ ...part, objects: addLayoutObjectTree(fp, part.objects, layout.uid, layout.id) }));
-  const offLayout = addLayoutObjectTree(fp, detail.offLayout, layout.uid, layout.id);
+function addLayoutObjects(cx: LayoutObjectsCx, detail: LayoutDetail, layout: FmObject): LayoutDetail {
+  const parts = detail.parts.map((part) => ({ ...part, objects: addLayoutObjectTree(cx, part.objects, layout.uid, layout.id) }));
+  const offLayout = addLayoutObjectTree(cx, detail.offLayout, layout.uid, layout.id);
   return { ...detail, parts, offLayout };
 }
 
@@ -74,13 +83,17 @@ function addLayoutObjects(fp: FileParse, detail: LayoutDetail, layout: FmObject)
  * `id` of every ancestor from the owning layout down to (but not including)
  * these objects — e.g. `"120.2970"` for objects nested one level inside layout
  * 120's object with id 2970. */
-function addLayoutObjectTree(fp: FileParse, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
+function addLayoutObjectTree(cx: LayoutObjectsCx, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
+  const { fp } = cx;
   return infos.map((lo) => {
     // `uuid` is only populated once FileMaker has stamped this specific object with
     // a per-edit UUID — an object never touched since it was placed has none, which
     // is the common case, not an edge case. Only skip when there's truly nothing to
     // build a uid from (below, `id` is preferred and `uuid` is just the fallback).
-    if (!lo.id && !lo.uuid) return lo;
+    if (!lo.id && !lo.uuid) {
+      // Nothing to list it by — but the objects inside it are still objects.
+      return lo.children?.length ? { ...lo, children: addLayoutObjectTree(cx, lo.children, parentUid, idChain) } : lo;
+    }
     // FileMaker's numeric `id` is unique among siblings under the same parent — like
     // a field's id is unique within its table — so namespace by the full ancestor
     // chain the same way fields are namespaced by table. A single level (layout + own
@@ -91,10 +104,19 @@ function addLayoutObjectTree(fp: FileParse, infos: LayoutObjectInfo[], parentUid
     const chain = lo.id ? `${idChain}.${lo.id}` : undefined;
     const withUid: LayoutObjectInfo = { ...lo, uid: uniqueLayoutObjectUid(fp, chain ?? lo.uuid!) };
     const uid = withUid.uid!;
-    fp.objects.push(layoutObjectFmObject(fp, withUid, uid, parentUid));
-    addLayoutObjectRefs(fp, withUid, uid);
+    const obj = layoutObjectFmObject(fp, withUid, uid, parentUid);
+    fp.objects.push(obj);
+    const element = cx.sources.get(lo);
+    if (element) {
+      cx.uidOfElement.set(element, uid);
+      // Everything the object itself uses — its field, script, value list,
+      // triggers, and the calcs behind its label, tooltip, hide condition,
+      // conditional formatting, web viewer, and button action — but not what
+      // the objects inside it use: each of those reports its own.
+      scanRefs(fp, withoutNestedObjects(element), obj);
+    }
     if (!lo.children || lo.children.length === 0) return withUid;
-    return { ...withUid, children: addLayoutObjectTree(fp, lo.children, uid, chain ?? idChain) };
+    return { ...withUid, children: addLayoutObjectTree(cx, lo.children, uid, chain ?? idChain) };
   });
 }
 
@@ -158,45 +180,22 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
   return a;
 }
 
-/** The references a layout object's bindings record: its field, the script it
- * performs, its value list, and its triggers' scripts. */
-function addLayoutObjectRefs(fp: FileParse, lo: LayoutObjectInfo, uid: string): void {
-  const out = fp.references;
-  // A field object with <FieldReference id="0" name=""> has no field at all
-  // (FileMaker shows it as <Field Missing>); the placeholder pass flags it from
-  // its label, so no structural edge to a non-existent id 0.
-  if (lo.fieldToId && lo.fieldToId !== "0") {
-    // The label reads "<Field Missing>" for a deleted field; the reference keeps
-    // the blank name like every other structural reference to it (which is what
-    // stops the placeholder pass from counting the same binding twice).
-    const fieldName = lo.fieldRef?.split("::")[1] ?? lo.fieldRef ?? "";
-    out.push({
-      fromUid: uid,
-      toType: "field",
-      toId: lo.fieldToId,
-      toName: fieldName === MISSING_FIELD_TOKEN ? "" : fieldName,
-      kind: "field",
-      ...(lo.fieldViaToId ? { viaToId: lo.fieldViaToId } : {}),
-    });
+/** A layout object's element without the layout objects nested in it — except
+ * a popover's panel, which isn't an object of its own (its contents hang off
+ * the popover button; see childObjects). */
+function withoutNestedObjects(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutNestedObjects);
+  if (!isRecord(node)) return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "LayoutObject") {
+      const panels = asArray(value).filter((lo) => attr(lo, "type") === "PopoverPanel");
+      if (panels.length > 0) out[key] = panels.map(withoutNestedObjects);
+    } else {
+      out[key] = isElementKey(key) ? withoutNestedObjects(value) : value;
+    }
   }
-  if (lo.scriptRef?.id) {
-    out.push({ fromUid: uid, toType: "script", toId: lo.scriptRef.id, toName: lo.scriptRef.name, kind: "script" });
-  } else if (lo.actionStep && isPerformScriptStep(lo.actionStep.name) && namesDeletedScript(lo.actionStep.params)) {
-    // A button whose script was deleted: FileMaker keeps the Perform Script
-    // action but not its <ScriptReference>.
-    out.push(brokenRef(uid, "script", UNKNOWN_TARGET, "script"));
-  }
-  if (lo.valueListRef?.id) {
-    out.push({ fromUid: uid, toType: "valueList", toId: lo.valueListRef.id, toName: lo.valueListRef.name, kind: "valueList" });
-  }
-  for (const t of lo.triggers ?? []) {
-    out.push(
-      t.scriptId
-        ? { fromUid: uid, toType: "script", toId: t.scriptId, toName: t.scriptName, kind: "trigger" }
-        : // The trigger's script was deleted: the event stays, its <ScriptReference> doesn't.
-          brokenRef(uid, "script", UNKNOWN_TARGET, "trigger"),
-    );
-  }
+  return out;
 }
 
 /** A human-readable name for a layout object used as its FmObject.name. */

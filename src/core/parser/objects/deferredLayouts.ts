@@ -83,11 +83,17 @@ function buttonSteps(node: Record<string, unknown>): { owner: string; index: num
  * Emit the layout references FM 22 records only in <ModifyAction> (see
  * deferredLayoutTargets): join each deferred button to its AddAction object by
  * id (and UUID, if the id is ambiguous), and each step by position and name.
- * The reference comes from the layout, like the ones the layout-level scan
- * emits, and resolves in the file the AddAction step's data source names.
+ * The reference comes from the layout and from the button itself, like the
+ * ones the element scan emits, and resolves in the file the AddAction step's
+ * data source names.
  * Steps whose AddAction copy already names the layout are left to that scan.
  */
-export function addDeferredLayoutRefs(fp: FileParse, layout: unknown, layoutObj: FmObject): void {
+export function addDeferredLayoutRefs(
+  fp: FileParse,
+  layout: unknown,
+  layoutObj: FmObject,
+  uidOfElement: ReadonlyMap<Record<string, unknown>, string>,
+): void {
   const deferred = fp.deferredLayoutTargets.get(layoutObj.id);
   if (!deferred) return;
   const objects = collectElements(layout, "LayoutObject");
@@ -107,9 +113,8 @@ export function addDeferredLayoutRefs(fp: FileParse, layout: unknown, layoutObj:
       // Marked external but with no data source: the target file is unknown, and
       // resolving it here would land on an unrelated local layout.
       if (!isExternal && attr(container, "External") === "True") continue;
-      fp.references.push({
-        fromUid: layoutObj.uid,
-        toType: "layout",
+      const ref = {
+        toType: "layout" as const,
         toId: target.layoutId,
         // An external target's recorded name is a local lookup (see
         // deferredLayoutTargets); resolution goes by id.
@@ -118,7 +123,10 @@ export function addDeferredLayoutRefs(fp: FileParse, layout: unknown, layoutObj:
         fromStep: target.index + 1,
         ...(isExternal ? { toFileName: fileName } : {}),
         ...(attr(step, "enable") === "False" ? { disabled: true } : {}),
-      });
+      };
+      fp.references.push({ fromUid: layoutObj.uid, ...ref });
+      const buttonUid = uidOfElement.get(match);
+      if (buttonUid) fp.references.push({ fromUid: buttonUid, ...ref });
     }
   }
 }

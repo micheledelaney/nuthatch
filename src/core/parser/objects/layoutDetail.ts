@@ -7,6 +7,14 @@ import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
 
+/** Each extracted layout object's own XML element. */
+export type LayoutObjectSources = Map<LayoutObjectInfo, Record<string, unknown>>;
+
+interface DetailContext {
+  stepTextByHash: ReadonlyMap<string, string>;
+  sources: LayoutObjectSources;
+}
+
 /**
  * Extract a layout's visible structure: its parts (Body/Header/…) and the
  * objects placed on each (fields, buttons, web viewers, …). Position and a bit
@@ -14,9 +22,13 @@ export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
  * out so the inspector shows what the layout actually contains, not just which
  * table occurrence it is anchored to.
  */
-export function layoutDetail(node: unknown, stepTextByHash: ReadonlyMap<string, string>): LayoutDetail | undefined {
+export function layoutDetail(
+  node: unknown,
+  stepTextByHash: ReadonlyMap<string, string>,
+): { detail: LayoutDetail; sources: LayoutObjectSources } | undefined {
   const partsList = child(node, "PartsList");
   if (!isRecord(node) || !isRecord(partsList)) return undefined;
+  const cx: DetailContext = { stepTextByHash, sources: new Map() };
 
   const rawParts: LayoutPart[] = [];
   for (const part of children(partsList, "Part")) {
@@ -27,7 +39,7 @@ export function layoutDetail(node: unknown, stepTextByHash: ReadonlyMap<string, 
       type: attr(part, "type") ?? "Part",
       top: num(attr(def, "absolute")),
       height: num(attr(def, "size")),
-      objects: layoutObjects(part["ObjectList"], stepTextByHash),
+      objects: layoutObjects(part["ObjectList"], cx),
     });
   }
   if (rawParts.length === 0) return undefined;
@@ -59,17 +71,24 @@ export function layoutDetail(node: unknown, stepTextByHash: ReadonlyMap<string, 
       }
     }
   }
-  return { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout };
+  return {
+    detail: { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout },
+    sources: cx.sources,
+  };
 }
 
 /** The objects on one layout part (or inside a portal / tab panel / group …). */
-function layoutObjects(container: unknown, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo[] {
+function layoutObjects(container: unknown, cx: DetailContext): LayoutObjectInfo[] {
   return children(container, "LayoutObject")
     .filter(isRecord)
-    .map((obj) => layoutObjectInfo(obj, stepTextByHash));
+    .map((obj) => {
+      const info = layoutObjectInfo(obj, cx);
+      cx.sources.set(info, obj);
+      return info;
+    });
 }
 
-function layoutObjectInfo(obj: Record<string, unknown>, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo {
+function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo {
   const id = attr(obj, "id");
   const uuidEl = child(obj, "UUID");
   const uuid = (isRecord(uuidEl) ? collectText(uuidEl) : typeof uuidEl === "string" ? uuidEl : undefined)?.trim();
@@ -86,7 +105,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, stepTextByHash: Readonly
   const portal = child(obj, "Portal");
   const portalTo = child(portal, "TableOccurrenceReference");
   const portalOptions = child(portal, "Options");
-  const kids = childObjects(obj, stepTextByHash);
+  const kids = childObjects(obj, cx);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
   const tooltipNode = child(obj, "Tooltip");
   const tooltip = isRecord(tooltipNode) ? calculationText(tooltipNode["Calculation"]) : "";
@@ -106,7 +125,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, stepTextByHash: Readonly
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
     ...(kids ? { children: kids } : {}),
     ...fieldBinding(obj),
-    ...buttonAction(obj, stepTextByHash),
+    ...buttonAction(obj, cx.stepTextByHash),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(tooltip ? { tooltip: stripOuterQuotes(tooltip) } : {}),
@@ -133,15 +152,15 @@ function panelLabel(obj: Record<string, unknown>): string | undefined {
  * itself is skipped and its objects hang off the button. Groups, button bars,
  * and popovers only count when they hold something.
  */
-function childObjects(obj: Record<string, unknown>, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo[] | undefined {
+function childObjects(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo[] | undefined {
   let kids: LayoutObjectInfo[] | undefined;
   for (const tag of ["Portal", "TabControl", "SlideControl", "TabPanel", "SlidePanel"]) {
     const holder = child(obj, tag);
-    if (isRecord(holder)) kids = layoutObjects(holder["ObjectList"], stepTextByHash);
+    if (isRecord(holder)) kids = layoutObjects(holder["ObjectList"], cx);
   }
   for (const tag of ["GroupedButton", "ButtonBar"]) {
     const holder = child(obj, tag);
-    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], stepTextByHash) : [];
+    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], cx) : [];
     if (members.length > 0) kids = members;
   }
   const popover = child(obj, "PopoverButton");
@@ -150,7 +169,7 @@ function childObjects(obj: Record<string, unknown>, stepTextByHash: ReadonlyMap<
       ...asArray(popover["PopoverPanel"]),
       ...asArray(popover["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
     ];
-    const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], stepTextByHash) : []));
+    const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], cx) : []));
     if (contents.length > 0) kids = contents;
   }
   return kids;
@@ -285,7 +304,7 @@ function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {
 function actionStepOf(action: unknown, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo["actionStep"] {
   const step = child(asArray(action)[0], "Step");
   if (!isRecord(step)) return undefined;
-  const name = attr(step, "name");
+  const name = decodeEntities(attr(step, "name") ?? "");
   return name ? { name, params: stepParams(step, name, stepTextByHash) } : undefined;
 }
 

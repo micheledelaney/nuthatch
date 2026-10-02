@@ -14,12 +14,18 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
  * text doesn't break apart.
  *
  * **Policy.** Decode once, at the boundary between parsed XML and stored
- * model: parser-side annotators decode names / display strings before writing
- * them into `FmObject.attributes`, `text`, or `detail`. UI components should
- * treat strings off the model as already-decoded and not call decodeEntities
- * a second time. The exception is raw chunks the parser routes through with
- * entities intact (e.g. step-text bodies that mix `&#13;` newlines with named
- * entities) — those decode at the rendering site that knows the semantics.
+ * model: the parser decodes every name, label, and attribute value — and the
+ * rendered script-step text (stepParams, which keeps `&#13;` as newlines) —
+ * before writing it into `FmObject.attributes`, `text`, or `detail`. UI
+ * components should treat strings off the model as already-decoded and not
+ * call decodeEntities a second time: a second pass turns a literal `&amp;` in
+ * a name into `&`.
+ *
+ * Calculation formulas are the exception that needs no decoding at all: every
+ * export writes them as CDATA, so calculationText returns them verbatim
+ * (`detail.body`, and calc-valued attributes such as `validationCalculation`,
+ * `installCondition`, `hideWhen`, `tooltip`). Decoding one would corrupt a
+ * formula that builds HTML or XML (`"&amp;"` would read as `"&"`).
  */
 export function decodeEntities(input: string): string {
   if (!input.includes("&")) return input;

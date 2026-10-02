@@ -1,7 +1,7 @@
 import type { FmObject, RawReference } from "@/types/ddr";
 import { isBrokenTableOccurrence } from "@/types/ddr";
 import type { ChunkContext, FileParse } from "../context";
-import { longestNameEndingAt } from "../calcText";
+import { longestNameEndingAt } from "@/core/identifiers";
 import { MISSING_FIELD_TOKEN, MISSING_FUNCTION_TOKEN, MISSING_TABLE_TOKEN, UNKNOWN_TARGET } from "../sentinels";
 import { brokenRef } from "./refBuilders";
 
@@ -62,13 +62,13 @@ function forEachPlaceholderUse(
   }
 }
 
-/** `fromUid` + step of every field reference from `refStart` on that `isBroken`
- * accepts — the sites already carrying a broken field edge. */
-function brokenFieldSites(refs: readonly RawReference[], refStart: number, isBroken: (r: RawReference) => boolean): Set<string> {
+/** `fromUid` + step of every reference from `refStart` on that `matches` — e.g.
+ * the sites already carrying a broken field edge. */
+function sitesWith(refs: readonly RawReference[], refStart: number, matches: (r: RawReference) => boolean): Set<string> {
   const sites = new Set<string>();
   for (let i = refStart; i < refs.length; i++) {
     const r = refs[i]!;
-    if (r.toType === "field" && isBroken(r)) sites.add(siteKey(r.fromUid, r.fromStep));
+    if (matches(r)) sites.add(siteKey(r.fromUid, r.fromStep));
   }
   return sites;
 }
@@ -97,7 +97,7 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
   // structurally (blank toName) — while its rendered text *also* carries the
   // "<Field Missing>" placeholder. Without this check, that single dangling
   // field would be counted and displayed twice.
-  const alreadyBroken = brokenFieldSites(fp.references, refStart, (r) => r.toName === "");
+  const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && r.toName === "");
   forEachPlaceholderUse(batch, MISSING_FIELD_TOKEN, fp.activeText, (obj, text, site) => {
     if (alreadyBroken.has(siteKey(obj.uid, site.fromStep))) return;
     const deleted = deletedFieldVia(text, fp.chunks);
@@ -136,13 +136,17 @@ function deletedFieldVia(text: string, chunks: ChunkContext): { viaToId?: string
  * placeholder marks a merge field whose occurrence was deleted
  * (`<<<Table Missing>>>`) and a portal whose occurrence was deleted. Emit one
  * explicitly broken edge per such step (or object) — to a table occurrence for
- * a portal, to a field otherwise. Skips steps already carrying a broken field edge.
+ * a portal, to a field otherwise. Skips steps already carrying a broken field
+ * edge, and a portal whose own scan recorded its dead occurrence (id -1).
  */
 function addMissingTargetTableRefs(fp: FileParse, batch: readonly FmObject[], refStart: number): void {
-  const alreadyBroken = brokenFieldSites(fp.references, refStart, (r) => r.forceBroken === true || r.toName === "");
+  const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && (r.forceBroken === true || r.toName === ""));
+  const deadOccurrence = sitesWith(fp.references, refStart, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
   forEachPlaceholderUse(batch, MISSING_TABLE_TOKEN, fp.activeText, (obj, text, site) => {
-    if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(siteKey(obj.uid, site.fromStep))) return;
+    const key = siteKey(obj.uid, site.fromStep);
+    if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(key)) return;
     const isPortal = obj.detail?.kind === "layoutObject" && obj.detail.portalTable === MISSING_TABLE_TOKEN;
+    if (isPortal && deadOccurrence.has(key)) return;
     const toType = isPortal ? "tableOccurrence" : "field";
     fp.references.push(brokenRef(obj.uid, toType, MISSING_TABLE_TOKEN, toType, site));
   });

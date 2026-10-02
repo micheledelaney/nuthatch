@@ -11,15 +11,11 @@ import { brokenRef, pushRef, type ScanCtx } from "./refBuilders";
 const STEP_FROM_FILE_RE = /from file:\s*[“"]([^”"]+)[”"]/;
 const PERFORM_SCRIPT_STEP_RE = /^Perform Script(?: on Server(?: with Callback)?)?$/;
 
-/** Perform Script, also on Server / with Callback. */
-export function isPerformScriptStep(stepName: string): boolean {
-  return PERFORM_SCRIPT_STEP_RE.test(stepName);
-}
 
 /** Whether a Perform Script step's rendered text names a deleted script —
  * `Perform Script [ “<unknown>” ]` — as opposed to one in a file that wasn't
  * open (`<unknown> from file: …`) or chosen by name at run time (`By name`). */
-export function namesDeletedScript(stepText: string): boolean {
+function namesDeletedScript(stepText: string): boolean {
   return stepText.includes(`“${UNKNOWN_TARGET}”`) || /\[\s*<unknown>(?!\s*from file)/.test(stepText);
 }
 
@@ -47,7 +43,7 @@ export function addStepTargetRefs(
   out: RawReference[],
 ): void {
   const name = attr(step, "name") ?? "";
-  const isPerform = isPerformScriptStep(name);
+  const isPerform = PERFORM_SCRIPT_STEP_RE.test(name);
   if (!isPerform && name !== "Go to Layout" && name !== "Go to Related Record") return;
   const rendered = renderedStepText(chunks.stepTextByHash, step);
   if (rendered == null) return;

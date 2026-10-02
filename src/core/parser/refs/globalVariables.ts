@@ -1,8 +1,3 @@
-import type { FmObject } from "@/types/ddr";
-import type { FileParse } from "../context";
-import { objectUid } from "../uid";
-import { globalVariableRef } from "./refBuilders";
-
 /**
  * Global variables ($$name) have no catalog — they exist only where FileMaker
  * reads or sets them. The element scan records each use as a `globalVariable`
@@ -17,6 +12,11 @@ import { globalVariableRef } from "./refBuilders";
  * a variable (`<<$$name>>`), which no chunk records, and a data source's path
  * list can name one (`$$path`), which FileMaker resolves when it opens the file.
  */
+import type { FmObject } from "@/types/ddr";
+import type { FileParse } from "../context";
+import { objectUid } from "../uid";
+import { globalVariableRef } from "./refBuilders";
+
 const MERGE_VARIABLE_RE = /<<(\$\$[^<>]+)>>/g;
 
 /** The `$$globals` a data source's path list names. A variable is a whole path
@@ -39,20 +39,22 @@ export function addTextGlobalRefs(fp: FileParse, batch: readonly FmObject[]): vo
   }
   for (const obj of batch) {
     if ((obj.type !== "layout" && obj.type !== "layoutObject") || !obj.text.includes("<<$$")) continue;
-    const names = new Set<string>();
-    for (const m of obj.text.matchAll(MERGE_VARIABLE_RE)) names.add(m[1]!.trim());
-    for (const name of names) fp.references.push(globalVariableRef(obj.uid, name));
+    // One reference per merge, so every use counts (dedupeRefs collapses them).
+    for (const m of obj.text.matchAll(MERGE_VARIABLE_RE)) fp.references.push(globalVariableRef(obj.uid, m[1]!.trim()));
   }
 }
 
 /** One navigable object per distinct `$$name` the file uses (the same $$x in two
  * files is two objects), so a variable lists its users and each script/calc the
  * globals it touches. `occurrences` counts uses before references are
- * de-duplicated, so a calc that reads $$x twice counts two. */
+ * de-duplicated, so a calc that reads $$x twice counts two. A use on a layout
+ * is recorded by the layout object and by its layout; it counts once. */
 export function globalVariableObjects(fp: FileParse): FmObject[] {
+  const layoutObjectUids = new Set(fp.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid));
   const counts = new Map<string, number>();
   for (const ref of fp.references) {
-    if (ref.toType === "globalVariable") counts.set(ref.toId, (counts.get(ref.toId) ?? 0) + 1);
+    if (ref.toType !== "globalVariable" || layoutObjectUids.has(ref.fromUid)) continue;
+    counts.set(ref.toId, (counts.get(ref.toId) ?? 0) + 1);
   }
   return [...counts].map(([name, count]) => ({
     uid: objectUid(fp.file.uid, "globalVariable", name),

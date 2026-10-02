@@ -2,6 +2,7 @@ import type { FileParse } from "../context";
 import { xmlParser } from "../xmlParser";
 import { asArray, isRecord } from "../xmlUtils";
 import { decodeEntities } from "../entities";
+import { folderName } from "./catalogItems";
 import { processOneLayout } from "./layouts";
 
 /**
@@ -19,16 +20,21 @@ export function splitLayoutCatalog(xml: string): { rest: string; layoutCatalog?:
   };
 }
 
-/** Return the start/end char positions of the first <LayoutCatalog>…</LayoutCatalog>
- * in an XML string, or null if not present. */
+/** The start/end char positions of <Structure>'s own <LayoutCatalog>…</LayoutCatalog>
+ * (the one in its <AddAction>), or null when there's none to stream. FM 22's
+ * <ModifyAction> repeats a small LayoutCatalog of button targets; that one is
+ * left to the main parse. */
 function findLayoutCatalogBounds(xml: string): { start: number; end: number } | null {
-  const open = "<LayoutCatalog";
-  const close = "</LayoutCatalog>";
-  const start = xml.indexOf(open);
+  const structure = xml.indexOf("<Structure");
+  const start = structure === -1 ? -1 : xml.indexOf("<LayoutCatalog", structure);
   if (start === -1) return null;
-  const end = xml.indexOf(close, start);
-  if (end === -1) return null;
-  return { start, end: end + close.length };
+  const modifyAction = xml.indexOf("<ModifyAction", structure);
+  if (modifyAction !== -1 && modifyAction < start) return null;
+  const openEnd = xml.indexOf(">", start);
+  if (openEnd === -1 || xml[openEnd - 1] === "/") return null; // <LayoutCatalog/>: no layouts
+  const close = "</LayoutCatalog>";
+  const end = xml.indexOf(close, openEnd);
+  return end === -1 ? null : { start, end: end + close.length };
 }
 
 /** Index of the next real `<Layout` element at or after `from`, or -1. Skips
@@ -86,7 +92,7 @@ export function parseLayoutsStreaming(catalogXml: string, fp: FileParse): void {
     if (folderMatch) {
       if (folderMatch[1] === "True") {
         const nameMatch = / name="([^"]*)"/.exec(openTag);
-        folderStack.push(nameMatch?.[1] != null ? decodeEntities(nameMatch[1]) : "");
+        folderStack.push(folderName(nameMatch?.[1] ?? ""));
       } else {
         folderStack.pop();
       }

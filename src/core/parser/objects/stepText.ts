@@ -8,7 +8,7 @@ export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap
   const steps: ScriptStep[] = [];
   for (const step of children(stepsContainer, "Step")) {
     if (!isRecord(step)) continue;
-    const name = attr(step, "name") ?? "(step)";
+    const name = decodeEntities(attr(step, "name") ?? "(step)");
     steps.push({
       index: steps.length + 1,
       name,

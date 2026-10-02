@@ -1,5 +1,6 @@
 import { asArray, attr, children, isRecord } from "./xmlUtils";
 import { decodeEntities } from "./entities";
+import { isNameChar } from "@/core/identifiers";
 
 /**
  * Helpers for a calculation's own text, used when its DDR_INFO chunk list can't
@@ -14,18 +15,11 @@ import { decodeEntities } from "./entities";
  *     pointer — so every sharer after the first would pick up someone else's
  *     references.
  *
- * `chunkListMatchesText` detects both cases; `scanCalcText` then recovers the
+ * `chunkListMatchesText` detects both cases; `scanCalcTextRefs` then recovers the
  * references from the formula text itself (a best-effort scan against the
  * file's known occurrence, field, and custom-function names).
  */
 
-/** Characters that continue a name: a known name only matches when the chars
- * just outside it are not one of these (so `xName` never matches `Name`). */
-const WORD_CHAR_RE = /[\p{L}\p{N}_.~]/u;
-
-export function isWordChar(c: string | undefined): boolean {
-  return c != null && WORD_CHAR_RE.test(c);
-}
 
 function squash(s: string): string {
   return s.replace(/\s+/g, "").toLowerCase();
@@ -137,23 +131,9 @@ export function makeNameIndex(names: Iterable<string>): NameIndex {
  * boundary, or undefined. */
 export function longestNameAt(text: string, pos: number, index: NameIndex): string | undefined {
   for (const name of index.byFirst.get(text[pos] ?? "") ?? []) {
-    if (text.startsWith(name, pos) && !isWordChar(text[pos + name.length])) return name;
+    if (text.startsWith(name, pos) && !isNameChar(text[pos + name.length])) return name;
   }
   return undefined;
-}
-
-/** The longest name in `names` that ends exactly at `end` (e.g. the occurrence
- * before a `::`) and starts at a name boundary. Multi-word names (with spaces)
- * are matched whole, which a delimiter-based regex would truncate. */
-export function longestNameEndingAt(text: string, end: number, names: readonly string[]): string | undefined {
-  let best: string | undefined;
-  for (const name of names) {
-    if (best != null && best.length >= name.length) continue;
-    if (name.length > end || !text.startsWith(name, end - name.length)) continue;
-    if (isWordChar(text[end - name.length - 1])) continue;
-    best = name;
-  }
-  return best;
 }
 
 /** Everything after a `::` up to the next operator/delimiter: the raw span a
@@ -170,7 +150,7 @@ export function longestPrefixName(candidate: string, names: Iterable<string>): s
   let best: string | undefined;
   for (const name of names) {
     if (!name || (best != null && best.length >= name.length)) continue;
-    if (candidate.startsWith(name) && !isWordChar(candidate[name.length])) best = name;
+    if (candidate.startsWith(name) && !isNameChar(candidate[name.length])) best = name;
   }
   return best;
 }

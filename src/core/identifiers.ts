@@ -3,10 +3,11 @@
  *
  * Three different rules show up across the parser and the UI:
  *
- *   • Calc identifier character (CALC_NAME_CHAR / isNameChar): the chars that
- *     can appear inside a calculation identifier — letters, digits, `_`, `.`,
- *     `~`. Used to decide where a multi-word TO or field name *ends* when
- *     walking calc text backwards.
+ *   • Calc identifier character (isNameChar): the chars that can appear inside
+ *     a calculation identifier — letters and digits of any script, `_`, `.`,
+ *     `~`. Used wherever a known name is matched whole in calc text: by the
+ *     parser (calcText, the missing-field pass) and by refResolution, which
+ *     must agree on where a multi-word TO or field name begins and ends.
  *
  *   • Inline-link token boundary (isWordChar): the chars between which an
  *     object name is matched as a whole token in rendered text (calc bodies,
@@ -23,8 +24,9 @@
  */
 
 /** Chars that can appear inside a calculation identifier (calc body / step
- * params). A char NOT in this set is a name boundary. */
-const CALC_NAME_CHAR_RE = /[A-Za-z0-9_.~]/;
+ * params). A char NOT in this set is a name boundary — so `Größe` never
+ * matches inside `NeueGröße`. */
+const CALC_NAME_CHAR_RE = /[\p{L}\p{N}_.~]/u;
 
 export function isNameChar(c: string | undefined): boolean {
   return c != null && CALC_NAME_CHAR_RE.test(c);
@@ -51,17 +53,26 @@ export const BROKEN_PLACEHOLDER_RE: RegExp = /<[^<>]*\bMissing\b[^<>]*>|<unknown
  * the field has been deleted but the occurrence is still nameable. */
 export const FIELD_MISSING_QUALIFIED = "::<Field Missing>";
 
+/** The longest name in `names` that ends exactly at `end` (e.g. the occurrence
+ * before a `::`) and starts at a name boundary. Multi-word names (with spaces,
+ * e.g. `Stock_current new Item`) are matched whole, which a delimiter-based
+ * regex would truncate. */
+export function longestNameEndingAt(text: string, end: number, names: readonly string[]): string | undefined {
+  let best: string | undefined;
+  for (const name of names) {
+    if (best != null && best.length >= name.length) continue;
+    if (name.length > end || !text.startsWith(name, end - name.length)) continue;
+    if (isNameChar(text[end - name.length - 1])) continue;
+    best = name;
+  }
+  return best;
+}
+
 /**
- * For each `Occ::<Field Missing>` position in `text`, yield the LONGEST name in
- * `names` that ends exactly at the `::`. Multi-word TO names (containing spaces,
- * e.g. `Stock_current new Item`) are handled — a regex class excluding `\s`
- * would truncate them — and the char before the candidate is checked so a longer
- * surrounding identifier isn't matched (e.g. `neueSorte` won't match `Sorte`).
- *
- * Names are yielded one per matching position, in document order; callers map
- * each to an id or object and de-duplicate as needed. Shared by the parser
- * (parse time, names from the raw occurrence list) and refResolution (UI time,
- * names from the model), so this scan lives in exactly one place.
+ * For each `Occ::<Field Missing>` position in `text`, yield the longest name in
+ * `names` that ends exactly at the `::` (see longestNameEndingAt). Names are
+ * yielded one per matching position, in document order; callers map each to an
+ * id or object and de-duplicate as needed.
  */
 export function* occurrencesBeforeMissingField(
   text: string,
@@ -74,14 +85,7 @@ export function* occurrencesBeforeMissingField(
     pos !== -1;
     pos = text.indexOf(FIELD_MISSING_QUALIFIED, pos + FIELD_MISSING_QUALIFIED.length)
   ) {
-    let best: string | undefined;
-    for (const name of list) {
-      if (best != null && best.length >= name.length) continue;
-      if (name.length > pos) continue;
-      if (text.slice(pos - name.length, pos) !== name) continue;
-      if (isNameChar(text[pos - name.length - 1])) continue;
-      best = name;
-    }
+    const best = longestNameEndingAt(text, pos, list);
     if (best != null) yield best;
   }
 }

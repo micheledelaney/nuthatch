@@ -73,7 +73,13 @@ function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): Par
       `${doc.name}: missing <DDR_INFO> — references inside calculations and script steps cannot be resolved. Re-export with "Include details for analysis tools" enabled.`,
     );
   }
-  return parseFile(container, fileIndex, errors, layoutCatalog);
+  try {
+    return parseFile(container, fileIndex, errors, layoutCatalog);
+  } catch (err) {
+    // Each file parses into its own lists, so nothing of this one is left half-added.
+    errors.push(`${doc.name}: parsing stopped and this file was left out — ${(err as Error).message}`);
+    return null;
+  }
 }
 
 interface Container {
@@ -117,7 +123,11 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   const file: FmFile = { uid: fileUidAt(fileIndex), name: container.name, source: container.source, version: container.version };
   const fileObject = makeFileObject(file, container.node, container.metadata);
   const node = container.node;
-  if (!isRecord(node)) return { file, objects: [fileObject], references: [], globals: [] };
+  if (!isRecord(node)) {
+    // e.g. a <Structure> with several <AddAction> blocks: a shape no sample has.
+    errors.push(`${container.name}: unrecognized <Structure> layout (expected one <AddAction>) — none of its catalogs could be read.`);
+    return { file, objects: [fileObject], references: [], globals: [] };
+  }
 
   const fp: FileParse = {
     file,

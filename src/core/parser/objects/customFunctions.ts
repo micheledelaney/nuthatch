@@ -1,6 +1,7 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { attr, collectText } from "../xmlUtils";
+import { decodeEntities } from "../entities";
 import { scanRefs } from "../refs/scanRefs";
 import { blocksByOwner, collectCatalogItems } from "./catalogItems";
 import { calculationText } from "./common";
@@ -18,7 +19,7 @@ export function annotateCustomFunction(
   obj: FmObject,
   calcs: Map<string, Record<string, unknown>[]>,
 ): FmObject {
-  const signature = collectText(item["Display"]).trim() || (attr(item, "name") ?? "");
+  const signature = decodeEntities(collectText(item["Display"]).trim() || (attr(item, "name") ?? ""));
   let annotated: FmObject = { ...obj, detail: { kind: "calculation", signature, body: calculationText(item["Calculation"]) } };
   for (const block of calcs.get(obj.id) ?? []) {
     const body = calculationText(block["Calculation"]);

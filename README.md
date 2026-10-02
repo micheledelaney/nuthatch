@@ -270,7 +270,7 @@ analyses just data.
 
 | Path | Responsibility |
 | ---- | -------------- |
-| `src/core/parser/` | Turn `<FMSaveAsXML>` into flat, serializable `FmObject`s and *unresolved* reference edges. Includes script-step and layout detail (`extractDetail.ts`), the tag→type map (`refTags.ts`), and the calculation-text fallback (`calcText.ts`). |
+| `src/core/parser/` | Turn `<FMSaveAsXML>` into flat, serializable `FmObject`s and *unresolved* reference edges. `parseDdr.ts` is the entry point; `objects/` has one module per object type (including script-step and layout detail), `refs/` the reference scan, the calculation-text fallback, and the text-derived broken-reference passes; `refTags.ts` maps tags to types. |
 | `src/core/model/buildModel.ts` | Resolve edges to target `uid`s (field refs flow through their table occurrence → base table → field), flag broken ones, build inbound/outbound indexes, run analyses. |
 | `src/core/analysis/` | Report card, call chains, dependency views, and the analysis-to-analysis diff. |
 | `src/core/search/` | Full-text search over names, calculations, and script code. |

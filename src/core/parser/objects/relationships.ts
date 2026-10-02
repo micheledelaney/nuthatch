@@ -1,5 +1,6 @@
 import type { FmObject, JoinPredicate, RelationshipSide } from "@/types/ddr";
 import { attr, child, children, isRecord } from "../xmlUtils";
+import { decodeEntities } from "../entities";
 
 // Keys match the `type` attribute FileMaker writes on <JoinPredicate>.
 // Confirmed from DDR output: Equal, NotEqual, LessOrEqual, GreaterOrEqual,
@@ -57,7 +58,7 @@ function relationshipSide(wrapper: unknown): RelationshipSide {
 
 /** The TO name from a LeftTable/RightTable wrapper. */
 function occurrenceName(wrapper: unknown): string {
-  return attr(child(wrapper, "TableOccurrenceReference"), "name") ?? "";
+  return decodeEntities(attr(child(wrapper, "TableOccurrenceReference"), "name") ?? "");
 }
 
 /** The TO id from a LeftTable/RightTable wrapper (the endpoint occurrence's id,
@@ -67,5 +68,5 @@ function occurrenceId(wrapper: unknown): string | undefined {
 }
 
 function fieldName(wrapper: unknown): string {
-  return attr(child(wrapper, "FieldReference"), "name") ?? "";
+  return decodeEntities(attr(child(wrapper, "FieldReference"), "name") ?? "");
 }
