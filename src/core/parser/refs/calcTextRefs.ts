@@ -1,5 +1,4 @@
-import type { RawReference } from "@/types/ddr";
-import type { ChunkContext } from "../context";
+import type { FileParse } from "../context";
 import { attr, child } from "../xmlUtils";
 import { edgeKind } from "../refTags";
 import {
@@ -12,7 +11,7 @@ import {
   type NameIndex,
 } from "../calcText";
 import { isNameChar, longestNameEndingAt } from "@/core/identifiers";
-import { globalVariableRef, pushRef, type RefOwner, type ScanCtx } from "./refBuilders";
+import { globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
 
 /**
  * Best-effort references from a formula's own text, for a calc whose chunk list
@@ -27,26 +26,33 @@ import { globalVariableRef, pushRef, type RefOwner, type ScanCtx } from "./refBu
  * Nothing found this way is ever reported broken: a name that doesn't match
  * simply isn't a reference.
  */
-export function scanCalcTextRefs(
-  chunks: ChunkContext,
-  rawText: string,
-  calc: Record<string, unknown>,
-  owner: RefOwner,
-  ctx: ScanCtx,
-  out: RawReference[],
-): void {
-  const fromUid = owner.uid;
+export function scanCalcTextRefs(fp: FileParse, rawText: string, calc: Record<string, unknown>, owner: RefOwner, ctx: ScanContext): void {
   const text = stripLiteralsAndComments(rawText);
+  addQualifiedFieldRefs(fp, text, owner, ctx);
+  if (owner.type === "field") addBareFieldRefs(fp, text, calc, owner, ctx);
+  forEachBareName(text, fp.index.cfIndex, false, (name) => {
+    const cfId = fp.index.cfByName.get(name);
+    if (cfId != null) pushRef(fp.references, { fromUid: owner.uid, toType: "customFunction", toId: cfId, toName: name, kind: "customFunction" }, ctx);
+  });
+  for (const name of [...globalVariablesInText(text), ...quotedGlobalVariables(rawText)]) {
+    pushRef(fp.references, globalVariableRef(owner.uid, name), ctx);
+  }
+}
 
+/** Every `TO::Field` in the (literal-free) text: the occurrence, and the field
+ * it reads (by id for a local occurrence, by name for an external one). */
+function addQualifiedFieldRefs(fp: FileParse, text: string, owner: RefOwner, ctx: ScanContext): void {
+  const { index, references: out } = fp;
+  const fromUid = owner.uid;
   for (let pos = text.indexOf("::"); pos !== -1; pos = text.indexOf("::", pos + 2)) {
-    const toName = longestNameEndingAt(text, pos, chunks.toNames);
+    const toName = longestNameEndingAt(text, pos, index.toNames);
     if (toName == null) continue;
-    const to = chunks.toByName.get(toName);
+    const to = index.toByName.get(toName);
     if (!to) continue;
     // As with a chunk list's field chunk, the occurrence is referenced too.
     pushRef(out, { fromUid, toType: "tableOccurrence", toId: to.id, toName, kind: edgeKind("tableOccurrence", ctx.stepName) }, ctx);
     if (to.localBaseTableId != null) {
-      const fields = chunks.fieldsByTable.get(to.localBaseTableId);
+      const fields = index.fieldsByTable.get(to.localBaseTableId);
       const field = fields ? longestNameAt(text, pos + 2, fields.index) : undefined;
       const fieldId = field != null ? fields?.idByName.get(field) : undefined;
       if (field != null && fieldId != null) {
@@ -59,27 +65,19 @@ export function scanCalcTextRefs(
       }
     }
   }
+}
 
-  if (owner.type === "field") {
-    const contextToId = attr(child(calc, "TableOccurrenceReference"), "id");
-    const to = contextToId != null ? chunks.toById.get(contextToId) : undefined;
-    const fields = to?.localBaseTableId != null ? chunks.fieldsByTable.get(to.localBaseTableId) : undefined;
-    if (to && fields) {
-      forEachBareName(text, fields.index, true, (name) => {
-        const fieldId = fields.idByName.get(name);
-        if (fieldId != null) pushRef(out, { fromUid, toType: "field", toId: fieldId, toName: name, kind: "field", viaToId: to.id }, ctx);
-      });
-    }
-  }
-
-  forEachBareName(text, chunks.cfIndex, false, (name) => {
-    const cfId = chunks.cfByName.get(name);
-    if (cfId != null) pushRef(out, { fromUid, toType: "customFunction", toId: cfId, toName: name, kind: "customFunction" }, ctx);
+/** A field calc's unqualified same-table field names, against the calc's
+ * context occurrence's base table. */
+function addBareFieldRefs(fp: FileParse, text: string, calc: Record<string, unknown>, owner: RefOwner, ctx: ScanContext): void {
+  const contextToId = attr(child(calc, "TableOccurrenceReference"), "id");
+  const to = contextToId != null ? fp.index.toById.get(contextToId) : undefined;
+  const fields = to?.localBaseTableId != null ? fp.index.fieldsByTable.get(to.localBaseTableId) : undefined;
+  if (!to || !fields) return;
+  forEachBareName(text, fields.index, true, (name) => {
+    const fieldId = fields.idByName.get(name);
+    if (fieldId != null) pushRef(fp.references, { fromUid: owner.uid, toType: "field", toId: fieldId, toName: name, kind: "field", viaToId: to.id }, ctx);
   });
-
-  for (const name of [...globalVariablesInText(text), ...quotedGlobalVariables(rawText)]) {
-    pushRef(out, globalVariableRef(fromUid, name), ctx);
-  }
 }
 
 /** Every whole, unqualified occurrence of an indexed name in `text`: not part of

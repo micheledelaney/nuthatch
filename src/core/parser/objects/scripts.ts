@@ -1,8 +1,9 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { attr, child, children, isRecord } from "../xmlUtils";
+import { collectOrderedWithFolders, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { blocksByOwner, collectOrderedWithFolders, makeObject, placeInCatalog } from "./catalogItems";
+import { makeObject, placeInCatalog } from "./catalogItems";
 import { scriptSteps } from "./stepText";
 
 /**
@@ -10,36 +11,38 @@ import { scriptSteps } from "./stepText";
  * separator items); their steps live in a separate StepsForScripts section,
  * each block keyed to its script by a leading <ScriptReference>.
  */
-export function parseScripts(containerNode: Record<string, unknown>, fp: FileParse): void {
-  const stepBlocks = blocksByOwner(children(containerNode["StepsForScripts"], "Script"), "ScriptReference");
+export function parseScripts(fp: FileParse, containerNode: Record<string, unknown>): void {
+  const stepBlocks = firstBlockByOwner(children(containerNode["StepsForScripts"], "Script"), "ScriptReference");
   let order = 0;
   for (const { node, folder } of collectOrderedWithFolders(containerNode["ScriptCatalog"], "Script")) {
-    const base = makeObject(node, "script", fp);
+    const base = makeObject(fp, node, "script");
     if (!base) continue;
     const placed = placeInCatalog(base, order++, folder);
-    fp.objects.push(placed.isSeparator ? placed : withSteps(fp, annotateScript(node, placed), stepBlocks.get(placed.id) ?? []));
+    if (placed.isSeparator) {
+      fp.objects.push(placed);
+      continue;
+    }
+    const block = stepBlocks.get(placed.id);
+    const script = annotateScript(node, placed);
+    fp.objects.push(block ? withSteps(fp, script, block) : script);
   }
 }
 
 /** A script with its steps: their references scanned, their rendered text
  * appended to its searchable text, and the step list as its detail. */
-function withSteps(fp: FileParse, script: FmObject, blocks: readonly Record<string, unknown>[]): FmObject {
-  let owner = script;
-  for (const block of blocks) {
-    // Scan only the steps (ObjectList), not the leading binding reference.
-    // (scanRefs also recovers the targets FileMaker records only in a step's
-    // rendered text — see addStepTargetRefs.)
-    const steps = block["ObjectList"];
-    scanRefs(fp, steps, owner);
-    // The text is built from FileMaker's pre-rendered StepText (per step,
-    // joined by newlines) rather than collectText(steps): the formatted text
-    // has real delimiters (`;`, `[`, `]`, …), so search and the placeholder
-    // passes see readable steps instead of the raw parameter tree.
-    const stepList = scriptSteps(steps, fp.chunks.stepTextByHash);
-    const stepText = stepList.map((s) => (s.params ? `${s.name} ${s.params}` : s.name)).join("\n");
-    owner = { ...owner, text: owner.text ? `${owner.text}\n${stepText}` : stepText, detail: { kind: "script", steps: stepList } };
-  }
-  return owner;
+function withSteps(fp: FileParse, script: FmObject, block: Record<string, unknown>): FmObject {
+  // Scan only the steps (ObjectList), not the leading binding reference.
+  // (scanRefs also recovers the targets FileMaker records only in a step's
+  // rendered text — see addStepTargetRefs.)
+  const steps = block["ObjectList"];
+  scanRefs(fp, steps, script);
+  // The text is built from FileMaker's pre-rendered StepText (per step,
+  // joined by newlines) rather than collectText(steps): the formatted text
+  // has real delimiters (`;`, `[`, `]`, …), so search and the placeholder
+  // passes see readable steps instead of the raw parameter tree.
+  const stepList = scriptSteps(steps, fp.index.stepTextByHash);
+  const stepText = stepList.map((s) => (s.params ? `${s.name} ${s.params}` : s.name)).join("\n");
+  return { ...script, text: script.text ? `${script.text}\n${stepText}` : stepText, detail: { kind: "script", steps: stepList } };
 }
 
 /** Surface script run options nested under <Options> (e.g. "run with full

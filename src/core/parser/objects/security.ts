@@ -6,8 +6,7 @@ import type {
   PrivilegeSetTableAccess,
 } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, children, collectText, enabledLabels, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { attr, child, children, collectText, displayText, enabledLabels, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { objectUid } from "../uid";
 import { calculationText } from "./common";
 
@@ -25,8 +24,8 @@ export function annotateAccount(node: Record<string, unknown>, obj: FmObject): F
   const a: Record<string, string> = { status: attr(node, "enable") === "False" ? "Inactive" : "Active" };
   const auth = child(node, "Authentication");
   // Account name: older exports nest it in <INSECURE_TEXT>, newer ones put it
-  // directly in <AccountName>. collectText handles both shapes.
-  const nameText = isRecord(auth) ? collectText(auth["AccountName"]).trim() : "";
+  // directly in <AccountName>. displayText handles both shapes.
+  const nameText = isRecord(auth) ? displayText(auth["AccountName"]) : "";
   // A FileMaker-auth account with no stored password is a security risk.
   // (External-auth accounts legitimately have none, so they're excluded.) The
   // password lives in <INSECURE_PASSWORD> (older) or <PasswordEncrypted>
@@ -35,19 +34,23 @@ export function annotateAccount(node: Record<string, unknown>, obj: FmObject): F
     a.password = collectText(auth["PasswordEncrypted"] ?? auth["INSECURE_PASSWORD"]).trim() ? "Yes" : "No";
   }
   // The granted privilege set is a nested <PrivilegeSetReference name=…>.
-  const privName = attr(child(node, "PrivilegeSetReference"), "name");
-  if (privName) a.privilegeSet = decodeEntities(privName);
+  const privName = textAttr(child(node, "PrivilegeSetReference"), "name");
+  if (privName) a.privilegeSet = privName;
   return {
     ...obj,
-    ...(nameText ? { name: decodeEntities(nameText) } : {}),
+    ...(nameText ? { name: nameText } : {}),
+    // Searchable text without <Authentication>: it holds the stored password
+    // (salt + hash, or in older exports <INSECURE_PASSWORD>), which must stay
+    // out of search, diffs and the AI export. Only the account name is kept.
+    text: collectText([isRecord(auth) ? auth["AccountName"] : undefined, withoutKey(node, "Authentication")]),
     attributes: { ...obj.attributes, ...a, ...descriptionAttribute(node) },
   };
 }
 
 /** A nested <Description>, as an attribute. */
 function descriptionAttribute(node: Record<string, unknown>): Record<string, string> {
-  const description = collectText(node["Description"]).trim();
-  return description ? { description: decodeEntities(description) } : {};
+  const description = displayText(node["Description"]);
+  return description ? { description } : {};
 }
 
 // ---- privilege sets -----------------------------------------------------------
@@ -65,7 +68,11 @@ const OTHER_PRIVILEGES: ReadonlyArray<readonly [string, string]> = [
   ["disconnectIdle", "Disconnect idle users"],
 ];
 
+/** The grants on one <Records> table row, each possibly gated by a calculation. */
 const RECORD_GRANT_VERBS = ["View", "Edit", "Create", "Delete"] as const;
+
+/** The grants a permission category node itself summarizes, besides View. */
+const CATEGORY_GRANT_VERBS = ["Create", "Edit", "Delete"] as const;
 
 /** Surface a privilege set's description and the access level it grants for each
  * object category (records, layouts, value lists, scripts) — all nested under
@@ -76,13 +83,13 @@ export function annotatePrivilegeSet(node: Record<string, unknown>, obj: FmObjec
   if (!isRecord(access)) return described;
   const detail = privilegeSetDetail(access);
   const a: Record<string, string> = {};
-  const records = categoryAccess(access["Records"]);
+  const records = categoryAccess(child(access, "Records"));
   if (records) a.recordsAccess = records;
-  const layouts = categoryAccess(access["Layouts"]);
+  const layouts = categoryAccess(child(access, "Layouts"));
   if (layouts) a.layoutsAccess = layouts;
-  const valueLists = categoryAccess(access["ValueLists"]);
+  const valueLists = categoryAccess(child(access, "ValueLists"));
   if (valueLists) a.valueListsAccess = valueLists;
-  const scripts = categoryAccess(access["Scripts"]);
+  const scripts = categoryAccess(child(access, "Scripts"));
   if (scripts) a.scriptsAccess = scripts;
   if (attr(access, "default") === "True") a.defaultPrivilegeSet = "Yes";
 
@@ -137,7 +144,7 @@ function accessLevel(node: unknown): string {
   const parts: string[] = [];
   const view = attr(node, "View");
   if (view && view !== "None") parts.push(`View: ${view}`);
-  for (const verb of ["Create", "Edit", "Delete"]) {
+  for (const verb of CATEGORY_GRANT_VERBS) {
     if (attr(node, verb) === "True") parts.push(verb);
   }
   return parts.length ? parts.join(", ") : "None";
@@ -154,10 +161,10 @@ function accessLevel(node: unknown): string {
  * category is Custom.
  */
 function privilegeSetDetail(accessNode: Record<string, unknown>): ObjectDetail | undefined {
-  const tables = customTableAccess(accessNode["Records"]);
-  const layouts = customObjectAccess(accessNode["Layouts"], LAYOUT_GRANTS);
-  const scripts = customObjectAccess(accessNode["Scripts"], SCRIPT_GRANTS);
-  const valueLists = customObjectAccess(accessNode["ValueLists"], VALUE_LIST_GRANTS);
+  const tables = customTableAccess(child(accessNode, "Records"));
+  const layouts = customObjectAccess(child(accessNode, "Layouts"), LAYOUT_GRANTS);
+  const scripts = customObjectAccess(child(accessNode, "Scripts"), SCRIPT_GRANTS);
+  const valueLists = customObjectAccess(child(accessNode, "ValueLists"), VALUE_LIST_GRANTS);
   if (tables.length === 0 && !layouts && !scripts && !valueLists) return undefined;
   return {
     kind: "privilegeSet",
@@ -203,26 +210,17 @@ const VALUE_LIST_GRANTS: ObjectGrantSpec = {
 /** The per-object grants of a category whose access is Custom, or undefined
  * when it isn't Custom. */
 function customObjectAccess(categoryNode: unknown, spec: ObjectGrantSpec): PrivilegeSetObjectAccess[] | undefined {
-  const node = Array.isArray(categoryNode) ? categoryNode[0] : categoryNode;
-  if (!isRecord(node) || attr(node, "Custom") !== "True") return undefined;
-  return children(child(child(node, "Custom"), "ObjectList"), spec.itemTag)
+  if (!isRecord(categoryNode) || attr(categoryNode, "Custom") !== "True") return undefined;
+  return children(child(child(categoryNode, "Custom"), "ObjectList"), spec.itemTag)
     .filter(isRecord)
     .map((item) => {
       const records = attr(item, "records");
       return {
-        name: attr(item, "type") === "New" ? spec.newLabel : decodeEntities(attr(child(item, spec.refTag), "name") ?? ""),
-        access: objectGrantLabel(attr(item, "access"), spec.readOnlyLabel),
-        ...(records != null ? { records: objectGrantLabel(records, "View only") } : {}),
+        name: attr(item, "type") === "New" ? spec.newLabel : (textAttr(child(item, spec.refTag), "name") ?? ""),
+        access: grantLabel({ ...OBJECT_GRANT_LABELS, ReadOnly: spec.readOnlyLabel }, attr(item, "access"), "No access"),
+        ...(records != null ? { records: grantLabel(OBJECT_GRANT_LABELS, records, "No access") } : {}),
       };
     });
-}
-
-/** A per-object grant: ReadWrite → "Modifiable", ReadOnly → the category's
- * read-only wording, anything else (NoAccess) → "No access". */
-function objectGrantLabel(raw: string | undefined, readOnlyLabel: string): string {
-  if (raw === "ReadWrite") return "Modifiable";
-  if (raw === "ReadOnly") return readOnlyLabel;
-  return "No access";
 }
 
 /** Custom record access (`<Records Custom="True">`): one row per table, or none
@@ -230,7 +228,7 @@ function objectGrantLabel(raw: string | undefined, readOnlyLabel: string): strin
 function customTableAccess(recordsNode: unknown): PrivilegeSetTableAccess[] {
   if (!isRecord(recordsNode) || attr(recordsNode, "Custom") !== "True") return [];
   return customRecordTables(recordsNode).map((table) => {
-    const baseTableName = attr(child(table, "BaseTableReference"), "name");
+    const baseTableName = textAttr(child(table, "BaseTableReference"), "name");
     const view = child(table, "View");
     const edit = child(table, "Edit");
     const del = child(table, "Delete");
@@ -238,25 +236,32 @@ function customTableAccess(recordsNode: unknown): PrivilegeSetTableAccess[] {
     const editCondition = recordGrantCondition(edit);
     const deleteCondition = recordGrantCondition(del);
     return {
-      table: baseTableName ? decodeEntities(baseTableName) : "(new tables)",
-      view: recordGrantLabel(attr(view, "access")),
-      edit: recordGrantLabel(attr(edit, "access")),
-      create: recordGrantLabel(attr(child(table, "Create"), "access")),
-      delete: recordGrantLabel(attr(del, "access")),
+      table: baseTableName || "(new tables)",
+      view: grantLabel(RECORD_GRANT_LABELS, attr(view, "access"), "No"),
+      edit: grantLabel(RECORD_GRANT_LABELS, attr(edit, "access"), "No"),
+      create: grantLabel(RECORD_GRANT_LABELS, attr(child(table, "Create"), "access"), "No"),
+      delete: grantLabel(RECORD_GRANT_LABELS, attr(del, "access"), "No"),
       ...(viewCondition ? { viewCondition } : {}),
       ...(editCondition ? { editCondition } : {}),
       ...(deleteCondition ? { deleteCondition } : {}),
-      ...tableFieldsAccess(table["Fields"]),
+      ...tableFieldsAccess(child(table, "Fields")),
     };
   });
 }
 
-/** View/Edit/Create/Delete grant on a `<Records>` table row: ReadWrite → "Yes",
- * a calculated condition → "Limited", anything else (NoAccess) → "No". */
-function recordGrantLabel(raw: string | undefined): string {
-  if (raw === "ReadWrite") return "Yes";
-  if (raw === "Calculation") return "Limited";
-  return "No";
+/** A per-object grant (layouts, scripts, value lists); ReadOnly is worded per
+ * category (ObjectGrantSpec.readOnlyLabel), anything else is "No access". */
+const OBJECT_GRANT_LABELS: Readonly<Record<string, string>> = { ReadWrite: "Modifiable", ReadOnly: "View only" };
+/** View/Edit/Create/Delete on a `<Records>` table row: a calculated condition is
+ * "Limited", anything else (NoAccess) "No". */
+const RECORD_GRANT_LABELS: Readonly<Record<string, string>> = { ReadWrite: "Yes", Calculation: "Limited" };
+/** A table's `<Fields access>` summary; anything else is "None". */
+const FIELDS_SUMMARY_LABELS: Readonly<Record<string, string>> = { ReadWrite: "All", ReadOnly: "View only", Custom: "Custom" };
+/** One field's grant under a Custom `<Fields>`; anything else is "None". */
+const FIELD_GRANT_LABELS: Readonly<Record<string, string>> = { ReadWrite: "Edit", ReadOnly: "View only" };
+
+function grantLabel(labels: Readonly<Record<string, string>>, raw: string | undefined, fallback: string): string {
+  return raw != null && Object.prototype.hasOwnProperty.call(labels, raw) ? labels[raw]! : fallback;
 }
 
 /** The formula behind a "Limited" (Calculation) grant on a View/Edit/Delete
@@ -270,29 +275,15 @@ function recordGrantCondition(node: unknown): string | undefined {
 /** The `<Fields access=…>` summary for one table, expanded into per-field
  * grants when it is "Custom" — or, as FM 21 writes custom access, when a
  * per-field list follows another summary. */
-function tableFieldsAccess(fieldsWrapper: unknown): { fieldsAccess: string; fields?: PrivilegeSetFieldAccess[] } {
-  const node = Array.isArray(fieldsWrapper) ? fieldsWrapper[0] : fieldsWrapper;
+function tableFieldsAccess(node: unknown): { fieldsAccess: string; fields?: PrivilegeSetFieldAccess[] } {
   const raw = attr(node, "access");
   const fieldNodes = children(node, "Field");
-  if (raw !== "Custom" && fieldNodes.length === 0) return { fieldsAccess: fieldsSummaryLabel(raw) };
-  const fields = fieldNodes.filter(isRecord).map((field) => {
-    const name = attr(child(field, "FieldReference"), "name");
-    return { field: name ? decodeEntities(name) : "(new fields)", access: singleFieldGrantLabel(attr(field, "access")) };
-  });
+  if (raw !== "Custom" && fieldNodes.length === 0) return { fieldsAccess: grantLabel(FIELDS_SUMMARY_LABELS, raw, "None") };
+  const fields = fieldNodes.filter(isRecord).map((field) => ({
+    field: textAttr(child(field, "FieldReference"), "name") || "(new fields)",
+    access: grantLabel(FIELD_GRANT_LABELS, attr(field, "access"), "None"),
+  }));
   return { fieldsAccess: "Custom", fields };
-}
-
-function fieldsSummaryLabel(raw: string | undefined): string {
-  if (raw === "ReadWrite") return "All";
-  if (raw === "ReadOnly") return "View only";
-  if (raw === "Custom") return "Custom";
-  return "None";
-}
-
-function singleFieldGrantLabel(raw: string | undefined): string {
-  if (raw === "ReadWrite") return "Edit";
-  if (raw === "ReadOnly") return "View only";
-  return "None";
 }
 
 // ---- extended privileges ------------------------------------------------------
@@ -310,7 +301,7 @@ export function annotateExtendedPrivilege(node: Record<string, unknown>, obj: Fm
  * makes the granting sets show as the extended privilege's inbound references,
  * and the extended privilege show among each set's outbound references.
  */
-export function addExtendedPrivilegeGrants(node: Record<string, unknown>, obj: FmObject, fp: FileParse): void {
+export function addExtendedPrivilegeGrants(fp: FileParse, node: Record<string, unknown>, obj: FmObject): void {
   for (const ref of children(child(node, "ObjectList"), "PrivilegeSetReference")) {
     const id = attr(ref, "id");
     if (id == null) continue;
@@ -333,10 +324,9 @@ export function addExtendedPrivilegeGrants(node: Record<string, unknown>, obj: F
  * The nested <Source> records who first authorized the file and when.
  */
 export function annotateFileAccess(node: Record<string, unknown>, obj: FmObject): FmObject {
-  const display = collectText(node["Display"]).trim();
-  const name = display ? decodeEntities(display) : obj.name;
+  const name = displayText(node["Display"]) || obj.name;
   const source = child(node, "Source");
-  const account = attr(source, "CreationAccountName");
+  const account = textAttr(source, "CreationAccountName");
   const created = attr(source, "CreationTimestamp");
   return {
     ...obj,
@@ -344,7 +334,7 @@ export function annotateFileAccess(node: Record<string, unknown>, obj: FmObject)
     text: name,
     attributes: {
       ...obj.attributes,
-      ...(account ? { authorizedBy: decodeEntities(account) } : {}),
+      ...(account ? { authorizedBy: account } : {}),
       ...(created ? { authorizedOn: created } : {}),
     },
   };

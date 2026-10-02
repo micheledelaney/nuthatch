@@ -2,7 +2,7 @@ import type { FileParse } from "../context";
 import { xmlParser } from "../xmlParser";
 import { asArray, isRecord } from "../xmlUtils";
 import { decodeEntities } from "../entities";
-import { folderName } from "./catalogItems";
+import { applyFolderMarker, folderPath } from "../catalogWalk";
 import { processOneLayout } from "./layouts";
 
 /**
@@ -20,20 +20,40 @@ export function splitLayoutCatalog(xml: string): { rest: string; layoutCatalog?:
   };
 }
 
+const CDATA_OPEN = "<![CDATA[";
+const CDATA_CLOSE = "]]>";
+
+/** The index of the next `needle` at or after `from` that isn't inside a CDATA
+ * section, or -1. These scans read the raw XML, where a formula or text object
+ * can contain any markup-like text (`"</Layout>"`) — only CDATA can, since
+ * everything else is entity-encoded. */
+function indexOutsideCdata(xml: string, needle: string, from: number): number {
+  let pos = xml.indexOf(needle, from);
+  let cdata = xml.indexOf(CDATA_OPEN, from);
+  while (pos !== -1 && cdata !== -1 && cdata < pos) {
+    const close = xml.indexOf(CDATA_CLOSE, cdata + CDATA_OPEN.length);
+    if (close === -1) return -1;
+    const after = close + CDATA_CLOSE.length;
+    if (pos < after) pos = xml.indexOf(needle, after);
+    cdata = xml.indexOf(CDATA_OPEN, after);
+  }
+  return pos;
+}
+
 /** The start/end char positions of <Structure>'s own <LayoutCatalog>…</LayoutCatalog>
  * (the one in its <AddAction>), or null when there's none to stream. FM 22's
  * <ModifyAction> repeats a small LayoutCatalog of button targets; that one is
  * left to the main parse. */
 function findLayoutCatalogBounds(xml: string): { start: number; end: number } | null {
-  const structure = xml.indexOf("<Structure");
-  const start = structure === -1 ? -1 : xml.indexOf("<LayoutCatalog", structure);
+  const structure = indexOutsideCdata(xml, "<Structure", 0);
+  const start = structure === -1 ? -1 : indexOutsideCdata(xml, "<LayoutCatalog", structure);
   if (start === -1) return null;
-  const modifyAction = xml.indexOf("<ModifyAction", structure);
+  const modifyAction = indexOutsideCdata(xml, "<ModifyAction", structure);
   if (modifyAction !== -1 && modifyAction < start) return null;
   const openEnd = xml.indexOf(">", start);
   if (openEnd === -1 || xml[openEnd - 1] === "/") return null; // <LayoutCatalog/>: no layouts
   const close = "</LayoutCatalog>";
-  const end = xml.indexOf(close, openEnd);
+  const end = indexOutsideCdata(xml, close, openEnd);
   return end === -1 ? null : { start, end: end + close.length };
 }
 
@@ -47,7 +67,7 @@ function nextLayoutElement(xml: string, from: number): number {
   const TAG = "<Layout";
   let pos = from;
   for (;;) {
-    const lt = xml.indexOf(TAG, pos);
+    const lt = indexOutsideCdata(xml, TAG, pos);
     if (lt === -1) return -1;
     const after = xml[lt + TAG.length]; // char immediately after "<Layout"
     if (after === " " || after === "\t" || after === "\n" || after === "\r" || after === ">" || after === "/") {
@@ -66,7 +86,7 @@ function nextLayoutElement(xml: string, from: number): number {
  * parse — the name attribute is read with a simple regex — because folder
  * marker layouts contain no reference-bearing content.
  */
-export function parseLayoutsStreaming(catalogXml: string, fp: FileParse): void {
+export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
   let order = 0;
   const folderStack: string[] = [];
   const closeTag = "</Layout>";
@@ -82,39 +102,31 @@ export function parseLayoutsStreaming(catalogXml: string, fp: FileParse): void {
       pos = gt + 1;
       continue;
     }
-    const closePos = catalogXml.indexOf(closeTag, gt + 1);
+    const closePos = indexOutsideCdata(catalogXml, closeTag, gt + 1);
     if (closePos === -1) break;
     const endPos = closePos + closeTag.length;
     pos = endPos;
 
     // Folder markers: manage the stack but do not emit an object.
-    const folderMatch = /\bisFolder="(True|Marker)"/.exec(openTag);
-    if (folderMatch) {
-      if (folderMatch[1] === "True") {
-        const nameMatch = / name="([^"]*)"/.exec(openTag);
-        folderStack.push(folderName(nameMatch?.[1] ?? ""));
-      } else {
-        folderStack.pop();
-      }
-      continue;
-    }
+    const flag = /\bisFolder="([^"]*)"/.exec(openTag)?.[1];
+    if (applyFolderMarker(folderStack, flag, / name="([^"]*)"/.exec(openTag)?.[1] ?? "")) continue;
 
     // Real layout: parse the single element and process it immediately so the
     // parsed object-tree can be GC'd before the next layout is parsed.
-    const layoutNode = parseLayoutElement(catalogXml.slice(lt, endPos), openTag, fp);
+    const layoutNode = parseLayoutElement(fp, catalogXml.slice(lt, endPos), openTag);
     if (layoutNode === null) {
       order++;
       continue;
     }
-    const folder = folderStack.join(" / ");
-    for (const node of asArray(layoutNode)) processOneLayout(node, folder, order++, fp);
+    const folder = folderPath(folderStack);
+    for (const node of asArray(layoutNode)) processOneLayout(fp, node, folder, order++);
   }
 }
 
 /** One <Layout> element's object tree, or null (and an error for the user)
  * when it doesn't parse — skipping it silently would hide the layout and every
  * reference on it. */
-function parseLayoutElement(layoutXml: string, openTag: string, fp: FileParse): unknown {
+function parseLayoutElement(fp: FileParse, layoutXml: string, openTag: string): unknown {
   try {
     const wrapper = (xmlParser.parse(`<_L>${layoutXml}</_L>`) as Record<string, unknown>)["_L"];
     return isRecord(wrapper) ? wrapper["Layout"] : undefined;

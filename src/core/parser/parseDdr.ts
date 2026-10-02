@@ -1,11 +1,10 @@
 import type { FmFile, FmObject, ParseResult, RawReference } from "@/types/ddr";
-import { buildChunkContext, type FileParse } from "./context";
+import { buildFileIndex, type FileParse } from "./context";
 import { xmlParser } from "./xmlParser";
-import { attr, isRecord } from "./xmlUtils";
-import { decodeEntities } from "./entities";
+import { attr, isRecord, textAttr } from "./xmlUtils";
 import { fileUidAt } from "./uid";
-import { addPlaceholderRefs } from "./refs/placeholderRefs";
-import { addTextGlobalRefs, globalVariableObjects } from "./refs/globalVariables";
+import { globalVariableObjects } from "./refs/globalVariables";
+import { addTextDerivedRefs } from "./refs/textRefs";
 import { parseCatalogs } from "./objects/catalogs";
 import { deferredLayoutTargets } from "./objects/deferredLayouts";
 import { parseTablesAndFields } from "./objects/fields";
@@ -110,7 +109,7 @@ function locateContainer(root: unknown, source: string): Container | null {
     ddrInfo: saveAs["DDR_INFO"],
     metadata: saveAs["Metadata"],
     modifyAction: isRecord(structure) ? structure["ModifyAction"] : undefined,
-    name: decodeEntities(attr(saveAs, "File") ?? "Untitled").replace(/\.fmp12$/i, ""),
+    name: (textAttr(saveAs, "File") ?? "Untitled").replace(/\.fmp12$/i, ""),
     source,
     // The FileMaker app version lives in `Source`; `version` is the schema.
     version: attr(saveAs, "Source"),
@@ -132,7 +131,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   const fp: FileParse = {
     file,
     fileObject,
-    chunks: buildChunkContext(node, container.ddrInfo),
+    index: buildFileIndex(node, container.ddrInfo),
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
     activeText: new Map(),
     layoutObjectUidCounts: new Map(),
@@ -141,15 +140,14 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     errors,
   };
   addFileRefs(fp, node, container.metadata);
-  parseTablesAndFields(node, fp);
-  parseScripts(node, fp);
-  parseCatalogs(node, fp);
-  parseCustomMenuItems(node, fp);
+  parseTablesAndFields(fp, node);
+  parseScripts(fp, node);
+  parseCatalogs(fp, node);
+  parseCustomMenuItems(fp, node);
   // Text-derived references for everything so far; each streamed layout gets
   // its own pass (processOneLayout), so its full text can be dropped right after.
-  addPlaceholderRefs(fp, fp.objects, 0);
-  addTextGlobalRefs(fp, fp.objects);
-  if (layoutCatalog) parseLayoutsStreaming(layoutCatalog, fp);
+  addTextDerivedRefs(fp, fp.objects, 0);
+  if (layoutCatalog) parseLayoutsStreaming(fp, layoutCatalog);
   return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
 }
 

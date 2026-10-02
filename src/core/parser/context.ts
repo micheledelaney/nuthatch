@@ -1,9 +1,8 @@
 import type { FmFile, FmObject, RawReference } from "@/types/ddr";
-import { asArray, attr, child, children, isElementKey, isRecord } from "./xmlUtils";
-import { decodeEntities } from "./entities";
+import { asArray, attr, child, isElementKey, isRecord, textAttr } from "./xmlUtils";
 import { makeNameIndex, type NameIndex } from "./calcText";
-import { collectCatalogItems } from "./objects/catalogItems";
-import { occurrenceSource } from "./objects/tableOccurrences";
+import { collectCatalogItems, fieldCatalogs } from "./catalogWalk";
+import { occurrenceSource, type OccurrenceSource } from "./occurrences";
 import type { DeferredButton } from "./objects/deferredLayouts";
 
 /**
@@ -14,7 +13,7 @@ import type { DeferredButton } from "./objects/deferredLayouts";
 export interface FileParse {
   readonly file: FmFile;
   readonly fileObject: FmObject;
-  readonly chunks: ChunkContext;
+  readonly index: FileIndex;
   /** Button layout targets recorded only in FM 22's <ModifyAction>, by layout id. */
   readonly deferredLayoutTargets: ReadonlyMap<string, DeferredButton[]>;
   /** Field uid → the text of its in-effect calcs, for a field whose XML still
@@ -36,7 +35,7 @@ export interface FileParse {
 /** The lookups a file's reference scan resolves against. The name indexes come
  * straight from the catalogs because field calcs are scanned before the
  * occurrence catalog becomes objects. */
-export interface ChunkContext {
+export interface FileIndex {
   /** pointer → the `<_HASH>` block node (which contains a <ChunkList>). */
   lists: Map<string, unknown>;
   /** custom-function name → id, for resolving CustomFunctionRef chunks (which
@@ -51,6 +50,8 @@ export interface ChunkContext {
   toByName: Map<string, OccurrenceInfo>;
   /** Table occurrences by id (a calc's context occurrence → its base table). */
   toById: Map<string, OccurrenceInfo>;
+  /** Where each table occurrence's records come from, by occurrence id. */
+  occurrenceSources: Map<string, OccurrenceSource>;
   /** Occurrence names, for longest-match before a `::`. */
   toNames: string[];
   /** Local base-table id → its fields (name → id), plus a longest-match index. */
@@ -87,14 +88,14 @@ export function renderedStepText(stepTextByHash: ReadonlyMap<string, string>, st
  * block (the blocks live in the sibling <DDR_INFO>, not in the catalogs), the
  * rendered step texts, and the custom-function, occurrence, field, and data
  * source indexes. */
-export function buildChunkContext(containerNode: Record<string, unknown>, ddrInfo: unknown): ChunkContext {
+export function buildFileIndex(containerNode: Record<string, unknown>, ddrInfo: unknown): FileIndex {
   const dataSourceIds = new Set<string>();
   for (const source of collectCatalogItems(containerNode["ExternalDataSourceCatalog"], "ExternalDataSource")) {
     const id = attr(source, "id");
     if (id != null) dataSourceIds.add(id);
   }
   const cfByName = customFunctionIds(containerNode);
-  const { toByName, toById } = occurrenceIndex(containerNode, dataSourceIds);
+  const { toByName, toById, occurrenceSources } = occurrenceIndex(containerNode, dataSourceIds);
   return {
     lists: chunkListBlocks(ddrInfo),
     cfByName,
@@ -102,6 +103,7 @@ export function buildChunkContext(containerNode: Record<string, unknown>, ddrInf
     stepTextByHash: stepTextByHash(ddrInfo),
     toByName,
     toById,
+    occurrenceSources,
     toNames: [...toByName.keys()],
     fieldsByTable: fieldIndex(containerNode),
     dataSourceIds,
@@ -119,18 +121,20 @@ function chunkListBlocks(ddrInfo: unknown): Map<string, unknown> {
     if (!isRecord(n)) return;
     for (const [k, v] of Object.entries(n)) {
       if (!isElementKey(k)) continue;
-      // Chunk-list block tags are the pointer the DDRREF names them by, and are
-      // the only underscore-prefixed elements in DDR_INFO. The shape varies by
-      // FileMaker version — `_<hash>` (older) and `_<UUID>_<suffix>` like
-      // `_…_0` / `_…_Condition_1` (newer) — so match on the `_` prefix and let
-      // the `ChunkList` child be the real filter. (A version-specific regex here
-      // silently dropped every newer-format calc/condition reference.)
-      if (k.startsWith("_")) {
-        for (const el of asArray(v)) {
-          if (isRecord(el) && el["ChunkList"] != null && !lists.has(k)) lists.set(k, el);
+      for (const el of asArray(v)) {
+        // Chunk-list block tags are the pointer the DDRREF names them by, and are
+        // the only underscore-prefixed elements in DDR_INFO. The shape varies by
+        // FileMaker version — `_<hash>` (older) and `_<UUID>_<suffix>` like
+        // `_…_0` / `_…_Condition_1` (newer) — so match on the `_` prefix and let
+        // the `ChunkList` child be the real filter. (A version-specific regex here
+        // silently dropped every newer-format calc/condition reference.) A
+        // block's chunks hold no further blocks, so it isn't descended into.
+        if (k.startsWith("_") && isRecord(el) && el["ChunkList"] != null) {
+          if (!lists.has(k)) lists.set(k, el);
+        } else {
+          visit(el);
         }
       }
-      visit(v);
     }
   };
   visit(ddrInfo);
@@ -165,11 +169,8 @@ function customFunctionIds(containerNode: Record<string, unknown>): Map<string, 
   const cfByName = new Map<string, string>();
   for (const item of collectCatalogItems(containerNode["CustomFunctionsCatalog"], "CustomFunction")) {
     const id = attr(item, "id");
-    const name = attr(item, "name");
-    if (id != null && name) {
-      const decoded = decodeEntities(name);
-      if (!cfByName.has(decoded)) cfByName.set(decoded, id);
-    }
+    const name = textAttr(item, "name");
+    if (id != null && name && !cfByName.has(name)) cfByName.set(name, id);
   }
   return cfByName;
 }
@@ -177,14 +178,17 @@ function customFunctionIds(containerNode: Record<string, unknown>): Map<string, 
 function occurrenceIndex(
   containerNode: Record<string, unknown>,
   dataSourceIds: ReadonlySet<string>,
-): { toByName: Map<string, OccurrenceInfo>; toById: Map<string, OccurrenceInfo> } {
+): Pick<FileIndex, "toByName" | "toById" | "occurrenceSources"> {
   const toByName = new Map<string, OccurrenceInfo>();
   const toById = new Map<string, OccurrenceInfo>();
+  const occurrenceSources = new Map<string, OccurrenceSource>();
   for (const to of collectCatalogItems(containerNode["TableOccurrenceCatalog"], "TableOccurrence")) {
     const id = attr(to, "id");
-    const name = decodeEntities(attr(to, "name") ?? "");
-    if (id == null || !name) continue;
+    if (id == null) continue;
     const source = occurrenceSource(to, dataSourceIds);
+    occurrenceSources.set(id, source);
+    const name = textAttr(to, "name") ?? "";
+    if (!name) continue;
     const info: OccurrenceInfo = {
       id,
       external: source.external,
@@ -195,31 +199,20 @@ function occurrenceIndex(
     if (!toByName.has(name)) toByName.set(name, info);
     toById.set(id, info);
   }
-  return { toByName, toById };
+  return { toByName, toById, occurrenceSources };
 }
 
 /** Local base-table id → its fields by name (first wins), plus a longest-match index. */
-function fieldIndex(containerNode: Record<string, unknown>): ChunkContext["fieldsByTable"] {
-  const fieldsByTable: ChunkContext["fieldsByTable"] = new Map();
+function fieldIndex(containerNode: Record<string, unknown>): FileIndex["fieldsByTable"] {
+  const fieldsByTable: FileIndex["fieldsByTable"] = new Map();
   for (const catalog of fieldCatalogs(containerNode)) {
     const idByName = new Map<string, string>();
     for (const field of collectCatalogItems(catalog.node, "Field")) {
       const id = attr(field, "id");
-      const name = decodeEntities(attr(field, "name") ?? "");
+      const name = textAttr(field, "name") ?? "";
       if (id != null && name && !idByName.has(name)) idByName.set(name, id);
     }
     fieldsByTable.set(catalog.tableId, { idByName, index: makeNameIndex(idByName.keys()) });
   }
   return fieldsByTable;
-}
-
-/** Each <FieldsForTables><FieldCatalog>, keyed back to its base table by a
- * leading <BaseTableReference>. */
-export function fieldCatalogs(containerNode: Record<string, unknown>): { tableId: string; node: unknown }[] {
-  const out: { tableId: string; node: unknown }[] = [];
-  for (const node of children(containerNode["FieldsForTables"], "FieldCatalog")) {
-    const tableId = attr(child(node, "BaseTableReference"), "id");
-    if (tableId != null) out.push({ tableId, node });
-  }
-  return out;
 }

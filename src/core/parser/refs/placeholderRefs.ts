@@ -1,15 +1,9 @@
 import type { FmObject, RawReference } from "@/types/ddr";
 import { isBrokenTableOccurrence } from "@/types/ddr";
-import type { ChunkContext, FileParse } from "../context";
+import type { FileIndex, FileParse } from "../context";
 import { longestNameEndingAt } from "@/core/identifiers";
 import { MISSING_FIELD_TOKEN, MISSING_FUNCTION_TOKEN, MISSING_TABLE_TOKEN, UNKNOWN_TARGET } from "../sentinels";
-import { brokenRef } from "./refBuilders";
-
-/** Where in an object a placeholder sits: the script step (when it's in one). */
-interface Site {
-  fromStep?: number;
-  disabled?: boolean;
-}
+import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 
 /** `<Table Missing>` not followed by `::` — a deleted target, not a field read
  * through a deleted occurrence (`<Table Missing>::Field`, handled structurally). */
@@ -28,10 +22,10 @@ export function addPlaceholderRefs(fp: FileParse, batch: readonly FmObject[], re
   addMissingFieldRefs(fp, batch, refStart);
   // After addMissingFieldRefs: a step it already flagged isn't flagged again.
   addMissingTargetTableRefs(fp, batch, refStart);
-  forEachPlaceholderUse(batch, MISSING_FUNCTION_TOKEN, fp.activeText, (obj, _text, site) => {
-    fp.references.push(brokenRef(obj.uid, "customFunction", MISSING_FUNCTION_TOKEN, "customFunction", site));
+  forEachPlaceholderUse(fp, batch, MISSING_FUNCTION_TOKEN, (obj, _text, site) => {
+    pushRef(fp.references, brokenRef(obj.uid, "customFunction", MISSING_FUNCTION_TOKEN), site);
   });
-  addBrokenTableOccurrenceRefs(batch, fp.references);
+  addBrokenTableOccurrenceRefs(fp, batch);
 }
 
 /**
@@ -42,22 +36,29 @@ export function addPlaceholderRefs(fp: FileParse, batch: readonly FmObject[], re
  * distinct missing target. A field is scanned through its *active* calcs only
  * (FileParse.activeText), so a disabled auto-enter calc naming a deleted field
  * doesn't flag it.
+ *
+ * Step parameters and layout-object text are decoded, but every other object's
+ * `text` is raw XML text, where a placeholder inside an attribute value stays
+ * entity-encoded (`name="&lt;Table Missing&gt;"`) and so isn't matched here. On
+ * purpose: those all sit on a `<TableOccurrenceReference id="-1">`, which the
+ * element scan already records as the broken reference. The placeholders this
+ * pass is for are in calculation text (CDATA, verbatim) and rendered steps.
  */
 function forEachPlaceholderUse(
+  fp: FileParse,
   batch: readonly FmObject[],
   token: string,
-  activeText: ReadonlyMap<string, string>,
-  emit: (obj: FmObject, text: string, site: Site) => void,
+  emit: (obj: FmObject, text: string, site: ScanContext) => void,
 ): void {
   for (const obj of batch) {
     if (obj.type === "file" || !obj.text) continue;
     if (obj.detail?.kind === "script") {
       for (const step of obj.detail.steps) {
-        if (step.params.includes(token)) emit(obj, step.params, { fromStep: step.index, disabled: !step.enabled });
+        if (step.params.includes(token)) emit(obj, step.params, { stepIndex: step.index, disabled: !step.enabled });
       }
       continue;
     }
-    const text = activeText.get(obj.uid) ?? obj.text;
+    const text = fp.activeText.get(obj.uid) ?? obj.text;
     if (text.includes(token)) emit(obj, text, {});
   }
 }
@@ -98,16 +99,17 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
   // "<Field Missing>" placeholder. Without this check, that single dangling
   // field would be counted and displayed twice.
   const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && r.toName === "");
-  forEachPlaceholderUse(batch, MISSING_FIELD_TOKEN, fp.activeText, (obj, text, site) => {
-    if (alreadyBroken.has(siteKey(obj.uid, site.fromStep))) return;
-    const deleted = deletedFieldVia(text, fp.chunks);
+  forEachPlaceholderUse(fp, batch, MISSING_FIELD_TOKEN, (obj, text, site) => {
+    if (alreadyBroken.has(siteKey(obj.uid, site.stepIndex))) return;
+    const deleted = deletedFieldVia(text, fp.index);
     if (!deleted) return;
-    fp.references.push({
-      ...brokenRef(obj.uid, "field", MISSING_FIELD_TOKEN, "field", site),
+    const ref = {
+      ...brokenRef(obj.uid, "field", MISSING_FIELD_TOKEN),
       // The field is gone but its occurrence is still a navigable target (keeps
       // the TO clickable inline, and surfaces the broken ref under its inbound list).
       ...(deleted.viaToId != null ? { viaToId: deleted.viaToId } : {}),
-    });
+    };
+    pushRef(fp.references, ref, site);
   });
 }
 
@@ -116,11 +118,11 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
  * (qualified by a real or missing occurrence, or bare) is a deleted field.
  * Returns the occurrence of the first deleted one (the navigable context), or
  * null when every placeholder was unverifiable. */
-function deletedFieldVia(text: string, chunks: ChunkContext): { viaToId?: string } | null {
+function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } | null {
   for (let pos = text.indexOf(MISSING_FIELD_TOKEN); pos !== -1; pos = text.indexOf(MISSING_FIELD_TOKEN, pos + 1)) {
     if (!text.endsWith("::", pos)) return {};
-    const name = longestNameEndingAt(text, pos - 2, chunks.toNames);
-    const occ = name != null ? chunks.toByName.get(name) : undefined;
+    const name = longestNameEndingAt(text, pos - 2, index.toNames);
+    const occ = name != null ? index.toByName.get(name) : undefined;
     if (occ?.unresolved) continue;
     return occ ? { viaToId: occ.id } : {};
   }
@@ -142,13 +144,13 @@ function deletedFieldVia(text: string, chunks: ChunkContext): { viaToId?: string
 function addMissingTargetTableRefs(fp: FileParse, batch: readonly FmObject[], refStart: number): void {
   const alreadyBroken = sitesWith(fp.references, refStart, (r) => r.toType === "field" && (r.forceBroken === true || r.toName === ""));
   const deadOccurrence = sitesWith(fp.references, refStart, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
-  forEachPlaceholderUse(batch, MISSING_TABLE_TOKEN, fp.activeText, (obj, text, site) => {
-    const key = siteKey(obj.uid, site.fromStep);
+  forEachPlaceholderUse(fp, batch, MISSING_TABLE_TOKEN, (obj, text, site) => {
+    const key = siteKey(obj.uid, site.stepIndex);
     if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(key)) return;
     const isPortal = obj.detail?.kind === "layoutObject" && obj.detail.portalTable === MISSING_TABLE_TOKEN;
     if (isPortal && deadOccurrence.has(key)) return;
     const toType = isPortal ? "tableOccurrence" : "field";
-    fp.references.push(brokenRef(obj.uid, toType, MISSING_TABLE_TOKEN, toType, site));
+    pushRef(fp.references, brokenRef(obj.uid, toType, MISSING_TABLE_TOKEN), site);
   });
 }
 
@@ -162,10 +164,10 @@ function addMissingTargetTableRefs(fp: FileParse, batch: readonly FmObject[], re
  * merely couldn't be resolved at export time isn't broken at all
  * (isUnresolvedTableOccurrence).
  */
-function addBrokenTableOccurrenceRefs(batch: readonly FmObject[], out: RawReference[]): void {
+function addBrokenTableOccurrenceRefs(fp: FileParse, batch: readonly FmObject[]): void {
   for (const obj of batch) {
     if (isBrokenTableOccurrence(obj)) {
-      out.push(brokenRef(obj.uid, "table", obj.attributes.externalDataSource || UNKNOWN_TARGET));
+      fp.references.push(brokenRef(obj.uid, "table", obj.attributes.externalDataSource || UNKNOWN_TARGET));
     }
   }
 }

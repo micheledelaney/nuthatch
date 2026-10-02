@@ -1,10 +1,9 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, children, collectText, enabledLabels, findElement, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { attr, child, children, collectText, displayText, enabledLabels, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { objectUid } from "../uid";
+import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { collectCatalogItems } from "./catalogItems";
 import { calculationText } from "./common";
 
 const MENU_MODES: ReadonlyArray<readonly [string, string]> = [
@@ -24,10 +23,10 @@ const MENU_ITEM_OVERRIDES: ReadonlyArray<readonly [string, string]> = [
 export function annotateCustomMenu(node: Record<string, unknown>, obj: FmObject): FmObject {
   const a: Record<string, string> = {};
   // The base menu the custom menu is derived from is <BaseMenu> (DDR) or <Base>.
-  const baseName = attr(child(node, "BaseMenu"), "name") ?? attr(child(node, "Base"), "name");
-  if (baseName) a.basedOn = decodeEntities(baseName);
-  const comment = collectText(node["Comment"]).trim();
-  if (comment) a.comment = decodeEntities(comment);
+  const baseName = textAttr(child(node, "BaseMenu"), "name") ?? textAttr(child(node, "Base"), "name");
+  if (baseName) a.basedOn = baseName;
+  const comment = displayText(node["Comment"]);
+  if (comment) a.comment = comment;
   const options = child(node, "Options");
   const modes = isRecord(options) ? enabledLabels(options, MENU_MODES) : [];
   if (modes.length) a.installsIn = modes.join(", ");
@@ -49,8 +48,8 @@ function installCondition(node: Record<string, unknown>): string {
  * (the member menus themselves are emitted as references). */
 export function annotateCustomMenuSet(node: Record<string, unknown>, obj: FmObject): FmObject {
   const a: Record<string, string> = {};
-  const comment = attr(node, "comment");
-  if (comment) a.comment = decodeEntities(comment);
+  const comment = textAttr(node, "comment");
+  if (comment) a.comment = comment;
   const count = attr(child(node, "CustomMenuList"), "membercount");
   if (count) a.menus = count;
   const sourceUuid = collectText(node["SourceUUID"]).trim();
@@ -67,13 +66,13 @@ export function annotateCustomMenuSet(node: Record<string, unknown>, obj: FmObje
  * <CustomMenuReference> submenu, or a Perform Script step's <ScriptReference>;
  * separators are kept (in order) and flagged like the script/layout dividers.
  */
-export function parseCustomMenuItems(containerNode: Record<string, unknown>, fp: FileParse): void {
+export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string, unknown>): void {
   for (const menu of collectCatalogItems(containerNode["CustomMenuCatalog"], "CustomMenu")) {
     const menuId = attr(menu, "id");
     const list = child(menu, "MenuItemList");
     if (!isRecord(menu) || menuId == null || !isRecord(list)) continue;
     const menuUid = objectUid(fp.file.uid, "customMenu", menuId);
-    const menuName = decodeEntities(attr(menu, "name") ?? "");
+    const menuName = textAttr(menu, "name") ?? "";
     let order = 0;
     for (const item of children(list, "CustomMenuItem")) {
       if (!isRecord(item)) continue;
@@ -118,7 +117,7 @@ function menuItemAttributes(item: Record<string, unknown>, menuName: string): Re
   // Shortcut>), e.g. "Name, Shortcut".
   const overrides = enabledLabels(child(item, "Override"), MENU_ITEM_OVERRIDES).join(", ");
   if (overrides) a.overrides = overrides;
-  const uuid = collectText(item["UUID"]).trim();
+  const uuid = uuidText(item);
   if (uuid) a.uuid = uuid;
   return a;
 }
@@ -127,10 +126,10 @@ function menuItemAttributes(item: Record<string, unknown>, menuName: string): Re
  * the script it performs; falls back to a generic separator/item label. */
 function menuItemName(item: Record<string, unknown>): string {
   if (attr(item, "isSeparatorItem") === "True") return "—";
-  const command = attr(child(item, "Command"), "name");
-  if (command) return decodeEntities(command);
-  const submenu = attr(child(item, "CustomMenuReference"), "name");
-  if (submenu) return decodeEntities(submenu);
+  const command = textAttr(child(item, "Command"), "name");
+  if (command) return command;
+  const submenu = textAttr(child(item, "CustomMenuReference"), "name");
+  if (submenu) return submenu;
   const scriptName = performedScriptName(item);
   if (scriptName) return `Perform Script: ${scriptName}`;
   return "(menu item)";
@@ -159,5 +158,5 @@ function menuItemShortcut(item: Record<string, unknown>): string | undefined {
 /** The script a menu item's Perform Script step runs (its <ScriptReference>
  * sits inside the step's parameter list). */
 function performedScriptName(item: Record<string, unknown>): string {
-  return decodeEntities(attr(findElement(item, "ScriptReference"), "name") ?? "");
+  return textAttr(findElement(item, "ScriptReference"), "name") ?? "";
 }

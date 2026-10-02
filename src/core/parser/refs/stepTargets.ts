@@ -1,16 +1,14 @@
-import type { RawReference } from "@/types/ddr";
-import { renderedStepText, type ChunkContext } from "../context";
+import { renderedStepText, type FileParse } from "../context";
 import { attr, findElement, isRecord } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { edgeKind } from "../refTags";
 import { UNKNOWN_TARGET } from "../sentinels";
-import { brokenRef, pushRef, type ScanCtx } from "./refBuilders";
+import { GO_TO_LAYOUT_STEP, GO_TO_RELATED_RECORD_STEP, isPerformScriptStep } from "../stepNames";
+import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 
 // FileMaker wraps the file name in typographic curly quotes (U+201C…U+201D);
 // accept straight quotes too for robustness across export versions.
 const STEP_FROM_FILE_RE = /from file:\s*[“"]([^”"]+)[”"]/;
-const PERFORM_SCRIPT_STEP_RE = /^Perform Script(?: on Server(?: with Callback)?)?$/;
-
 
 /** Whether a Perform Script step's rendered text names a deleted script —
  * `Perform Script [ “<unknown>” ]` — as opposed to one in a file that wasn't
@@ -35,20 +33,15 @@ function namesDeletedScript(stepText: string): boolean {
  *   • Go to Related Record whose occurrence was deleted without a
  *     `<Table Missing>` reference left behind (`From table: <unknown>`).
  */
-export function addStepTargetRefs(
-  chunks: ChunkContext,
-  step: Record<string, unknown>,
-  fromUid: string,
-  stepCtx: ScanCtx,
-  out: RawReference[],
-): void {
+export function addStepTargetRefs(fp: FileParse, step: Record<string, unknown>, fromUid: string, stepCtx: ScanContext): void {
   const name = attr(step, "name") ?? "";
-  const isPerform = PERFORM_SCRIPT_STEP_RE.test(name);
-  if (!isPerform && name !== "Go to Layout" && name !== "Go to Related Record") return;
-  const rendered = renderedStepText(chunks.stepTextByHash, step);
+  const isPerform = isPerformScriptStep(name);
+  if (!isPerform && name !== GO_TO_LAYOUT_STEP && name !== GO_TO_RELATED_RECORD_STEP) return;
+  const rendered = renderedStepText(fp.index.stepTextByHash, step);
   if (rendered == null) return;
   const text = decodeEntities(rendered);
   const params = step["ParameterValues"];
+  const out = fp.references;
 
   if (isPerform) {
     if (findElement(params, "ScriptReference") != null) return;
@@ -67,16 +60,16 @@ export function addStepTargetRefs(
   const container = findElement(params, "LayoutReferenceContainer");
   const occurrence = findElement(params, "TableOccurrenceReference");
   const occurrenceId = attr(occurrence, "id");
-  const externalVerifiable = occurrenceId != null && chunks.toById.get(occurrenceId)?.fileOpenAtExport === true;
+  const externalVerifiable = occurrenceId != null && fp.index.toById.get(occurrenceId)?.fileOpenAtExport === true;
   const layoutGone =
     isRecord(container) &&
     (attr(container, "External") !== "True" || externalVerifiable) &&
     findElement(container, "LayoutReference") == null &&
-    (name === "Go to Layout" ? text.includes(UNKNOWN_TARGET) : text.includes(`Using layout: ${UNKNOWN_TARGET}`));
+    (name === GO_TO_LAYOUT_STEP ? text.includes(UNKNOWN_TARGET) : text.includes(`Using layout: ${UNKNOWN_TARGET}`));
   if (layoutGone) {
     pushRef(out, brokenRef(fromUid, "layout", UNKNOWN_TARGET, edgeKind("layout", name)), stepCtx);
   }
-  if (name === "Go to Related Record" && text.includes(`From table: ${UNKNOWN_TARGET}`) && occurrence == null) {
+  if (name === GO_TO_RELATED_RECORD_STEP && text.includes(`From table: ${UNKNOWN_TARGET}`) && occurrence == null) {
     pushRef(out, brokenRef(fromUid, "tableOccurrence", UNKNOWN_TARGET), stepCtx);
   }
 }

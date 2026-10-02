@@ -8,7 +8,7 @@ export interface RefOwner {
 }
 
 /** Where inside its owner a reference was found. */
-export interface ScanCtx {
+export interface ScanContext {
   stepName?: string;
   /** 1-based index of the enclosing <Step>, matching scriptSteps() numbering. */
   stepIndex?: number;
@@ -16,11 +16,14 @@ export interface ScanCtx {
   disabled?: boolean;
   /** Inside a <ScriptTrigger>: its script reference is a "trigger" edge. */
   inTrigger?: boolean;
+  /** Inside a calculation's chunk list (followed from its DDRREF pointer). */
+  inChunkList?: boolean;
 }
 
 /** Push a reference, stamped with the originating step (and whether that step is
- * disabled) from the scan context. */
-export function pushRef(out: RawReference[], ref: RawReference, ctx: ScanCtx): void {
+ * disabled) from the scan context. Every reference that comes from a step goes
+ * through here. */
+export function pushRef(out: RawReference[], ref: RawReference, ctx: ScanContext): void {
   out.push({
     ...ref,
     ...(ctx.stepIndex != null ? { fromStep: ctx.stepIndex } : {}),
@@ -30,23 +33,8 @@ export function pushRef(out: RawReference[], ref: RawReference, ctx: ScanCtx): v
 
 /** A reference whose target the export itself shows was deleted: it resolves as
  * broken whatever the target lookup would find. */
-export function brokenRef(
-  fromUid: string,
-  toType: ObjectType,
-  toName: string,
-  kind: string = toType,
-  site: { fromStep?: number; disabled?: boolean } = {},
-): RawReference {
-  return {
-    fromUid,
-    toType,
-    toId: MISSING_REF_ID,
-    toName,
-    kind,
-    forceBroken: true,
-    ...(site.fromStep != null ? { fromStep: site.fromStep } : {}),
-    ...(site.disabled ? { disabled: true } : {}),
-  };
+export function brokenRef(fromUid: string, toType: ObjectType, toName: string, kind: string = toType): RawReference {
+  return { fromUid, toType, toId: MISSING_REF_ID, toName, kind, forceBroken: true };
 }
 
 /** A use of a `$$global` variable (they have no catalog: each name becomes an

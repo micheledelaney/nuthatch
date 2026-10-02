@@ -359,10 +359,6 @@ export interface LayoutObjectInfo {
   children?: LayoutObjectInfo[];
   /** Field binding: "TO::FieldName" for field-type objects. */
   fieldRef?: string;
-  /** Raw field numeric id — used to emit a RawReference, not rendered. */
-  fieldToId?: string;
-  /** Raw table occurrence numeric id for the field binding — used for viaToId. */
-  fieldViaToId?: string;
   /** Script called by a button or grouped button — enables navigation to the script. */
   scriptRef?: { id?: string; name: string; uuid?: string };
   /** Value list attached to a field object's format (drop-down, checkbox set, …). */

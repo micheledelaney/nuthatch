@@ -1,4 +1,5 @@
 import type { ObjectType } from "@/types/ddr";
+import { GO_TO_LAYOUT_STEP, SET_FIELD_STEP, isPerformScriptStep } from "./stepNames";
 
 /**
  * FMSaveAsXML element tag -> referenced object type.
@@ -37,13 +38,16 @@ export const FMSAVEAS_REF_TAGS: Readonly<Record<string, ObjectType>> = {
 };
 
 /**
- * Refine the edge "kind" for display, based on the containing script step's
- * name and the target type. Falls back to the target type.
+ * Refine the edge "kind" of a script step's own target — the script a Perform
+ * Script runs, the layout a Go to Layout goes to, the field a Set Field sets —
+ * from the step's name. Falls back to the target type. Not for what the step's
+ * calculations read: those are plain uses (scanRefs scans them with
+ * `inChunkList`).
  */
 export function edgeKind(targetType: ObjectType, stepName: string | undefined): string {
-  const step = (stepName ?? "").toLowerCase();
-  if (targetType === "script" && step.includes("perform script")) return "performScript";
-  if (targetType === "layout" && step.includes("go to layout")) return "goToLayout";
-  if (targetType === "field" && step.includes("set field")) return "setField";
+  if (stepName == null) return targetType;
+  if (targetType === "script" && isPerformScriptStep(stepName)) return "performScript";
+  if (targetType === "layout" && stepName === GO_TO_LAYOUT_STEP) return "goToLayout";
+  if (targetType === "field" && stepName === SET_FIELD_STEP) return "setField";
   return targetType;
 }

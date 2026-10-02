@@ -1,6 +1,7 @@
 import type { ScriptStep } from "@/types/ddr";
 import { renderedStepText } from "../context";
-import { attr, child, children, isRecord } from "../xmlUtils";
+import { INSERT_TEXT_STEP } from "../stepNames";
+import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 
 /** Build the ordered step list shown in a script's inspector. */
@@ -8,7 +9,7 @@ export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap
   const steps: ScriptStep[] = [];
   for (const step of children(stepsContainer, "Step")) {
     if (!isRecord(step)) continue;
-    const name = decodeEntities(attr(step, "name") ?? "(step)");
+    const name = textAttr(step, "name") ?? "(step)";
     steps.push({
       index: steps.length + 1,
       name,
@@ -54,7 +55,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   const base = flattenNewlinesOutsideBrackets(stripped);
 
   // Insert Text omits the text value from StepText — append it from ParameterValues.
-  if (name === "Insert Text") {
+  if (name === INSERT_TEXT_STEP) {
     const text = insertTextValue(step);
     if (text) return base ? `${base} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
   }

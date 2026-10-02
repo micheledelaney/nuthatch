@@ -8,9 +8,9 @@ import type { FileParse } from "@/core/parser/context";
 vi.mock("@/core/parser/objects/scripts", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/core/parser/objects/scripts")>();
   return {
-    parseScripts: (containerNode: Record<string, unknown>, fp: FileParse) => {
+    parseScripts: (fp: FileParse, containerNode: Record<string, unknown>) => {
       if (fp.file.name === "BAD") throw new Error("boom");
-      original.parseScripts(containerNode, fp);
+      original.parseScripts(fp, containerNode);
     },
   };
 });

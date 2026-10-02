@@ -1,6 +1,5 @@
 import type { FmObject } from "@/types/ddr";
-import { attr, child, collectText, isRecord, withoutKey } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { child, collectText, isRecord, textAttr, withoutKey } from "../xmlUtils";
 
 /**
  * A <Theme> names itself with a reverse-DNS id (`com.filemaker.theme.apex_blue`);
@@ -12,8 +11,8 @@ import { decodeEntities } from "../entities";
  * like rather than just version/locale bookkeeping.
  */
 export function annotateTheme(node: Record<string, unknown>, obj: FmObject): FmObject {
-  const display = attr(node, "Display");
-  const name = display ? decodeEntities(display) : obj.name;
+  const display = textAttr(node, "Display");
+  const name = display || obj.name;
   // Now the object's title; don't repeat it as a raw property row.
   const attributes = display ? withoutKey(obj.attributes, "Display") : obj.attributes;
   return {

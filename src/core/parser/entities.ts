@@ -16,17 +16,20 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
  * **Policy.** Decode once, at the boundary between parsed XML and stored
  * model: the parser decodes every name, label, and attribute value — and the
  * rendered script-step text (stepParams, which keeps `&#13;` as newlines) —
- * before writing it into `FmObject.name`, `attributes`, or `detail`. UI
- * components treat strings off the model as already-decoded and never call
- * decodeEntities a second time: a second pass turns a literal `&amp;` in a
- * name into `&`. (`FmObject.text` is the search index, built from the raw XML;
- * it isn't display text.)
+ * before writing it into `FmObject.name`, `attributes`, or `detail`. Read
+ * them through `textAttr` (an attribute) and `displayText` (an element's
+ * text), the two decoding readers. UI components treat strings off the model
+ * as already-decoded and never call decodeEntities a second time: a second
+ * pass turns a literal `&amp;` in a name into `&`. (`FmObject.text` is the
+ * search index, built from the raw XML; it isn't display text.)
  *
- * Calculation formulas are the exception that needs no decoding at all: every
- * export writes them as CDATA, so calculationText returns them verbatim
- * (`detail.body`, and calc-valued attributes such as `validationCalculation`,
- * `installCondition`, `hideWhen`, `tooltip`). Decoding one would corrupt a
- * formula that builds HTML or XML (`"&amp;"` would read as `"&"`).
+ * CDATA is never decoded: its content is literal text. The XML parser keeps it
+ * under its own key (CDATA_KEY), so `displayText` decodes only character data.
+ * Calculation formulas are always CDATA, so calculationText returns them
+ * verbatim (`detail.body`, and calc-valued attributes such as
+ * `validationCalculation`, `installCondition`, `hideWhen`, `tooltip`), as are
+ * layout text and labels (`<Data>`). Decoding one would corrupt a formula that
+ * builds HTML or XML (`"&amp;"` would read as `"&"`).
  */
 export function decodeEntities(input: string): string {
   if (!input.includes("&")) return input;

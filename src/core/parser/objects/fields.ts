@@ -1,11 +1,11 @@
 import type { FmObject, ObjectDetail } from "@/types/ddr";
-import { fieldCatalogs, type FileParse } from "../context";
-import { attr, child, children, collectText, enabledLabels, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import type { FileParse } from "../context";
+import { attr, child, children, collectText, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
+import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { activeFieldNode } from "../refs/activeOptions";
-import { collectCatalogItems, makeObject } from "./catalogItems";
+import { makeObject } from "./catalogItems";
 import { calculationText, qualifiedField } from "./common";
 
 /**
@@ -13,25 +13,25 @@ import { calculationText, qualifiedField } from "./common";
  * FieldsForTables section, each FieldCatalog keyed back to its base table by a
  * leading <BaseTableReference>.
  */
-export function parseTablesAndFields(containerNode: Record<string, unknown>, fp: FileParse): void {
+export function parseTablesAndFields(fp: FileParse, containerNode: Record<string, unknown>): void {
   const tableUidById = new Map<string, string>();
   for (const table of collectCatalogItems(containerNode["BaseTableCatalog"], "BaseTable")) {
-    const tableObj = makeObject(table, "table", fp);
+    const tableObj = makeObject(fp, table, "table");
     if (!tableObj) continue;
     fp.objects.push(tableObj);
     tableUidById.set(tableObj.id, tableObj.uid);
   }
   for (const catalog of fieldCatalogs(containerNode)) {
     const tableUid = tableUidById.get(catalog.tableId);
-    if (tableUid) addFields(catalog.node, tableUid, catalog.tableId, fp);
+    if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId);
   }
 }
 
-function addFields(fieldContainer: unknown, tableUid: string, tableId: string, fp: FileParse): void {
+function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tableId: string): void {
   for (const field of collectCatalogItems(fieldContainer, "Field")) {
     // Field ids are unique only within a base table, so namespace the uid by
     // the owning table to keep object uids globally unique.
-    const base = makeObject(field, "field", fp, tableUid, tableId);
+    const base = makeObject(fp, field, "field", tableUid, tableId);
     if (!base || !isRecord(field)) continue;
     const fieldObj = annotateField(field, base);
     fp.objects.push(fieldObj);
@@ -120,7 +120,7 @@ function annotateField(fieldNode: Record<string, unknown>, fieldObj: FmObject): 
 /** Global storage, container storage, repetitions, and indexing (all in <Storage>). */
 function storageAttributes(fieldNode: Record<string, unknown>, storage: unknown): Record<string, string> {
   const a: Record<string, string> = {};
-  if (attr(storage, "global") === "True") a.global = "true";
+  if (attr(storage, "global") === "True") a.global = "Yes";
   // Container fields: where the data lives — in the file, or externally.
   if (attr(fieldNode, "datatype") === "Binary") a.containerStorage = containerStorage(storage);
   // Repetitions beyond the default single value are worth surfacing.
@@ -130,8 +130,8 @@ function storageAttributes(fieldNode: Record<string, unknown>, storage: unknown)
   const index = attr(storage, "index");
   if (index && index !== "None") a.indexing = index;
   if (attr(storage, "autoIndex") === "True") a.autoIndex = "Yes";
-  const indexLanguage = attr(child(storage, "LanguageReference"), "name");
-  if (indexLanguage && (a.indexing || a.autoIndex)) a.indexLanguage = decodeEntities(indexLanguage);
+  const indexLanguage = textAttr(child(storage, "LanguageReference"), "name");
+  if (indexLanguage && (a.indexing || a.autoIndex)) a.indexLanguage = indexLanguage;
   return a;
 }
 
@@ -144,9 +144,9 @@ function containerStorage(storage: unknown): string {
   const remote = child(storage, "Remote");
   if (!isRecord(remote)) return "In file";
   const dirRef = child(remote, "BaseDirectoryReference");
-  const dir = attr(dirRef, "name");
+  const dir = textAttr(dirRef, "name");
   const parts = [`External (${attr(remote, "type") ?? "Secure"})`];
-  if (dir) parts.push(decodeEntities(dir));
+  if (dir) parts.push(dir);
   if (attr(dirRef, "absolute") === "True") parts.push("absolute path");
   if (attr(remote, "withFewerFolders") === "True") parts.push("fewer folders");
   return parts.join(" · ");
@@ -176,7 +176,7 @@ function fieldFormula(
     ...(body ? { detail: { kind: "calculation", signature: autoEnterCalc != null ? "Auto-enter calculation" : "", body } } : {}),
     attributes: {
       // An unstored calculation opts out of storing results.
-      ...(calc != null && attr(storage, "storeCalculationResults") === "False" ? { unstored: "true" } : {}),
+      ...(calc != null && attr(storage, "storeCalculationResults") === "False" ? { unstored: "Yes" } : {}),
       ...(contextToId != null ? { calcContextToId: contextToId } : {}),
     },
   };
@@ -190,8 +190,8 @@ function summaryDetail(fieldNode: Record<string, unknown>): ObjectDetail | undef
   const operation = SUMMARY_OPERATION_LABELS[attr(summaryInfo, "operation") ?? ""] ?? "Summary of";
   const fields: string[] = [];
   for (const sf of children(summaryInfo, "SummaryField")) {
-    const name = attr(child(sf, "FieldReference"), "name");
-    if (name) fields.push(decodeEntities(name));
+    const name = textAttr(child(sf, "FieldReference"), "name");
+    if (name) fields.push(name);
   }
   return { kind: "summary", operation, fields };
 }
@@ -215,7 +215,7 @@ function autoEnterAttributes(autoEnter: unknown): Record<string, string> {
   const a: Record<string, string> = {};
   const type = attr(autoEnter, "type");
   if (type === "ConstantData") {
-    const value = decodeEntities(collectText(autoEnter["ConstantData"]).trim());
+    const value = displayText(autoEnter["ConstantData"]);
     a.autoEnter = value ? `Data: ${value}` : "Data";
   } else if (type && type !== "Calculated") {
     a.autoEnter = AUTO_ENTER_LABELS[type] ?? type;
@@ -267,12 +267,12 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
   }
   // A deleted value list stays referenced, as id -1 with an empty name.
   const valueListRef = child(validation, "ValueListReference");
-  if (valueListRef != null) requirements.push(`In value list “${decodeEntities(attr(valueListRef, "name") ?? "") || UNKNOWN_TARGET}”`);
+  if (valueListRef != null) requirements.push(`In value list “${textAttr(valueListRef, "name") || UNKNOWN_TARGET}”`);
   const range = child(validation, "Range");
   if (range != null) {
-    const from = attr(range, "from");
-    const to = attr(range, "to");
-    requirements.push(from != null && to != null ? `In range ${decodeEntities(from)} to ${decodeEntities(to)}` : "In range");
+    const from = textAttr(range, "from");
+    const to = textAttr(range, "to");
+    requirements.push(from != null && to != null ? `In range ${from} to ${to}` : "In range");
   }
   // Validation by calculation: <Calculated><Calculation>, left in place with
   // enable="False" when the option is switched off.
@@ -302,5 +302,5 @@ function validationMessage(validation: Record<string, unknown>): string {
   if (isRecord(messageCalc)) {
     return attr(messageCalc, "enable") === "False" ? "" : calculationText(messageCalc["Calculation"]);
   }
-  return decodeEntities(collectText(validation["Message"]).trim());
+  return displayText(validation["Message"]);
 }

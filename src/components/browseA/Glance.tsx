@@ -65,8 +65,8 @@ function linkOrText(obj: FmObject | null, fallback: string | undefined, onGo: On
 /** How a field keeps its value: global, unstored (unstored calcs and every
  * summary field), a container's location, or stored (with its index level). */
 function fieldStorage(a: Record<string, string>): string {
-  if (a.global === "true") return "Global";
-  if (a.unstored === "true" || a.fieldtype === "Summary") return "Unstored";
+  if (a.global === "Yes") return "Global";
+  if (a.unstored === "Yes" || a.fieldtype === "Summary") return "Unstored";
   if (a.containerStorage) return a.containerStorage;
   return a.indexing ? `Stored · ${a.indexing} index` : "Stored";
 }

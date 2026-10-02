@@ -1,8 +1,10 @@
 import type { FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { isRecord } from "../xmlUtils";
+import { collectCatalogItems } from "../catalogWalk";
+import { occurrenceSource } from "../occurrences";
 import { scanRefs } from "../refs/scanRefs";
-import { collectCatalogItems, makeObject } from "./catalogItems";
+import { makeObject } from "./catalogItems";
 import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs } from "./customFunctions";
 import { annotateExternalDataSource } from "./dataSources";
 import { annotateCustomMenu, annotateCustomMenuSet } from "./menus";
@@ -27,18 +29,18 @@ interface CatalogSpec {
   itemTag: string;
   type: ObjectType;
   /** The object with its type-specific attributes and detail. */
-  annotate?: (item: Item, obj: FmObject, fp: FileParse) => FmObject;
+  annotate?: (item: Item, obj: FmObject) => FmObject;
   /** What to scan for the item's own references: the whole item unless given;
    * "none" when nothing in it is a dependency. */
   scan?: "none" | ((item: Item) => unknown);
   /** References recorded after the scan, from outside the item's own element
    * scan (a separately stored formula, the sets granting a privilege, …). */
-  addRefs?: (item: Item, obj: FmObject, fp: FileParse) => void;
+  addRefs?: (fp: FileParse, item: Item, obj: FmObject) => void;
 }
 
 /** The catalogs, in the order their objects are emitted. Missing catalogs are
- * skipped. */
-function catalogSpecs(containerNode: Record<string, unknown>): CatalogSpec[] {
+ * skipped. A table, not logic: one entry per catalog. */
+function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): CatalogSpec[] {
   const valueLists = valueListContents(containerNode);
   const cfCalcs = customFunctionCalcs(containerNode);
   return [
@@ -52,7 +54,13 @@ function catalogSpecs(containerNode: Record<string, unknown>): CatalogSpec[] {
       scan: recordAccessCalcs,
     },
     { catalogKey: "AccountsCatalog", itemTag: "Account", type: "account", annotate: annotateAccount },
-    { catalogKey: "TableOccurrenceCatalog", itemTag: "TableOccurrence", type: "tableOccurrence", annotate: annotateTableOccurrence },
+    {
+      catalogKey: "TableOccurrenceCatalog",
+      itemTag: "TableOccurrence",
+      type: "tableOccurrence",
+      annotate: (item, obj) =>
+        annotateTableOccurrence(item, obj, fp.index.occurrenceSources.get(obj.id) ?? occurrenceSource(item, fp.index.dataSourceIds)),
+    },
     { catalogKey: "RelationshipCatalog", itemTag: "Relationship", type: "relationship", annotate: annotateRelationship },
     {
       catalogKey: "ValueListCatalog",
@@ -61,14 +69,14 @@ function catalogSpecs(containerNode: Record<string, unknown>): CatalogSpec[] {
       annotate: (item, obj) => annotateValueList(item, obj, valueLists),
       // Only the in-effect parts of its contents are dependencies (addValueListRefs).
       scan: "none",
-      addRefs: (item, obj, fp) => addValueListRefs(fp, item, obj, valueLists),
+      addRefs: (refFp, item, obj) => addValueListRefs(refFp, item, obj, valueLists),
     },
     {
       catalogKey: "CustomFunctionsCatalog",
       itemTag: "CustomFunction",
       type: "customFunction",
       annotate: (item, obj) => annotateCustomFunction(item, obj, cfCalcs),
-      addRefs: (_item, obj, fp) => addCustomFunctionCalcRefs(fp, obj, cfCalcs),
+      addRefs: (refFp, _item, obj) => addCustomFunctionCalcRefs(refFp, obj, cfCalcs),
     },
     {
       catalogKey: "ExtendedPrivilegesCatalog",
@@ -101,15 +109,15 @@ function catalogSpecs(containerNode: Record<string, unknown>): CatalogSpec[] {
 }
 
 /** Every object of the catalogs in catalogSpecs, with its references. */
-export function parseCatalogs(containerNode: Record<string, unknown>, fp: FileParse): void {
-  for (const spec of catalogSpecs(containerNode)) {
+export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>): void {
+  for (const spec of catalogSpecs(fp, containerNode)) {
     for (const item of collectCatalogItems(containerNode[spec.catalogKey], spec.itemTag)) {
-      const base = makeObject(item, spec.type, fp);
+      const base = makeObject(fp, item, spec.type);
       if (!base || !isRecord(item)) continue;
-      const obj = spec.annotate ? spec.annotate(item, base, fp) : base;
+      const obj = spec.annotate ? spec.annotate(item, base) : base;
       fp.objects.push(obj);
       if (spec.scan !== "none") scanRefs(fp, spec.scan ? spec.scan(item) : item, obj);
-      spec.addRefs?.(item, obj, fp);
+      spec.addRefs?.(fp, item, obj);
     }
   }
 }

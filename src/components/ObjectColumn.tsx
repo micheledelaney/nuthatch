@@ -435,7 +435,7 @@ export function DetailsProps({
           </>
         )}
 
-        {a.unstored === "true" && (
+        {a.unstored === "Yes" && (
           <>
             <dt>Storage</dt>
             <dd style={{ color: "var(--warn)" }}>Unstored calculation</dd>

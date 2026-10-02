@@ -1,14 +1,14 @@
 import type { ObjectType, RawReference } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, children, collectText, isElementKey, isRecord, withoutKey } from "../xmlUtils";
+import { asArray, attr, child, children, displayText, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
-import { PSEUDO_MENU_SETS, UNKNOWN_TARGET } from "../sentinels";
+import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
 import { chunkListMatchesText, quotedGlobalVariables } from "../calcText";
 import { activeAutoEnter, activeValidation } from "./activeOptions";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
-import { brokenRef, globalVariableRef, pushRef, type RefOwner, type ScanCtx } from "./refBuilders";
+import { brokenRef, globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
 
 /**
  * Walk an object body and record a reference for every nested element whose tag
@@ -17,9 +17,9 @@ import { brokenRef, globalVariableRef, pushRef, type RefOwner, type ScanCtx } fr
  * a reference buried inside a step's parameters is still attributed to the
  * right step).
  */
-export function scanRefs(fp: FileParse, node: unknown, owner: RefOwner, ctx: ScanCtx = {}, inChunkList = false): void {
+export function scanRefs(fp: FileParse, node: unknown, owner: RefOwner, ctx: ScanContext = {}): void {
   if (Array.isArray(node)) {
-    for (const item of node) scanRefs(fp, item, owner, ctx, inChunkList);
+    for (const item of node) scanRefs(fp, item, owner, ctx);
     return;
   }
   if (!isRecord(node)) return;
@@ -30,54 +30,79 @@ export function scanRefs(fp: FileParse, node: unknown, owner: RefOwner, ctx: Sca
 
   for (const [key, value] of Object.entries(node)) {
     if (!isElementKey(key)) continue;
-    switch (key) {
-      case "DDRREF":
-        // A calculation's references live in a separate <_HASH><ChunkList> block,
-        // reached only through this pointer; scan it as if inline here so the
-        // field / function references resolve with full id + occurrence context
-        // (and a script step's index carries through `ctx`). Guard against
-        // nested pointers.
-        if (!inChunkList) followChunkLists(fp, node, value, owner, ctx);
-        continue;
-      case "AutoEnter":
-        for (const el of asArray(value)) scanRefs(fp, activeAutoEnter(el), owner, ctx, inChunkList);
-        continue;
-      case "Validation":
-        for (const el of asArray(value)) scanRefs(fp, activeValidation(el), owner, ctx, inChunkList);
-        continue;
-      case "Chunk":
-        scanChunks(fp, value, owner, ctx, inChunkList);
-        continue;
-      case "Map":
-        // Import Records lists every field of the target table as a <Map>: kind 0
-        // "import to", kind 2 "match with" (update matching records), and kind 1
-        // "not import to" — which isn't a use of the field.
-        for (const el of asArray(value)) {
-          if (attr(el, "kind") !== "1") scanRefs(fp, el, owner, ctx, inChunkList);
-        }
-        continue;
-      case "ScriptTrigger":
-        // A script trigger whose script was deleted keeps its event but loses its
-        // <ScriptReference> (FileMaker shows the script as <unknown>).
-        for (const el of asArray(value)) {
-          if (isRecord(el) && el["ScriptReference"] == null) {
-            pushRef(fp.references, brokenRef(owner.uid, "script", UNKNOWN_TARGET, "trigger"), ctx);
-          }
-          scanRefs(fp, el, owner, { ...ctx, inTrigger: true }, inChunkList);
-        }
-        continue;
-      case "Name":
-      case "Variable":
-        // The global a Set Variable step writes (<Name value>) or a step stores its
-        // result in (<Variable value>, e.g. Insert from URL's target) isn't a calc,
-        // so no chunk records it. (Still scanned below: a target's repetition is.)
-        for (const el of asArray(value)) {
-          const variable = decodeEntities(attr(el, "value") ?? "").trim();
-          if (variable.startsWith("$$")) pushRef(fp.references, globalVariableRef(owner.uid, variable), ctx);
-        }
-        break;
+    if (scanSpecialElements(fp, node, key, value, owner, ctx)) continue;
+    scanElements(fp, key, value, owner, ctx, externalFileName);
+  }
+}
+
+/** The element keys that need more than the generic scan. True when the
+ * elements are fully handled here. */
+function scanSpecialElements(
+  fp: FileParse,
+  node: Record<string, unknown>,
+  key: string,
+  value: unknown,
+  owner: RefOwner,
+  ctx: ScanContext,
+): boolean {
+  switch (key) {
+    case "DDRREF":
+      // A calculation's references live in a separate <_HASH><ChunkList> block,
+      // reached only through this pointer; scan it as if inline here so the
+      // field / function references resolve with full id + occurrence context
+      // (and a script step's index carries through `ctx`). Guard against
+      // nested pointers.
+      if (!ctx.inChunkList) followChunkLists(fp, node, value, owner, ctx);
+      return true;
+    case "AutoEnter":
+      for (const el of asArray(value)) scanRefs(fp, activeAutoEnter(el), owner, ctx);
+      return true;
+    case "Validation":
+      for (const el of asArray(value)) scanRefs(fp, activeValidation(el), owner, ctx);
+      return true;
+    case "Chunk":
+      scanChunks(fp, value, owner, ctx);
+      return true;
+    case "Map":
+      // Import Records lists every field of the target table as a <Map>: kind 0
+      // "import to", kind 2 "match with" (update matching records), and kind 1
+      // "not import to" — which isn't a use of the field.
+      for (const el of asArray(value)) {
+        if (attr(el, "kind") !== "1") scanRefs(fp, el, owner, ctx);
+      }
+      return true;
+    case "ScriptTrigger":
+      scanTriggers(fp, value, owner, ctx);
+      return true;
+    case "Name":
+    case "Variable":
+      addVariableTargetRefs(fp, value, owner, ctx);
+      // Still scanned generically: a target's repetition is a calc.
+      return false;
+    default:
+      return false;
+  }
+}
+
+/** Script triggers: their script is a "trigger" edge. A trigger whose script
+ * was deleted keeps its event but loses its <ScriptReference> (FileMaker shows
+ * the script as <unknown>). */
+function scanTriggers(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanContext): void {
+  for (const el of asArray(value)) {
+    if (isRecord(el) && el["ScriptReference"] == null) {
+      pushRef(fp.references, brokenRef(owner.uid, "script", UNKNOWN_TARGET, "trigger"), ctx);
     }
-    scanElements(fp, key, value, owner, ctx, inChunkList, externalFileName);
+    scanRefs(fp, el, owner, { ...ctx, inTrigger: true });
+  }
+}
+
+/** The global a Set Variable step writes (<Name value>) or a step stores its
+ * result in (<Variable value>, e.g. Insert from URL's target): not a calc, so
+ * no chunk records it. */
+function addVariableTargetRefs(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanContext): void {
+  for (const el of asArray(value)) {
+    const variable = (textAttr(el, "value") ?? "").trim();
+    if (variable.startsWith("$$")) pushRef(fp.references, globalVariableRef(owner.uid, variable), ctx);
   }
 }
 
@@ -88,8 +113,7 @@ function scanElements(
   key: string,
   value: unknown,
   owner: RefOwner,
-  ctx: ScanCtx,
-  inChunkList: boolean,
+  ctx: ScanContext,
   externalFileName: string | undefined,
 ): void {
   const targetType = FMSAVEAS_REF_TAGS[key];
@@ -106,13 +130,14 @@ function scanElements(
         stepName: attr(el, "name") ?? ctx.stepName,
         stepIndex,
         ...(ctx.disabled || attr(el, "enable") === "False" ? { disabled: true } : {}),
+        ...(ctx.inChunkList ? { inChunkList: true } : {}),
       };
-      addStepTargetRefs(fp.chunks, el, owner.uid, childCtx, fp.references);
+      addStepTargetRefs(fp, el, owner.uid, childCtx);
     }
     // A field read through a deleted occurrence (<Table Missing>, id -1) is one
     // broken reference, not two: don't also emit the dead occurrence itself.
     const deadOccurrence = targetType === "field" && isRecord(el) && attr(child(el, "TableOccurrenceReference"), "id") === "-1";
-    scanRefs(fp, deadOccurrence ? withoutKey(el, "TableOccurrenceReference") : el, owner, childCtx, inChunkList);
+    scanRefs(fp, deadOccurrence ? withoutKey(el, "TableOccurrenceReference") : el, owner, childCtx);
   }
 }
 
@@ -122,12 +147,12 @@ function elementRef(
   el: Record<string, unknown>,
   targetType: ObjectType,
   fromUid: string,
-  ctx: ScanCtx,
+  ctx: ScanContext,
   externalFileName: string | undefined,
 ): RawReference | undefined {
   const id = attr(el, "id");
   if (id == null) return undefined;
-  const name = decodeEntities(attr(el, "name") ?? "");
+  const name = textAttr(el, "name") ?? "";
   // FileMaker writes a placeholder <FieldReference id="0" name="" UUID="">
   // for every UNMAPPED source column in Import Records (one per slot, even
   // the hundreds that aren't being imported). They aren't real references;
@@ -148,7 +173,7 @@ function elementRef(
     toType: targetType,
     toId: id,
     toName: name,
-    kind: ctx.inTrigger && targetType === "script" ? "trigger" : edgeKind(targetType, ctx.stepName),
+    kind: refKind(targetType, ctx),
     // The data source itself is this file's own catalog entry, not a target
     // inside the external file.
     ...(externalFileName != null && targetType !== "externalDataSource" ? { toFileName: externalFileName } : {}),
@@ -157,18 +182,19 @@ function elementRef(
   };
 }
 
-/** A `<DataSourceReference id="0">` names the current file ("Current File" in
- * Close File, Re-Login, …) — except FileMaker's `<unknown>` for a data source
- * that was deleted. */
-export function namesCurrentFile(id: string | undefined, name: string): boolean {
-  return id === "0" && name !== UNKNOWN_TARGET;
+/** A reference's edge kind: a trigger's script, a step's own target (see
+ * edgeKind), or — for what a calculation reads, even inside a step — the plain
+ * target type. (A Set Field's value calc reads fields; it doesn't set them.) */
+function refKind(targetType: ObjectType, ctx: ScanContext): string {
+  if (ctx.inTrigger && targetType === "script") return "trigger";
+  return ctx.inChunkList ? targetType : edgeKind(targetType, ctx.stepName);
 }
 
 /** The external file a <DataSourceReference> points into, or undefined when
  * there is none or it names the current file. */
 function externalFileOf(dataSourceRef: unknown): string | undefined {
   if (dataSourceRef == null) return undefined;
-  const name = decodeEntities(attr(dataSourceRef, "name") ?? "");
+  const name = textAttr(dataSourceRef, "name") ?? "";
   return namesCurrentFile(attr(dataSourceRef, "id"), name) ? undefined : name;
 }
 
@@ -180,13 +206,13 @@ function externalFileOf(dataSourceRef: unknown): string | undefined {
  * chunks of their own, so a $$name mentioned in one is never counted); a global
  * passed by name as a whole string literal is plain text in a NoRef chunk.
  */
-function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanCtx, inChunkList: boolean): void {
+function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanContext): void {
   for (const el of asArray(value)) {
     if (isRecord(el)) {
       const type = attr(el, "type");
       const raw = el["#text"];
       const text = typeof raw === "string" ? decodeEntities(raw.trim()) : "";
-      const cfId = type === "CustomFunctionRef" && text ? fp.chunks.cfByName.get(text) : undefined;
+      const cfId = type === "CustomFunctionRef" && text ? fp.index.cfByName.get(text) : undefined;
       if (cfId != null) {
         pushRef(fp.references, { fromUid: owner.uid, toType: "customFunction", toId: cfId, toName: text, kind: "customFunction" }, ctx);
       }
@@ -199,7 +225,7 @@ function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanCtx
       for (const name of globals) pushRef(fp.references, globalVariableRef(owner.uid, name), ctx);
     }
     // Recurse to capture the <FieldReference> inside a FieldRef chunk.
-    scanRefs(fp, el, owner, ctx, inChunkList);
+    scanRefs(fp, el, owner, ctx);
   }
 }
 
@@ -211,17 +237,19 @@ function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanCtx
  * a deleted field or table) or a block shared through a UUID-less pointer — the
  * references are recovered from the formula text instead.
  */
-function followChunkLists(fp: FileParse, calc: Record<string, unknown>, pointers: unknown, owner: RefOwner, ctx: ScanCtx): void {
+function followChunkLists(fp: FileParse, calc: Record<string, unknown>, pointers: unknown, owner: RefOwner, ctx: ScanContext): void {
+  // The formula as written: CDATA verbatim (a chunk's text is entity-encoded,
+  // and chunkListMatchesText decodes that side).
   const textNode = calc["Text"];
-  const calcText = textNode == null ? undefined : decodeEntities(typeof textNode === "string" ? textNode : collectText(textNode));
+  const calcText = textNode == null ? undefined : displayText(textNode);
   for (const el of asArray(pointers)) {
     if (!isRecord(el) || attr(el, "kind") !== "ChunkList") continue;
     const ptr = el["#text"];
-    const block = typeof ptr === "string" ? fp.chunks.lists.get(ptr) : undefined;
+    const block = typeof ptr === "string" ? fp.index.lists.get(ptr) : undefined;
     if (block && chunkBlockBelongsTo(block, attr(el, "hash"), calcText)) {
-      scanRefs(fp, block, owner, ctx, true);
+      scanRefs(fp, block, owner, { ...ctx, inChunkList: true });
     } else if (calcText?.trim()) {
-      scanCalcTextRefs(fp.chunks, calcText, calc, owner, ctx, fp.references);
+      scanCalcTextRefs(fp, calcText, calc, owner, ctx);
     }
   }
 }
@@ -242,4 +270,3 @@ function chunkBlockBelongsTo(block: unknown, pointerHash: string | undefined, ca
   // this calc's own text (with no text to compare, trust it).
   return calcText == null || chunkListMatchesText(list, calcText);
 }
-

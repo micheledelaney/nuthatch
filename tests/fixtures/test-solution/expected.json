@@ -63,7 +63,7 @@
       "MAIN:field:T_Main::f_ValMsgCalc": {"validation": "Not empty, Existing value", "validationMessage": "\"Bad: \" & f_Text"},
       "MAIN:field:T_Main::f_ValMsgOff": {"validation": "Not empty", "validationMessage": {"absent": true}},
       "MAIN:field:T_Main::f_ValDelVL": {"validation": {"contains": "In value list"}},
-      "MAIN:field:T_Main::g_Global": {"global": "true"},
+      "MAIN:field:T_Main::g_Global": {"global": "Yes"},
       "MAIN:field:T_Main::f_Rep": {"repetitions": "5"},
       "MAIN:field:T_Main::f_Indexed": {"indexing": "All", "indexLanguage": "German"},
       "MAIN:field:T_Main::f_Cont": {"containerStorage": "External (Secure) · TEST_MAIN/", "validation": "Max 500 KB"},
@@ -74,10 +74,10 @@
       "MAIN:field:T_Main::f_LastVisited": {"autoEnter": "Value from last visited record"},
       "MAIN:field:T_Main::f_AECalc": {"autoEnterOptions": "Prohibit modification"},
       "MAIN:field:T_Main::c_Stored": {"unstored": {"absent": true}},
-      "MAIN:field:T_Main::c_Unstored": {"unstored": "true"},
-      "MAIN:field:T_Main::c_Deep": {"unstored": "true"},
-      "MAIN:field:T_Main::c_Ext": {"unstored": "true"},
-      "MAIN:field:T_Main::c_DelTO": {"unstored": "true"},
+      "MAIN:field:T_Main::c_Unstored": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_Deep": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_Ext": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_DelTO": {"unstored": "Yes"},
       "MAIN:tableOccurrence:TO_Ext": {"baseTable": "E_Table", "externalDataSource": "DS_Ext"},
       "MAIN:tableOccurrence:TO_ExtMissing": {"baseTableId": {"absent": true}, "baseTableUnresolved": {"present": true}},
       "MAIN:tableOccurrence:TO_VarPath": {"baseTableId": {"absent": true}, "baseTableUnresolved": {"present": true}},
@@ -110,7 +110,7 @@
       "MAIN:extendedPrivilege:xpTest": {"description": "Test keyword"},
       "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}},
       "MAIN:valueList:VL_External": {"source": "External"},
-      "MAIN:field:T_Main::c_DelField": {"unstored": "true"}
+      "MAIN:field:T_Main::c_DelField": {"unstored": "Yes"}
     },
     "folders": {
       "MAIN:script:S_Main": "Test",

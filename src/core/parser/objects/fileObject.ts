@@ -1,7 +1,6 @@
 import type { FmFile, FmObject, LayoutTriggerInfo } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, collectText, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { attr, child, displayText, isRecord, textAttr } from "../xmlUtils";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
 import { scriptTriggers } from "./common";
@@ -69,7 +68,7 @@ function fileMetadata(metadata: unknown): { attributes: Record<string, string>; 
     // Read only the account, never the sibling password the DDR stores in clear.
     const login = child(add, "Login");
     if (isRecord(login)) {
-      const account = decodeEntities(collectText(login["AccountName"]) || collectText(login["UserName"])).trim();
+      const account = displayText(login["AccountName"]) || displayText(login["UserName"]);
       attributes.autoLogin = account ? `Account “${account}”` : "Guest account";
     }
     // Encryption at rest: type 0 means none.
@@ -109,6 +108,6 @@ function fileAccessOptions(containerNode: unknown): Record<string, string> {
  * (in <Structure>), beside the menu sets themselves.
  */
 function defaultMenuSet(containerNode: unknown): Record<string, string> {
-  const name = attr(child(child(containerNode, "CustomMenuSetCatalog"), "CustomMenuSetReference"), "name");
-  return name ? { defaultMenuSet: decodeEntities(name) } : {};
+  const name = textAttr(child(child(containerNode, "CustomMenuSetCatalog"), "CustomMenuSetReference"), "name");
+  return name ? { defaultMenuSet: name } : {};
 }

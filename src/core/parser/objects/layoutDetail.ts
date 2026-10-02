@@ -1,8 +1,7 @@
 import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
-import { asArray, attr, child, children, collectText, isElementKey, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { asArray, attr, child, children, collectText, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
-import { calculationText, qualifiedField, scriptTriggers } from "./common";
+import { BUTTON_ACTION_TAGS, calculationText, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
 import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
@@ -29,24 +28,37 @@ export function layoutDetail(
   const partsList = child(node, "PartsList");
   if (!isRecord(node) || !isRecord(partsList)) return undefined;
   const cx: DetailContext = { stepTextByHash, sources: new Map() };
+  const rawParts = layoutParts(partsList, cx);
+  if (rawParts.length === 0) return undefined;
+  const declaredWidth = num(attr(node, "width"));
+  const { parts, offLayout } = splitOffLayout(rawParts, declaredWidth);
+  const { width, height } = canvasSize(parts, declaredWidth);
+  return {
+    detail: { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout },
+    sources: cx.sources,
+  };
+}
 
-  const rawParts: LayoutPart[] = [];
+/** The layout's parts, each with the objects placed on it. */
+function layoutParts(partsList: Record<string, unknown>, cx: DetailContext): LayoutPart[] {
+  const parts: LayoutPart[] = [];
   for (const part of children(partsList, "Part")) {
     if (!isRecord(part)) continue;
     // The part's top offset (absolute) and height (size) live on its <Definition>.
     const def = child(part, "Definition");
-    rawParts.push({
+    parts.push({
       type: attr(part, "type") ?? "Part",
       top: num(attr(def, "absolute")),
       height: num(attr(def, "size")),
       objects: layoutObjects(part["ObjectList"], cx),
     });
   }
-  if (rawParts.length === 0) return undefined;
+  return parts;
+}
 
-  // The layout's real right edge. Objects sitting entirely to the right of it (a
-  // common "scratch area" habit) are split out so they don't stretch the canvas.
-  const declaredWidth = num(attr(node, "width"));
+/** Objects sitting entirely to the right of the layout's real right edge (a
+ * common "scratch area" habit), split out so they don't stretch the canvas. */
+function splitOffLayout(rawParts: LayoutPart[], declaredWidth: number): { parts: LayoutPart[]; offLayout: LayoutObjectInfo[] } {
   const offLayout: LayoutObjectInfo[] = [];
   const parts = rawParts.map((part) => {
     if (declaredWidth <= 0) return part;
@@ -57,9 +69,12 @@ export function layoutDetail(
     }
     return { ...part, objects: onLayout };
   });
+  return { parts, offLayout };
+}
 
-  // Canvas = the declared layout box; fall back to the on-layout object extent
-  // when the width attribute is missing.
+/** Canvas = the declared layout box; fall back to the on-layout object extent
+ * when the width attribute is missing. */
+function canvasSize(parts: LayoutPart[], declaredWidth: number): { width: number; height: number } {
   let width = declaredWidth;
   let height = parts.reduce((h, p) => Math.max(h, p.top + p.height), 0);
   if (width <= 0 || height <= 0) {
@@ -71,10 +86,7 @@ export function layoutDetail(
       }
     }
   }
-  return {
-    detail: { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout },
-    sources: cx.sources,
-  };
+  return { width, height };
 }
 
 /** The objects on one layout part (or inside a portal / tab panel / group …). */
@@ -90,8 +102,7 @@ function layoutObjects(container: unknown, cx: DetailContext): LayoutObjectInfo[
 
 function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo {
   const id = attr(obj, "id");
-  const uuidEl = child(obj, "UUID");
-  const uuid = (isRecord(uuidEl) ? collectText(uuidEl) : typeof uuidEl === "string" ? uuidEl : undefined)?.trim();
+  const uuid = uuidText(obj);
   const hash = attr(obj, "hash");
   const type = attr(obj, "type") ?? "Object";
   const bounds = child(obj, "Bounds");
@@ -111,7 +122,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
   const tooltip = isRecord(tooltipNode) ? calculationText(tooltipNode["Calculation"]) : "";
   return {
     type,
-    name: panelLabel(obj) ?? decodeEntities(attr(obj, "name") ?? ""),
+    name: panelLabel(obj) ?? textAttr(obj, "name") ?? "",
     ...(id ? { id } : {}),
     ...(uuid ? { uuid } : {}),
     ...(hash ? { hash } : {}),
@@ -121,7 +132,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
     ...(style ? { style } : {}),
     ...(info ? { info } : {}),
     // Portal: the table occurrence it shows and its visible row count.
-    ...(isRecord(portalTo) ? { portalTable: decodeEntities(attr(portalTo, "name") ?? "") } : {}),
+    ...(isRecord(portalTo) ? { portalTable: textAttr(portalTo, "name") ?? "" } : {}),
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
     ...(kids ? { children: kids } : {}),
     ...fieldBinding(obj),
@@ -186,15 +197,11 @@ function fieldBinding(obj: Record<string, unknown>): Partial<LayoutObjectInfo> {
   const fieldNode = child(obj, "Field");
   if (!isRecord(fieldNode)) return {};
   const fieldRef = child(fieldNode, "FieldReference");
-  const fieldToId = attr(fieldRef, "id");
-  const fieldViaToId = attr(child(fieldRef, "TableOccurrenceReference"), "id");
   const vlRef = child(child(fieldNode, "Display"), "ValueListReference");
   const vlId = attr(vlRef, "id");
   return {
     fieldRef: qualifiedField(fieldRef) || MISSING_FIELD_TOKEN,
-    ...(fieldToId ? { fieldToId } : {}),
-    ...(fieldViaToId ? { fieldViaToId } : {}),
-    ...(vlId ? { valueListRef: { id: vlId, name: decodeEntities(attr(vlRef, "name") ?? "") } } : {}),
+    ...(vlId ? { valueListRef: { id: vlId, name: textAttr(vlRef, "name") ?? "" } } : {}),
   };
 }
 
@@ -207,7 +214,7 @@ function buttonAction(
 ): Pick<LayoutObjectInfo, "scriptRef" | "actionStep"> {
   let scriptRef: LayoutObjectInfo["scriptRef"];
   let actionStep: LayoutObjectInfo["actionStep"];
-  for (const tag of ["GroupedButton", "Button"]) {
+  for (const tag of BUTTON_ACTION_TAGS) {
     const button = child(obj, tag);
     if (scriptRef || !isRecord(button)) continue;
     scriptRef = extractScriptRef(button["action"]);
@@ -231,12 +238,6 @@ function conditions(obj: Record<string, unknown>): Pick<LayoutObjectInfo, "hideW
     ...(hideWhen ? { hideWhen, ...(attr(hide, "findMode") === "True" ? { hideInFind: true } : {}) } : {}),
     ...(formats.length > 0 ? { conditionalFormats: formats } : {}),
   };
-}
-
-/** Strip a single layer of surrounding double-quotes (FileMaker wraps static
- * labels like `"Tab Name"` in quotes in the Calculation text). */
-function stripOuterQuotes(s: string): string {
-  return s.startsWith('"') && s.endsWith('"') && s.length > 2 ? s.slice(1, -1) : s;
 }
 
 /** Parse a numeric attribute, defaulting to 0 when missing/non-numeric. */
@@ -279,10 +280,10 @@ function normalizeLocalCss(raw: string): string {
 function behaviorLine(obj: Record<string, unknown>): string | undefined {
   const webViewer = child(child(obj, "External"), "WebViewer");
   if (isRecord(webViewer)) {
-    const url = firstChildText(webViewer, "Calculation");
+    const url = calculationText(findElement(webViewer, "Calculation"));
     return url ? `URL: ${url}` : undefined;
   }
-  for (const tag of ["Button", "GroupedButton", "PopoverButton"]) {
+  for (const tag of [...BUTTON_ACTION_TAGS, "PopoverButton"]) {
     const button = child(obj, tag);
     if (!isRecord(button)) continue;
     const label = firstTextValue(button["Label"]);
@@ -295,7 +296,7 @@ function behaviorLine(obj: Record<string, unknown>): string | undefined {
 function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {
   const sr = child(asArray(action)[0], "ScriptReference");
   if (!isRecord(sr)) return undefined;
-  const name = decodeEntities(attr(sr, "name") ?? "");
+  const name = textAttr(sr, "name") ?? "";
   return name || attr(sr, "id") ? { id: attr(sr, "id"), name, uuid: attr(sr, "UUID") } : undefined;
 }
 
@@ -304,36 +305,14 @@ function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {
 function actionStepOf(action: unknown, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo["actionStep"] {
   const step = child(asArray(action)[0], "Step");
   if (!isRecord(step)) return undefined;
-  const name = decodeEntities(attr(step, "name") ?? "");
+  const name = textAttr(step, "name") ?? "";
   return name ? { name, params: stepParams(step, name, stepTextByHash) } : undefined;
 }
 
-/** A styled label's text: its <StyledText><Data> CDATA, not the surrounding
- * <Options>/formatting nodes a broader <Text> search would also pick up. */
+/** A styled label's text: the first non-empty <StyledText><Data> under `node`,
+ * not the surrounding <Options>/formatting nodes a broader <Text> search would
+ * also pick up. */
 function firstTextValue(node: unknown): string | undefined {
-  const text = firstChildText(node, "Data");
-  return text ? decodeEntities(text) : undefined;
-}
-
-/** Find the first descendant element named `tag` with text and return that
- * text, skipping FileMaker's internal DDRREF chunk pointers. */
-function firstChildText(node: unknown, tag: string): string {
-  if (Array.isArray(node)) {
-    for (const el of node) {
-      const found = firstChildText(el, tag);
-      if (found) return found;
-    }
-    return "";
-  }
-  if (!isRecord(node)) return "";
-  if (node[tag] != null) {
-    const text = collectText(node[tag]).trim();
-    if (text) return text;
-  }
-  for (const [key, value] of Object.entries(node)) {
-    if (!isElementKey(key) || key === "DDRREF") continue;
-    const found = firstChildText(value, tag);
-    if (found) return found;
-  }
-  return "";
+  const data = findElement(node, "Data", (el) => displayText(el) !== "");
+  return data == null ? undefined : displayText(data);
 }

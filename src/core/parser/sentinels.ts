@@ -24,3 +24,13 @@ export const FILE_DEFAULT_MENU_SET = "[File Default]";
 
 /** Built-in menu-set names that aren't objects in the file's catalog. */
 export const PSEUDO_MENU_SETS: ReadonlySet<string> = new Set([FILE_DEFAULT_MENU_SET, "[Standard FileMaker Menus]"]);
+
+/** The `<DataSourceReference>` id FileMaker writes for "Current File". */
+const CURRENT_FILE_DATA_SOURCE_ID = "0";
+
+/** A `<DataSourceReference id="0">` names the current file ("Current File" in
+ * Close File, Re-Login, …) — except FileMaker's `<unknown>` for a data source
+ * that was deleted. */
+export function namesCurrentFile(id: string | undefined, name: string): boolean {
+  return id === CURRENT_FILE_DATA_SOURCE_ID && name !== UNKNOWN_TARGET;
+}

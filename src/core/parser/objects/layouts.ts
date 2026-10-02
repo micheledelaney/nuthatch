@@ -1,20 +1,19 @@
-import type { FmObject, LayoutObjectInfo } from "@/types/ddr";
+import type { FmObject, LayoutObjectInfo, ObjectDetail } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, collectText, isElementKey, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { asArray, attr, child, collectText, isElementKey, isRecord, textAttr } from "../xmlUtils";
 import { FILE_DEFAULT_MENU_SET } from "../sentinels";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
-import { addPlaceholderRefs } from "../refs/placeholderRefs";
-import { addTextGlobalRefs } from "../refs/globalVariables";
+import { addTextDerivedRefs } from "../refs/textRefs";
 import { makeObject, placeInCatalog } from "./catalogItems";
+import { stripOuterQuotes } from "./common";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
 import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./layoutDetail";
 
 /** What emitting one layout's objects needs: each object's own XML element (to
  * scan it), and the uid each element ends up with (for the FM 22 deferred
  * button targets, which name the element). */
-interface LayoutObjectsCx {
+interface LayoutObjectsContext {
   fp: FileParse;
   sources: LayoutObjectSources;
   uidOfElement: Map<Record<string, unknown>, string>;
@@ -28,15 +27,14 @@ interface LayoutObjectsCx {
  * model) is only needed for those text passes, so the layout is stored with a
  * compact term list instead as soon as they're done (compactLayoutText).
  */
-export function processOneLayout(layout: unknown, folder: string, order: number, fp: FileParse): void {
-  const base = makeObject(layout, "layout", fp);
+export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): void {
+  const base = makeObject(fp, layout, "layout");
   if (!base) return;
   const objStart = fp.objects.length;
   const refStart = fp.references.length;
   const full = buildLayout(fp, layout, placeInCatalog(base, order, folder));
   const batch = [...fp.objects.slice(objStart), full];
-  addPlaceholderRefs(fp, batch, refStart);
-  addTextGlobalRefs(fp, batch);
+  addTextDerivedRefs(fp, batch, refStart);
   fp.objects.push(full.detail?.kind === "layout" ? { ...full, text: compactLayoutText(full, full.detail) } : full);
 }
 
@@ -44,8 +42,8 @@ export function processOneLayout(layout: unknown, folder: string, order: number,
 function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): FmObject {
   if (placed.isSeparator) return placed;
   const annotated = annotateLayout(layout, placed);
-  const extracted = layoutDetail(layout, fp.chunks.stepTextByHash);
-  const cx: LayoutObjectsCx = { fp, sources: extracted?.sources ?? new Map(), uidOfElement: new Map() };
+  const extracted = layoutDetail(layout, fp.index.stepTextByHash);
+  const cx: LayoutObjectsContext = { fp, sources: extracted?.sources ?? new Map(), uidOfElement: new Map() };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
   // The layout lists everything on it, too: its own settings and every object's.
   scanRefs(fp, layout, obj);
@@ -59,21 +57,21 @@ function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): FmObject
 function annotateLayout(node: unknown, obj: FmObject): FmObject {
   if (!isRecord(node)) return obj;
   const a: Record<string, string> = {};
-  const toName = attr(child(node, "TableOccurrenceReference"), "name");
-  if (toName) a.tableOccurrence = decodeEntities(toName);
+  const toName = textAttr(child(node, "TableOccurrenceReference"), "name");
+  if (toName) a.tableOccurrence = toName;
   // hidden="True" leaves the layout out of the layout (menu) pop-up.
   if (attr(child(node, "Options"), "hidden") === "True") a.includeInLayoutMenus = "No";
   const clientType = collectText(node["ClientType"]).trim();
   if (clientType && clientType !== "0") a.clientType = clientType;
-  const menuSet = attr(child(child(node, "MenuSet"), "CustomMenuSetReference"), "name");
-  if (menuSet && menuSet !== FILE_DEFAULT_MENU_SET) a.menuSet = decodeEntities(menuSet);
+  const menuSet = textAttr(child(child(node, "MenuSet"), "CustomMenuSetReference"), "name");
+  if (menuSet && menuSet !== FILE_DEFAULT_MENU_SET) a.menuSet = menuSet;
   return { ...obj, attributes: { ...obj.attributes, ...a } };
 }
 
 /** Emit the layout's objects (and their references), returning its detail with
  * each object's uid filled in. Every part's objects come first, then the
  * off-layout ones — the order the duplicate-uid suffixes are counted in. */
-function addLayoutObjects(cx: LayoutObjectsCx, detail: LayoutDetail, layout: FmObject): LayoutDetail {
+function addLayoutObjects(cx: LayoutObjectsContext, detail: LayoutDetail, layout: FmObject): LayoutDetail {
   const parts = detail.parts.map((part) => ({ ...part, objects: addLayoutObjectTree(cx, part.objects, layout.uid, layout.id) }));
   const offLayout = addLayoutObjectTree(cx, detail.offLayout, layout.uid, layout.id);
   return { ...detail, parts, offLayout };
@@ -83,7 +81,7 @@ function addLayoutObjects(cx: LayoutObjectsCx, detail: LayoutDetail, layout: FmO
  * `id` of every ancestor from the owning layout down to (but not including)
  * these objects — e.g. `"120.2970"` for objects nested one level inside layout
  * 120's object with id 2970. */
-function addLayoutObjectTree(cx: LayoutObjectsCx, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
+function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
   const { fp } = cx;
   return infos.map((lo) => {
     // `uuid` is only populated once FileMaker has stamped this specific object with
@@ -140,25 +138,15 @@ function layoutObjectFmObject(fp: FileParse, lo: LayoutObjectInfo, uid: string, 
     parentUid,
     attributes: layoutObjectAttributes(lo),
     text: layoutObjectTerms(lo).join(" "),
-    detail: {
-      kind: "layoutObject",
-      loType: lo.type,
-      info: lo.info,
-      fieldRef: lo.fieldRef,
-      scriptRef: lo.scriptRef,
-      valueListRef: lo.valueListRef,
-      actionStep: lo.actionStep,
-      triggers: lo.triggers,
-      tooltip: lo.tooltip,
-      hideWhen: lo.hideWhen,
-      hideInFind: lo.hideInFind,
-      conditionalFormats: lo.conditionalFormats,
-      bounds: lo.bounds,
-      style: lo.style,
-      portalTable: lo.portalTable,
-      portalRows: lo.portalRows,
-    },
+    detail: layoutObjectDetail(lo),
   };
+}
+
+/** Everything the layout object shows, minus what identifies it (kept on the
+ * FmObject itself) and the objects nested in it (objects of their own). */
+function layoutObjectDetail(lo: LayoutObjectInfo): ObjectDetail {
+  const { type, name: _name, id: _id, uuid: _uuid, hash: _hash, uid: _uid, children: _children, ...shown } = lo;
+  return { kind: "layoutObject", loType: type, ...shown };
 }
 
 function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
@@ -169,7 +157,7 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
   if (lo.hash) a.hash = lo.hash;
   if (lo.bounds) a.position = `${lo.bounds.left}, ${lo.bounds.top} → ${lo.bounds.right}, ${lo.bounds.bottom}`;
   if (lo.info && lo.type !== "Web Viewer" && lo.type !== "Text") {
-    const bare = lo.info.replace(/^"|"$/g, "");
+    const bare = stripOuterQuotes(lo.info);
     if (bare) a.label = bare;
   }
   if (lo.tooltip) a.tooltip = lo.tooltip;
@@ -198,16 +186,19 @@ function withoutNestedObjects(node: unknown): unknown {
   return out;
 }
 
+/** How much of a text object's content its name shows. */
+const TEXT_NAME_MAX_LENGTH = 60;
+
 /** A human-readable name for a layout object used as its FmObject.name. */
 function nameForLayoutObj(lo: LayoutObjectInfo): string {
   if (lo.type === "Text" && lo.info) {
     const s = lo.info.trim();
-    return s.length > 60 ? s.slice(0, 60) + "…" : s;
+    return s.length > TEXT_NAME_MAX_LENGTH ? s.slice(0, TEXT_NAME_MAX_LENGTH) + "…" : s;
   }
   if (lo.fieldRef) return lo.fieldRef;
   if (lo.type === "Portal" && lo.portalTable) return `Portal (${lo.portalTable})`;
   if (lo.info) {
-    const bare = lo.info.replace(/^"|"$/g, "");
+    const bare = stripOuterQuotes(lo.info);
     if (bare) return `${lo.type} (${bare})`;
   }
   if (lo.name.trim()) return lo.name;

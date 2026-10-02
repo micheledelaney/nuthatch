@@ -1,4 +1,4 @@
-import { asArray, attr, children, isRecord } from "./xmlUtils";
+import { child, children, isRecord, textAttr } from "./xmlUtils";
 import { decodeEntities } from "./entities";
 import { isNameChar } from "@/core/identifiers";
 
@@ -60,10 +60,10 @@ export function chunkListMatchesText(chunkList: unknown, calcText: string): bool
       if (!consume(squash(decodeEntities(String(chunk))))) return false;
       continue;
     }
-    const fieldRef = asArray(chunk["FieldReference"])[0];
+    const fieldRef = child(chunk, "FieldReference");
     if (isRecord(fieldRef)) {
-      const field = squash(decodeEntities(attr(fieldRef, "name") ?? ""));
-      const to = squash(decodeEntities(attr(asArray(fieldRef["TableOccurrenceReference"])[0], "name") ?? ""));
+      const field = squash(textAttr(fieldRef, "name") ?? "");
+      const to = squash(textAttr(child(fieldRef, "TableOccurrenceReference"), "name") ?? "");
       if (!(to && consume(`${to}::${field}`)) && !consume(field)) return false;
       continue;
     }

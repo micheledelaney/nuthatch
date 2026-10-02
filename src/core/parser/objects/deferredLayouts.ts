@@ -1,11 +1,11 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, children, collectElements, collectText, findElement, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { asArray, attr, child, children, collectElements, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { edgeKind } from "../refTags";
-import { UNKNOWN_TARGET } from "../sentinels";
-import { namesCurrentFile } from "../refs/scanRefs";
-import { collectCatalogItems } from "./catalogItems";
+import { UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
+import { collectCatalogItems } from "../catalogWalk";
+import { pushRef } from "../refs/refBuilders";
+import { BUTTON_ACTION_TAGS } from "./common";
 
 /** A button (or grouped button) whose action targets a layout FM 22 names only
  * in <ModifyAction>. */
@@ -25,8 +25,6 @@ interface DeferredLayoutStep {
   layoutId: string;
   layoutName: string;
 }
-
-const BUTTON_ACTION_KEYS = ["Button", "GroupedButton"] as const;
 
 /**
  * FM 22 exports write layouts in two passes: <AddAction> defines them, then
@@ -61,18 +59,14 @@ function deferredButton(node: Record<string, unknown>): DeferredButton[] {
     const target = findElement(step, "LayoutReference");
     const layoutId = attr(target, "id");
     if (layoutId == null) return [];
-    return [{ owner, index, stepName: attr(step, "name") ?? "", layoutId, layoutName: decodeEntities(attr(target, "name") ?? "") }];
+    return [{ owner, index, stepName: attr(step, "name") ?? "", layoutId, layoutName: textAttr(target, "name") ?? "" }];
   });
   return id != null && steps.length > 0 ? [{ id, uuid: uuidText(node), steps }] : [];
 }
 
-function uuidText(node: Record<string, unknown>): string {
-  return collectText(node["UUID"]).trim();
-}
-
 /** The action steps of a layout object's button / grouped button, in order. */
 function buttonSteps(node: Record<string, unknown>): { owner: string; index: number; step: Record<string, unknown> }[] {
-  return BUTTON_ACTION_KEYS.flatMap((owner) =>
+  return BUTTON_ACTION_TAGS.flatMap((owner) =>
     children(child(child(node, owner), "action"), "Step")
       .filter(isRecord)
       .map((step, index) => ({ owner, index, step })),
@@ -96,9 +90,9 @@ export function addDeferredLayoutRefs(
 ): void {
   const deferred = fp.deferredLayoutTargets.get(layoutObj.id);
   if (!deferred) return;
-  const objects = collectElements(layout, "LayoutObject");
+  const objectsById = layoutObjectsById(layout);
   for (const button of deferred) {
-    const byId = objects.filter((o) => attr(o, "id") === button.id);
+    const byId = objectsById.get(button.id) ?? [];
     const matches = byId.length > 1 ? byId.filter((o) => uuidText(o) === button.uuid) : byId;
     const [match] = matches;
     if (matches.length !== 1 || !match) continue;
@@ -108,7 +102,7 @@ export function addDeferredLayoutRefs(
       if (!step || attr(step, "name") !== target.stepName || findElement(step, "LayoutReference") != null) continue;
       const container = findElement(step, "LayoutReferenceContainer");
       const dataSource = child(container, "DataSourceReference");
-      const fileName = decodeEntities(attr(dataSource, "name") ?? "");
+      const fileName = textAttr(dataSource, "name") ?? "";
       const isExternal = dataSource != null && !namesCurrentFile(attr(dataSource, "id"), fileName);
       // Marked external but with no data source: the target file is unknown, and
       // resolving it here would land on an unrelated local layout.
@@ -120,13 +114,25 @@ export function addDeferredLayoutRefs(
         // deferredLayoutTargets); resolution goes by id.
         toName: isExternal ? UNKNOWN_TARGET : target.layoutName,
         kind: edgeKind("layout", target.stepName),
-        fromStep: target.index + 1,
         ...(isExternal ? { toFileName: fileName } : {}),
-        ...(attr(step, "enable") === "False" ? { disabled: true } : {}),
       };
-      fp.references.push({ fromUid: layoutObj.uid, ...ref });
+      const site = { stepIndex: target.index + 1, disabled: attr(step, "enable") === "False" };
+      pushRef(fp.references, { fromUid: layoutObj.uid, ...ref }, site);
       const buttonUid = uidOfElement.get(match);
-      if (buttonUid) fp.references.push({ fromUid: buttonUid, ...ref });
+      if (buttonUid) pushRef(fp.references, { fromUid: buttonUid, ...ref }, site);
     }
   }
+}
+
+/** The layout's objects (at any depth) by id. */
+function layoutObjectsById(layout: unknown): Map<string, Record<string, unknown>[]> {
+  const byId = new Map<string, Record<string, unknown>[]>();
+  for (const obj of collectElements(layout, "LayoutObject")) {
+    const id = attr(obj, "id");
+    if (id == null) continue;
+    const list = byId.get(id);
+    if (list) list.push(obj);
+    else byId.set(id, [obj]);
+  }
+  return byId;
 }

@@ -52,11 +52,11 @@ export function matchesFieldFilter(o: FmObject, filter: FieldFilter): boolean {
     case "summary":
       return o.attributes.fieldtype === "Summary";
     case "unstored":
-      return o.attributes.unstored === "true";
+      return o.attributes.unstored === "Yes";
     case "deepCalc":
-      return o.attributes.unstored === "true" && (o.relationshipDepth ?? 0) >= 2;
+      return o.attributes.unstored === "Yes" && (o.relationshipDepth ?? 0) >= 2;
     case "global":
-      return o.attributes.global === "true";
+      return o.attributes.global === "Yes";
     default:
       return true;
   }

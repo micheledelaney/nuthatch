@@ -205,6 +205,97 @@ describe("decoding", () => {
   });
 });
 
+describe("CDATA stays verbatim", () => {
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE}
+        <CustomFunctionsCatalog><CustomFunction id="1" name="F"><Display><![CDATA[F ( "&amp;" )]]></Display></CustomFunction></CustomFunctionsCatalog>
+        ${layout(`<LayoutObject id="1" type="Text" name=""><Text><StyledText><Data><![CDATA[Tom &amp; Jerry]]></Data></StyledText></Text></LayoutObject>`)}
+      </AddAction>`,
+    ),
+  );
+
+  it("keeps a literal entity typed into a text object or a signature", () => {
+    expect(object(result, "F0:layoutObject:10.1").detail).toMatchObject({ info: "Tom &amp; Jerry" });
+    expect(object(result, "F0:customFunction:1").detail).toMatchObject({ signature: 'F ( "&amp;" )' });
+  });
+});
+
+describe("what gets parsed", () => {
+  it("keeps an account's stored password out of its text", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><AccountsCatalog><Account id="2" type="FileMaker" enable="True">
+          <Authentication><AccountName>admin</AccountName><PasswordEncrypted><Context>SALT==</Context><Data>HASH=</Data></PasswordEncrypted></Authentication>
+          <PrivilegeSetReference id="1" name="[Full Access]"></PrivilegeSetReference>
+        </Account></AccountsCatalog></AddAction>`,
+      ),
+    );
+    const account = object(result, "F0:account:2");
+    expect(account.text).toBe("admin [Full Access]");
+    expect(account.attributes.password).toBe("Yes");
+  });
+
+  it("marks only a Set Field's target as set, not the fields its value reads", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>
+            <Step id="1" name="Set Field" enable="True"><ParameterValues>
+              <Parameter type="FieldReference"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter>
+              <Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation>
+                <DDRREF kind="ChunkList" hash="H2">_P2</DDRREF><Text><![CDATA[T::b]]></Text>
+              </Calculation></Calculation></Parameter>
+            </ParameterValues></Step>
+          </ObjectList></Script></StepsForScripts>
+        </AddAction>`,
+        `<Calcs><_P2 hash="H2"><ChunkList><Chunk type="FieldRef"><FieldReference id="2" name="b"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Chunk></ChunkList></_P2></Calcs>`,
+      ),
+    );
+    expect(refsFrom(result, "F0:script:1")).toEqual([
+      "field:1 via 1 step 1 setField",
+      "field:2 via 1 step 1 field",
+      "tableOccurrence:1 step 1 tableOccurrence",
+    ]);
+  });
+
+  it("gives an empty formula no body, not its context occurrence's name", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE.replace(
+          '<Field id="2" name="b"></Field>',
+          `<Field id="2" name="b" fieldtype="Calculated"><Calculation>
+            <TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><DDRREF kind="ChunkList" hash="H3">_P3</DDRREF>
+          </Calculation></Field>`,
+        )}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:field:1.2").detail).toBeUndefined();
+  });
+
+  it("streams layouts whose text holds layout markup", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><LayoutCatalog>
+          <Layout id="1" name="A"><PartsList><Part type="Body"><Definition absolute="0" size="100"></Definition><ObjectList>
+            <LayoutObject id="1" type="Text" name=""><Text><StyledText><Data><![CDATA[</Layout><Layout id="9" name="X">]]></Data></StyledText></Text></LayoutObject>
+          </ObjectList></Part></PartsList></Layout>
+          <Layout id="2" name="B"></Layout>
+        </LayoutCatalog></AddAction>`,
+      ),
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.objects.filter((o) => o.type === "layout").map((o) => o.name)).toEqual(["A", "B"]);
+    expect(object(result, "F0:layoutObject:1.1").detail).toMatchObject({ info: '</Layout><Layout id="9" name="X">' });
+  });
+});
+
 describe("name boundaries", () => {
   it("treats letters of any script as part of a name, as the parser does", () => {
     expect([...occurrencesBeforeMissingField("ÄLager::<Field Missing>", ["Lager"])]).toEqual([]);

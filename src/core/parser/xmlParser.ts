@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { ATTR_PREFIX } from "./xmlUtils";
+import { ATTR_PREFIX, CDATA_KEY } from "./xmlUtils";
 
 /** The one parser configuration every FMSaveAsXML document (and each streamed
  * layout) is read with. */
@@ -14,4 +14,7 @@ export const xmlParser = new XMLParser({
   // text; we treat text verbatim, so skip entity expansion (faster, and avoids
   // the parser's billion-laughs guard tripping on legitimate large files).
   processEntities: false,
+  // CDATA under its own key, so it can be told apart from character data: CDATA
+  // is literal text, everything else is entity-encoded (see decodeEntities).
+  cdataPropName: CDATA_KEY,
 });

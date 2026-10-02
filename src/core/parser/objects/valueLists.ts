@@ -1,10 +1,9 @@
 import type { FmObject, ObjectDetail, ValueListFieldSource } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, collectText, isRecord } from "../xmlUtils";
-import { decodeEntities } from "../entities";
+import { attr, child, collectText, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
+import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { collectCatalogItems } from "./catalogItems";
 import { qualifiedField } from "./common";
 
 /**
@@ -19,7 +18,7 @@ export function valueListContents(containerNode: Record<string, unknown>): Map<s
   const byOwner = new Map<string, Record<string, unknown>>();
   for (const block of blocks) {
     if (!isRecord(block)) continue;
-    const ownerId = attr(block["ValueListReference"], "id") ?? attr(block, "id");
+    const ownerId = attr(child(block, "ValueListReference"), "id") ?? attr(block, "id");
     if (ownerId != null) byOwner.set(ownerId, block);
   }
   return byOwner;
@@ -92,14 +91,14 @@ function addExternalValueListSource(fp: FileParse, block: Record<string, unknown
   const extId = attr(vlRef, "id");
   if (extId == null) return;
   const dsRef = child(external, "DataSourceReference");
-  const dataSource = attr(dsRef, "name");
+  const dataSource = textAttr(dsRef, "name");
   fp.references.push({
     fromUid: ownerUid,
     toType: "valueList",
     toId: extId,
-    toName: decodeEntities(attr(vlRef, "name") ?? ""),
+    toName: textAttr(vlRef, "name") ?? "",
     kind: "valueList",
-    ...(dataSource ? { toFileName: decodeEntities(dataSource) } : { forceBroken: true }),
+    ...(dataSource ? { toFileName: dataSource } : { forceBroken: true }),
   });
   // The data source itself is a dependency too (it lists this value list among
   // its users). A nameless one was deleted.
@@ -109,7 +108,7 @@ function addExternalValueListSource(fp: FileParse, block: Record<string, unknown
     fromUid: ownerUid,
     toType: "externalDataSource",
     toId: dsId,
-    toName: dataSource ? decodeEntities(dataSource) : UNKNOWN_TARGET,
+    toName: dataSource || UNKNOWN_TARGET,
     kind: "externalDataSource",
     ...(dataSource ? {} : { forceBroken: true }),
   });
@@ -142,15 +141,13 @@ function fieldSource(node: unknown): ValueListFieldSource | undefined {
 
   const showRelated = child(node, "ShowRelated");
   const showRelatedFrom =
-    isRecord(showRelated) && attr(showRelated, "value") === "True"
-      ? decodeEntities(attr(child(showRelated, "TableOccurrenceReference"), "name") ?? "") || undefined
-      : undefined;
+    isRecord(showRelated) && attr(showRelated, "value") === "True" ? textAttr(child(showRelated, "TableOccurrenceReference"), "name") : undefined;
 
   return {
     primaryField: qualifiedField(primary["FieldReference"]),
     sort: attr(primary, "sort") === "True",
-    secondaryField: secondaryField || undefined,
+    ...(secondaryField ? { secondaryField } : {}),
     ...(showOnlySecondary ? { showOnlySecondary } : {}),
-    showRelatedFrom,
+    ...(showRelatedFrom ? { showRelatedFrom } : {}),
   };
 }

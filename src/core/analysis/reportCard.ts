@@ -25,17 +25,17 @@ export function buildReportCard(
   }
 
   const unstoredCalculationCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.unstored === "true",
+    (o) => o.type === "field" && o.attributes.unstored === "Yes",
   ).length;
 
   const deepCalcCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.unstored === "true" && (o.relationshipDepth ?? 0) >= 2,
+    (o) => o.type === "field" && o.attributes.unstored === "Yes" && (o.relationshipDepth ?? 0) >= 2,
   ).length;
 
   const globalVariableCount = countGlobalVariables(parsed.objects);
 
   const globalFieldCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.global === "true",
+    (o) => o.type === "field" && o.attributes.global === "Yes",
   ).length;
 
   // Active FileMaker-auth accounts with no password set.
