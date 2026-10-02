@@ -476,6 +476,8 @@ export interface ReportCard {
    * count as the navigator's Broken filter (not the number of broken refs). */
   brokenReferenceCount: number;
   unreferencedCount: number;
+  /** Objects used only by unreferenced objects (or by each other): the unused chains. */
+  unusedChainCount: number;
   unstoredCalculationCount: number;
   /** Unstored calculation fields whose relationship depth is >= 2 (multi-hop). */
   deepCalcCount: number;
@@ -503,6 +505,8 @@ export interface SolutionModel {
   inbound: Map<string, FmReference[]>;
   brokenReferences: FmReference[];
   unreferenced: FmObject[];
+  /** Objects whose every use is itself unused (see core/analysis/unusedChains). */
+  unusedChain: FmObject[];
   reportCard: ReportCard;
   parseErrors: string[];
 }

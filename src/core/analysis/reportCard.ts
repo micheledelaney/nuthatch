@@ -16,6 +16,7 @@ export function buildReportCard(
   references: FmReference[],
   broken: FmReference[],
   unreferenced: FmObject[],
+  unusedChain: FmObject[],
 ): ReportCard {
   const countsByType = emptyCounts();
   for (const obj of parsed.objects) {
@@ -48,6 +49,7 @@ export function buildReportCard(
     referenceCount: references.length,
     brokenReferenceCount: new Set(broken.map((r) => r.fromUid)).size,
     unreferencedCount: unreferenced.length,
+    unusedChainCount: unusedChain.length,
     unstoredCalculationCount,
     deepCalcCount,
     globalVariableCount,
@@ -86,6 +88,14 @@ function deriveRiskFlags(card: ReportCard): RiskFlag[] {
     flags.push({
       severity: "warn",
       message: `${card.unreferencedCount} potentially unreferenced object${plural(card.unreferencedCount)}.`,
+    });
+  }
+  // "info", not "warn": the saved-analyses trend counts warn flags, and this
+  // adds no new problem — it shows how far the unreferenced ones reach.
+  if (card.unusedChainCount > 0) {
+    flags.push({
+      severity: "info",
+      message: `${card.unusedChainCount} object${plural(card.unusedChainCount)} used only by unreferenced objects.`,
     });
   }
   if (card.unstoredCalculationCount > 0) {

@@ -1,10 +1,12 @@
 import type React from "react";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { decodeEntities } from "@/core/parser/entities";
+import { chainTops } from "@/core/analysis/unusedChains";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders } from "../ObjectColumn";
 import type { Fact } from "./facts";
+import { isInUnusedChain } from "./filters";
 
 type OnGo = (uid: string, rowKey: string) => void;
 
@@ -15,6 +17,8 @@ interface GlanceRow {
 
 const FIELD_KIND_LABEL: Record<string, string> = { Normal: "Normal", Calculated: "Calculation", Summary: "Summary" };
 const DATA_TYPE_LABEL: Record<string, string> = { Binary: "Container" };
+/** Objects named in the Used only by row before "and N more". */
+const USED_ONLY_BY_SHOWN = 3;
 
 /** An object in the same file by type + FileMaker id, if it's loaded. */
 function byId(model: SolutionModel, fileUid: string, type: ObjectType, id: string | undefined): FmObject | null {
@@ -335,7 +339,32 @@ function glanceRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
       </>
     ),
   };
-  return [typeRow, ...detailRows(obj, model, onGo)];
+  const chainRow = isInUnusedChain(model, obj) ? usedOnlyByRow(obj, model, onGo) : null;
+  return [typeRow, ...detailRows(obj, model, onGo), ...(chainRow ? [chainRow] : [])];
+}
+
+/** For an object in an unused chain: the unreferenced objects it hangs from —
+ * check those, and the rest follows — or the loop it's part of. */
+function usedOnlyByRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow | null {
+  const { tops, loop } = chainTops(model, obj.uid);
+  const users = tops.length > 0 ? tops : loop;
+  if (users.length === 0) return null;
+  const shown = users.slice(0, USED_ONLY_BY_SHOWN);
+  const more = users.length - shown.length;
+  return {
+    label: "Used only by",
+    value: (
+      <span className="op-glance-list">
+        {shown.map((u) => (
+          <span key={u.uid} className="op-glance-list-item">
+            {linkOrText(u, undefined, onGo)}
+          </span>
+        ))}
+        {more > 0 && <span>and {more.toLocaleString()} more</span>}
+        <span className="op-glance-note">{tops.length > 0 ? "(unreferenced)" : "(an unused loop)"}</span>
+      </span>
+    ),
+  };
 }
 
 /**

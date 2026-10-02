@@ -15,7 +15,7 @@
     "exact": "exact: true means the source's outbound edges must equal the listed set (nothing missing, nothing extra). exact: false means the listed edges must exist; extras are allowed.",
     "unverified": "A string explaining why FileMaker's XML for this case hasn't been observed yet. A mismatch there is a question to investigate first, not automatically a parser bug.",
     "matchers": "Attribute values: a plain string must match exactly; {\"contains\": s} is a substring match; {\"oneOf\": [..]} matches any; {\"absent\": true} means the attribute must not be set; {\"present\": true} means it must be set.",
-    "ignoredTypes": "Object types listed in ignoredTypes aren't checked: edges to them are neither required nor flagged as extra, and they're left out of the unreferenced check."
+    "ignoredTypes": "Object types listed in ignoredTypes aren't checked: edges to them are neither required nor flagged as extra, and they're left out of the unreferenced and unused-chain checks."
   },
   "ignoredTypes": ["theme"],
   "objects": {
@@ -751,6 +751,15 @@
       "MAIN:field:T_Main::DEL_Field": "c_DelField (in this snapshot)"
     },
     "_note": "Same list as the final snapshot: every DEL_ object is referenced."
+  },
+  "unusedChain": {
+    "_rule": "Objects referenced only by unused ones: an unreferenced object that isn't a layout or script shown in FileMaker's menus, or another object in the chain (see src/core/analysis/unusedChains.ts). Never includes an unreferenced object. Candidate types only, as for unreferenced. Must equal this set.",
+    "exact": ["MAIN:table:DEL_Table", "MAIN:field:T_Child::DEL_Field2", "EXT:valueList:EVL_List"],
+    "_why": {
+      "MAIN:table:DEL_Table": "used only by TO_Broken (unreferenced)",
+      "MAIN:field:T_Child::DEL_Field2": "used only by VL_DelField (unreferenced); c_DelField still reads T_Main::DEL_Field in this snapshot",
+      "EXT:valueList:EVL_List": "used only by VL_External and VL_ExtDeleted (both unreferenced)"
+    }
   },
   "brokenSources": {
     "_rule": "Objects with at least one broken outbound edge. A \"/**\" entry is satisfied by the object or any of its descendants. Must equal this set.",

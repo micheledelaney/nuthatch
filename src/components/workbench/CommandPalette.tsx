@@ -145,7 +145,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         </div>
         <div className="wb-palette-hint">
           <span>
-            <code>type:script</code> <code>table:Invoices</code> <code>is:broken|unreferenced|calc|unstored|global</code>{" "}
+            <code>type:script</code> <code>table:Invoices</code> <code>is:broken|unreferenced|chain|calc|unstored|global</code>{" "}
             <code>refs&gt;20</code>
           </span>
           <span className="wb-hint-keys">

@@ -39,7 +39,7 @@ export function ObjLink({
 
 /** A small uppercase chip ("EXTERNAL", "BROKEN") to qualify the row in the
  * margin — matches the chip the references list already uses. */
-export function RefStatusChip({ kind }: { kind: "external" | "broken" }) {
+export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused" }) {
   return <span className="ref-external-tag">{kind}</span>;
 }
 

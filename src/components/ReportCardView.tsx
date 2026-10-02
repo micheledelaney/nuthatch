@@ -31,6 +31,11 @@ export function ReportCardView() {
     setNavType("all");
     setNavRefFilter("unreferenced");
   };
+  const showUnusedChain = () => {
+    showBrowse();
+    setNavType("all");
+    setNavRefFilter("unusedChain");
+  };
 
   const typeMetrics = (Object.keys(OBJECT_TYPE_META) as ObjectType[])
     .filter((t) => t !== "file" && card.countsByType[t] > 0)
@@ -67,6 +72,7 @@ export function ReportCardView() {
         <Metric label="References" value={card.referenceCount} />
         <Metric label="Objects with broken references" value={card.brokenReferenceCount} onClick={showBroken} accent={card.brokenReferenceCount > 0 ? "high" : undefined} />
         <Metric label="Unreferenced objects" value={card.unreferencedCount} onClick={showUnreferenced} accent={card.unreferencedCount > 0 ? "warn" : undefined} />
+        <Metric label="Used only by unreferenced objects" value={card.unusedChainCount} onClick={showUnusedChain} accent={card.unusedChainCount > 0 ? "warn" : undefined} />
         <Metric label="Active accounts, no password" value={card.accountsNoPasswordCount} onClick={() => { showBrowse(); setNavRefFilter("all"); setNavType("account"); setNavAccountFilter("active"); setNavAccountPw("none"); }} accent={card.accountsNoPasswordCount > 0 ? "high" : undefined} />
         <Metric label="Unstored calculations" value={card.unstoredCalculationCount} onClick={() => { setNavRefFilter("all"); focusFields("unstored"); }} accent={card.unstoredCalculationCount > 0 ? "warn" : undefined} />
         <Metric label="Deep calcs (depth ≥ 2)" value={card.deepCalcCount} onClick={() => { setNavRefFilter("all"); focusFields("deepCalc"); }} accent={card.deepCalcCount > 0 ? "warn" : undefined} />

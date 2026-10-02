@@ -154,6 +154,19 @@ export function isUnreferenced(model: SolutionModel, o: FmObject): boolean {
   return set.has(o.uid);
 }
 
+const unusedChainCache = new WeakMap<SolutionModel, Set<string>>();
+
+/** Whether an object is in an unused chain (dimmed like an unreferenced one,
+ * matched by the Unused chain chip) — exactly the model's own list. */
+export function isInUnusedChain(model: SolutionModel, o: FmObject): boolean {
+  let set = unusedChainCache.get(model);
+  if (!set) {
+    set = new Set(model.unusedChain.map((x) => x.uid));
+    unusedChainCache.set(model, set);
+  }
+  return set.has(o.uid);
+}
+
 /** Every navigator sub-filter, mirroring the `nav*` fields in the store. */
 export interface NavFilters {
   field: FieldFilter;
@@ -191,7 +204,7 @@ export const NO_FILTERS: NavFilters = {
 export function effectiveRefFilter(type: ObjectType | "all", ref: RefFilter): RefFilter {
   const canUnref = type === "all" || UNREF_ELIGIBLE.has(type);
   const canBroken = type === "all" || BROKEN_ELIGIBLE.has(type);
-  if (ref === "unreferenced" && !canUnref) return "all";
+  if ((ref === "unreferenced" || ref === "unusedChain") && !canUnref) return "all";
   if (ref === "broken" && !canBroken) return "all";
   return ref;
 }
@@ -226,6 +239,8 @@ export function applyNavFilters(
     tests.push((o) => broken.has(o.uid));
   } else if (ref === "unreferenced") {
     tests.push((o) => isUnreferenced(model, o));
+  } else if (ref === "unusedChain") {
+    tests.push((o) => isInUnusedChain(model, o));
   }
   if (tests.length === 0) return objects;
   return objects.filter((o) => tests.every((t) => t(o)));
@@ -262,6 +277,7 @@ export function chipGroupsFor(model: SolutionModel, type: ObjectType | "all"): C
   const canBroken = type === "all" || BROKEN_ELIGIBLE.has(type);
   const health: ChipOption[] = [];
   if (canUnref) health.push({ value: "unreferenced", label: "Unreferenced", tone: "warn" });
+  if (canUnref) health.push({ value: "unusedChain", label: "Unused chain", tone: "warn" });
   if (canBroken) health.push({ value: "broken", label: "Broken", tone: "high" });
   if (health.length) groups.push({ key: "ref", label: "Health", options: health });
 

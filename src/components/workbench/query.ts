@@ -1,5 +1,5 @@
 import { OBJECT_TYPE_META, isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
-import { isUnreferenced, matchesFieldFilter } from "@/components/browseA/filters";
+import { isInUnusedChain, isUnreferenced, matchesFieldFilter } from "@/components/browseA/filters";
 import { brokenSourcesFor, refStatsFor } from "@/components/browseA/refStats";
 import { excerpt } from "@/core/search/search";
 import { ancestorsOf } from "./objectInfo";
@@ -8,11 +8,11 @@ import { ancestorsOf } from "./objectInfo";
  * The command palette's query language: free text (fuzzy-matched against
  * object names) mixed with typed filter tokens:
  *   type:script   table:Invoices   table:"Line Items"   is:broken
- *   is:unreferenced  is:calc  is:unstored  is:global   refs>20  refs<1  refs=0
+ *   is:unreferenced  is:chain  is:calc  is:unstored  is:global   refs>20  refs<1  refs=0
  * Several type: tokens OR together; everything else ANDs.
  */
 
-export type IsFlag = "broken" | "unreferenced" | "calc" | "unstored" | "global";
+export type IsFlag = "broken" | "unreferenced" | "chain" | "calc" | "unstored" | "global";
 export type RefsOp = ">" | "<" | ">=" | "<=" | "=";
 
 export type Token =
@@ -21,7 +21,7 @@ export type Token =
   | { kind: "is"; flag: IsFlag; raw: string }
   | { kind: "refs"; op: RefsOp; n: number; raw: string };
 
-const IS_FLAGS: ReadonlySet<string> = new Set<IsFlag>(["broken", "unreferenced", "calc", "unstored", "global"]);
+const IS_FLAGS: ReadonlySet<string> = new Set<IsFlag>(["broken", "unreferenced", "chain", "calc", "unstored", "global"]);
 /** Older spellings still accepted in queries. */
 const IS_FLAG_ALIASES: Record<string, IsFlag> = { unused: "unreferenced" };
 
@@ -165,6 +165,8 @@ function matchesIs(model: SolutionModel, o: FmObject, flag: IsFlag): boolean {
       return brokenSourcesFor(model).has(o.uid) || isBrokenTableOccurrence(o);
     case "unreferenced":
       return isUnreferenced(model, o);
+    case "chain":
+      return isInUnusedChain(model, o);
     case "calc":
       return o.type === "field" && matchesFieldFilter(o, "calculation");
     case "unstored":

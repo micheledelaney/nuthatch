@@ -1767,6 +1767,7 @@ export function GroupedRefList({
   onGo,
   byUid,
   previewLimit = DETAIL_REF_PREVIEW_LIMIT,
+  isUnused,
 }: {
   edges: DependencyEdge[];
   side: "from" | "to";
@@ -1774,6 +1775,8 @@ export function GroupedRefList({
   byUid: Map<string, FmObject>;
   /** Rows shown before "Show more" (the object page's tabs show more). */
   previewLimit?: number;
+  /** Marks rows whose object is itself unused (see core/analysis/unusedChains). */
+  isUnused?: (uid: string) => boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (edges.length === 0) return <div className="subtle indent">None.</div>;
@@ -1801,6 +1804,7 @@ export function GroupedRefList({
               const deleted = unresolved && (edge.ref.toName === "" || /Missing>$/.test(edge.ref.toName));
               const broken = unresolved && (edge.ref.broken || deleted);
               const external = unresolved && !broken;
+              const unused = obj != null && (isUnused?.(obj.uid) ?? false);
               const rowKey = `${edge.ref.fromUid}-${edge.ref.toId}-${group.type}-${i}`;
               const type = obj?.type ?? edge.ref.toType;
               const label =
@@ -1816,7 +1820,9 @@ export function GroupedRefList({
                 ? `Broken — ${label}`
                 : external
                   ? `${label} — in another file (not loaded)`
-                  : label;
+                  : unused
+                    ? `${label} — itself unused`
+                    : label;
               return (
                 <li
                   key={rowKey}
@@ -1827,6 +1833,7 @@ export function GroupedRefList({
                   <TypePill type={type} short />
                   <span className="ellipsis">{label}</span>
                   {external && <RefStatusChip kind="external" />}
+                  {unused && <RefStatusChip kind="unused" />}
                 </li>
               );
             })}
@@ -1848,6 +1855,7 @@ export function CallTreeNode({
   onGo,
   isRoot,
   clickedKey,
+  isUnused,
 }: {
   node: CallNode;
   /** Position of this node in the tree, so duplicate scripts get distinct keys. */
@@ -1855,16 +1863,21 @@ export function CallTreeNode({
   onGo: (uid: string, rowKey: string) => void;
   isRoot?: boolean;
   clickedKey?: string;
+  /** Dims the scripts nothing in use reaches: on an unused script's tree, the
+   * ones that go with it (see core/analysis/unusedChains). */
+  isUnused?: (uid: string) => boolean;
 }) {
   const rowKey = `call:${path}`;
   const clicked = !isRoot && rowKey === clickedKey;
-  const className = `call-node${isRoot ? " root" : ""}${node.broken ? " broken" : ""}${node.external ? " external" : ""}${clicked ? " clicked" : ""}`;
+  const unused = !isRoot && (isUnused?.(node.uid) ?? false);
+  const className = `call-node${isRoot ? " root" : ""}${node.broken ? " broken" : ""}${node.external ? " external" : ""}${unused ? " unused" : ""}${clicked ? " clicked" : ""}`;
   const clickable = !node.broken && !node.external && !isRoot;
   return (
     <li>
       <span
         className={className}
         onClick={() => clickable && onGo(node.uid, rowKey)}
+        title={unused ? "Used only by unused scripts" : undefined}
       >
         <TypePill type="script" short />
         {node.name}
@@ -1880,6 +1893,7 @@ export function CallTreeNode({
               path={`${path}.${i}`}
               onGo={onGo}
               clickedKey={clickedKey}
+              isUnused={isUnused}
             />
           ))}
         </ul>

@@ -8,6 +8,7 @@ import type {
 } from "@/types/ddr";
 import { ORPHAN_CANDIDATE_TYPES, isBrokenTableOccurrence } from "@/types/ddr";
 import { buildReportCard } from "@/core/analysis/reportCard";
+import { findUnusedChains } from "@/core/analysis/unusedChains";
 import { longestPrefixName } from "@/core/parser/calcText";
 import { buildDataSourceIndex, type DataSourceIndex } from "./dataSources";
 
@@ -48,7 +49,8 @@ export function buildModel(parsed: ParseResult): SolutionModel {
 
   const brokenReferences = references.filter((r) => r.broken);
   const unreferenced = findUnreferenced(parsed.objects, inbound, byUid);
-  const reportCard = buildReportCard(parsed, references, brokenReferences, unreferenced);
+  const unusedChain = findUnusedChains(parsed.objects, outbound, byUid, unreferenced);
+  const reportCard = buildReportCard(parsed, references, brokenReferences, unreferenced, unusedChain);
 
   return {
     files: parsed.files,
@@ -59,6 +61,7 @@ export function buildModel(parsed: ParseResult): SolutionModel {
     inbound,
     brokenReferences,
     unreferenced,
+    unusedChain,
     reportCard,
     parseErrors: parsed.errors,
   };

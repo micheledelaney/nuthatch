@@ -31,6 +31,7 @@ interface Oracle {
   sources: Record<string, { exact: boolean; edges: ExpectedEdge[]; undecidedEdges?: ExpectedEdge[] }>;
   absentEdges?: { from: string; to: string; step?: number; why: string }[];
   unreferenced: { exact: string[]; undecided?: string[] };
+  unusedChain: { exact: string[] };
   brokenSources: { exact: string[] };
   globalVariables: Record<string, string[]>;
   reportCard: Record<string, unknown>;
@@ -290,6 +291,15 @@ export function buildChecks(oracle: Oracle, snapshot: () => Snapshot, mainAlone:
         .filter((r) => !snap.unreferenced.has(r))
         .map((r) => (lookup(snap, r).length ? `expected unreferenced, but it's referenced: ${r}` : `expected unreferenced, but not found: ${r}`)),
       ...[...snap.unreferenced].filter((r) => !expected.has(r) && !undecided.has(r)).map((r) => `unreferenced, but it's used: ${r}`),
+    ];
+  });
+
+  add("unused chain", () => {
+    const snap = snapshot();
+    const expected = new Set(oracle.unusedChain.exact.filter((r) => !skip(r)));
+    return [
+      ...[...expected].filter((r) => !snap.unusedChain.has(r)).map((r) => `expected in an unused chain: ${r}`),
+      ...[...snap.unusedChain].filter((r) => !expected.has(r)).map((r) => `in an unused chain, but shouldn't be: ${r}`),
     ];
   });
 

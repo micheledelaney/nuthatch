@@ -1,5 +1,6 @@
 import { version as NUTHATCH_VERSION } from "../../../package.json";
 import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
+import { chainTops } from "@/core/analysis/unusedChains";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -45,9 +46,10 @@ const REF_COLUMNS = [
 export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportFile[] {
   const brokenFrom = new Set(model.brokenReferences.map((r) => r.fromUid));
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
+  const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
   return [
     { name: "README.md", content: buildReadme(model, info) },
-    { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced)).join("\n") + "\n" },
+    { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced, unusedChain)).join("\n") + "\n" },
     { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model))].join("\n") + "\n" },
     // Keeps the dump (which can include account names and emails) out of git
     // by default; the README explains how to opt in.
@@ -61,7 +63,10 @@ function exportObject(
   model: SolutionModel,
   brokenFrom: ReadonlySet<string>,
   unreferenced: ReadonlySet<string>,
+  unusedChain: ReadonlySet<string>,
 ): string {
+  const chain = unusedChain.has(o.uid) ? chainTops(model, o.uid) : null;
+  const usedOnlyBy = chain ? (chain.tops.length > 0 ? chain.tops : chain.loop) : [];
   return JSON.stringify({
     uid: o.uid,
     type: o.type,
@@ -74,6 +79,9 @@ function exportObject(
     refsIn: model.inbound.get(o.uid)?.length ?? 0,
     refsOut: model.outbound.get(o.uid)?.length ?? 0,
     unreferenced: unreferenced.has(o.uid) || undefined,
+    unusedChain: chain ? true : undefined,
+    unusedLoop: chain && chain.tops.length === 0 ? true : undefined,
+    usedOnlyBy: usedOnlyBy.length > 0 ? usedOnlyBy.map((u) => u.uid) : undefined,
     hasBrokenRefs: brokenFrom.has(o.uid) || undefined,
     relationshipDepth: o.relationshipDepth,
     // A layout object's attributes and text restate its detail (type, label,
@@ -165,7 +173,7 @@ dependency questions ("what uses X?", "can I delete X?") are a lookup in
 - **Analysis saved:** ${new Date(info.savedAt).toISOString()}
 - **Exported:** ${new Date(info.exportedAt).toISOString()}
 - **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length}
-- **Unreferenced objects:** ${card.unreferencedCount}
+- **Unreferenced objects:** ${card.unreferencedCount} · **Used only by unreferenced objects:** ${card.unusedChainCount}
 
 This is a snapshot. If the FileMaker solution has changed since the date
 above, re-export the XML, re-analyze it in nuthatch, and export again.
@@ -192,6 +200,13 @@ One JSON object per line:
   Workspace / catalog folder path.
 - \`refsIn\` / \`refsOut\`: number of references to / from this object.
 - \`unreferenced: true\`: nothing in the loaded files references it.
+- \`unusedChain: true\`: something references it, but only unused objects (an
+  unreferenced one, or another object in the chain), e.g. a script called only by
+  an unreferenced script. \`usedOnlyBy\` lists the unreferenced objects at the top
+  of its chain: if those really are unused, so is this. With \`unusedLoop: true\`
+  it's in a loop of objects that only use each other, and \`usedOnlyBy\` lists the
+  others. Layouts and scripts shown in FileMaker's menus count as in use, so they
+  never start a chain.
 - \`hasBrokenRefs: true\`: it references something that no longer exists.
 - \`attributes\`: raw attributes from the XML element (field type, storage, …).
 - \`detail\`: type-specific structure. Scripts: \`steps\` with \`index\`, \`name\`,
@@ -241,6 +256,9 @@ awk -F'\\t' '$6=="broken"' refs.tsv
 
 # Unreferenced scripts
 grep '"type":"script"' objects.jsonl | grep '"unreferenced":true' | jq -r .name
+
+# Objects used only by unused objects, and what their chain hangs from
+grep '"unusedChain":true' objects.jsonl | jq -c '{name, usedOnlyBy}'
 \`\`\`
 
 ## Before concluding something is safe to delete
@@ -254,7 +272,8 @@ grep '"type":"script"' objects.jsonl | grep '"unreferenced":true' | jq -r .name
   other apps, plug-ins).
 
 So also \`grep -F\` the name across \`objects.jsonl\`. A clean result means
-"no references found", not "safe".
+"no references found", not "safe". An \`unusedChain\` object inherits all of
+this from the objects in its \`usedOnlyBy\`: check those first.
 
 ## Privacy and git
 

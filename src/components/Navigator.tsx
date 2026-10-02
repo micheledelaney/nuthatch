@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/store";
 import { OBJECT_TYPE_META, objectLabel, type FmFile, type FmObject, type ObjectType } from "@/types/ddr";
 import { TypePill } from "./TypePill";
-import { applyNavFilters, effectiveRefFilter, isUnreferenced, type NavFilters } from "./browseA/filters";
+import { applyNavFilters, effectiveRefFilter, isInUnusedChain, isUnreferenced, type NavFilters } from "./browseA/filters";
 import { brokenSourcesFor, refStatsFor } from "./browseA/refStats";
 import { FilterMenu } from "./browseA/FilterChips";
 
@@ -325,12 +325,13 @@ export function Navigator() {
     const stats = refStatsFor(model, obj.uid);
     const broken = brokenSources.has(obj.uid);
     const unref = isUnreferenced(model, obj);
-    const hint = `${objectLabel(obj)}\n← referenced by ${stats.inbound} · references ${stats.outbound} →${broken ? `\n${stats.broken} broken reference${stats.broken === 1 ? "" : "s"}` : ""}${unref ? "\nUnreferenced" : ""}`;
+    const chain = !unref && isInUnusedChain(model, obj);
+    const hint = `${objectLabel(obj)}\n← referenced by ${stats.inbound} · references ${stats.outbound} →${broken ? `\n${stats.broken} broken reference${stats.broken === 1 ? "" : "s"}` : ""}${unref ? "\nUnreferenced" : ""}${chain ? "\nUsed only by unreferenced objects" : ""}`;
     return (
       <div
         key={obj.uid}
         data-uid={obj.uid}
-        className={`node lib-row${obj.uid === activeUid ? " selected" : ""}${unref ? " unref" : ""}`}
+        className={`node lib-row${obj.uid === activeUid ? " selected" : ""}${unref || chain ? " unref" : ""}`}
         style={{ paddingLeft: BASE_PAD + depth * INDENT }}
         onClick={() => openObject(obj.uid)}
         title={hint}

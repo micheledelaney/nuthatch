@@ -30,6 +30,8 @@ export interface Snapshot {
   edgesFrom: Map<string, ActualEdge[]>;
   /** Oracle refs of the unreferenced objects (ignored types left out). */
   unreferenced: Set<string>;
+  /** Oracle refs of the objects in unused chains (ignored types left out). */
+  unusedChain: Set<string>;
   /** globalVariable name → the refs of every object (and its ancestors) using it. */
   globalUsers: Map<string, Set<string>>;
   reportCard: ReportCard;
@@ -89,6 +91,9 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
     edgesFrom,
     unreferenced: new Set(
       model.unreferenced.filter((o) => !ignoredTypes.has(o.type)).map((o) => refOf.get(o.uid) ?? o.uid),
+    ),
+    unusedChain: new Set(
+      model.unusedChain.filter((o) => !ignoredTypes.has(o.type)).map((o) => refOf.get(o.uid) ?? o.uid),
     ),
     globalUsers: new Map(),
     reportCard: model.reportCard,
