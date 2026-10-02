@@ -1,6 +1,6 @@
 import type { FmObject, ObjectDetail, ValueListFieldSource } from "@/types/ddr";
-import type { FileParse } from "../context";
-import { attr, child, collectText, isRecord, textAttr } from "../xmlUtils";
+import type { FileIndex, FileParse } from "../context";
+import { attr, child, displayText, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
 import { collectCatalogItems, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
@@ -28,13 +28,14 @@ export function annotateValueList(
   item: Record<string, unknown>,
   obj: FmObject,
   contents: Map<string, Record<string, unknown>> | null,
+  index: FileIndex,
 ): FmObject {
   const source = attr(child(item, "Source"), "value");
   const block = contentsOf(item, obj, contents);
   return {
     ...obj,
     attributes: { ...obj.attributes, ...(source ? { source } : {}) },
-    ...(block ? { detail: valueListDetail(block) } : {}),
+    ...(block ? { detail: valueListDetail(block, index) } : {}),
   };
 }
 
@@ -111,18 +112,18 @@ function addExternalValueListSource(fp: FileParse, block: Record<string, unknown
  * A value list's full contents: a custom list carries its literal values in
  * <CustomValues><Text>; a "from field" list carries its field binding in <Field>.
  */
-function valueListDetail(block: Record<string, unknown>): ObjectDetail {
+function valueListDetail(block: Record<string, unknown>, index: FileIndex): ObjectDetail {
   const source = attr(child(block, "Source"), "value") ?? "";
   const customNode = child(block, "CustomValues");
-  const customText = isRecord(customNode) ? collectText(customNode["Text"]) : "";
+  const customText = isRecord(customNode) ? displayText(customNode["Text"]) : "";
   // FileMaker stores custom values CR-separated (the XML parser turns line
   // endings into "\n"); a blank line is a divider.
   const customValues = customText ? customText.replace(/\n+$/, "").split("\n") : [];
-  return { kind: "valueList", source, customValues, field: fieldSource(block["Field"]) };
+  return { kind: "valueList", source, customValues, field: fieldSource(block["Field"], index) };
 }
 
 /** The field binding of a "from field" value list. */
-function fieldSource(node: unknown): ValueListFieldSource | undefined {
+function fieldSource(node: unknown, index: FileIndex): ValueListFieldSource | undefined {
   const primary = child(node, "PrimaryField");
   if (!isRecord(node) || !isRecord(primary)) return undefined;
 
@@ -130,7 +131,7 @@ function fieldSource(node: unknown): ValueListFieldSource | undefined {
   // second field" removes the element. Its `show` (the opposite of the primary
   // field's) records "Show values only from second field".
   const secondaryWrap = child(node, "SecondaryField");
-  const secondaryField = isRecord(secondaryWrap) ? qualifiedField(secondaryWrap["FieldReference"]) : undefined;
+  const secondaryField = isRecord(secondaryWrap) ? qualifiedField(secondaryWrap["FieldReference"], index) : undefined;
   const showOnlySecondary = isRecord(secondaryWrap) && attr(secondaryWrap, "show") === "True";
 
   const showRelated = child(node, "ShowRelated");
@@ -138,7 +139,7 @@ function fieldSource(node: unknown): ValueListFieldSource | undefined {
     isRecord(showRelated) && attr(showRelated, "value") === "True" ? textAttr(child(showRelated, "TableOccurrenceReference"), "name") : undefined;
 
   return {
-    primaryField: qualifiedField(primary["FieldReference"]),
+    primaryField: qualifiedField(primary["FieldReference"], index),
     sort: attr(primary, "sort") === "True",
     ...(secondaryField ? { secondaryField } : {}),
     ...(showOnlySecondary ? { showOnlySecondary } : {}),

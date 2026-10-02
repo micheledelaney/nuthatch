@@ -7,21 +7,29 @@
 
 import { asArray, attr, isRecord, withoutKey } from "../xmlUtils";
 
-/** Whether an auto-enter option element is in effect. FileMaker 26 marks each
- * one enable="True|False"; older exports don't, so fall back to the AutoEnter's
- * own `type` (the option it's set to). */
-function autoEnterOptionActive(option: unknown, autoEnterType: string | undefined, forType: string): boolean {
-  const enable = attr(asArray(option)[0], "enable");
-  return enable != null ? enable !== "False" : autoEnterType === forType;
+/** Whether an <AutoEnter>'s calculated value / looked-up value is in effect.
+ * FileMaker 26 marks each option enable="True|False" — and several can be on at
+ * once (a Data value with a Calculated value over it); older exports don't
+ * mark them, so fall back to the AutoEnter's own `type` (the option it's set
+ * to). The scan and the field's inspector both go by this. */
+export function isAutoEnterOptionActive(autoEnter: unknown, option: "Calculated" | "Looked_up"): boolean {
+  if (!isRecord(autoEnter) || autoEnter[option] == null) return false;
+  const enable = attr(asArray(autoEnter[option])[0], "enable");
+  return enable != null ? enable !== "False" : attr(autoEnter, "type") === option;
+}
+
+/** Whether a validation option element (<Calculated>, <MessageCalc>) is in
+ * effect: present, and not marked enable="False" (FM 22 writes no `enable`). */
+export function isValidationOptionActive(option: unknown): boolean {
+  return isRecord(option) && attr(option, "enable") !== "False";
 }
 
 /** An <AutoEnter> without its switched-off calc / lookup (the same node when
  * nothing is dropped). */
 export function activeAutoEnter(node: unknown): unknown {
   if (!isRecord(node)) return node;
-  const type = attr(node, "type");
-  const dropCalc = node["Calculated"] != null && !autoEnterOptionActive(node["Calculated"], type, "Calculated");
-  const dropLookup = node["Looked_up"] != null && !autoEnterOptionActive(node["Looked_up"], type, "Looked_up");
+  const dropCalc = node["Calculated"] != null && !isAutoEnterOptionActive(node, "Calculated");
+  const dropLookup = node["Looked_up"] != null && !isAutoEnterOptionActive(node, "Looked_up");
   if (!dropCalc && !dropLookup) return node;
   const withoutCalc = dropCalc ? withoutKey(node, "Calculated") : node;
   return dropLookup ? withoutKey(withoutCalc, "Looked_up") : withoutCalc;
@@ -32,7 +40,7 @@ export function activeAutoEnter(node: unknown): unknown {
 export function activeValidation(node: unknown): unknown {
   if (!isRecord(node)) return node;
   return ["Calculated", "MessageCalc"].reduce(
-    (active, key) => (attr(asArray(active[key])[0], "enable") === "False" ? withoutKey(active, key) : active),
+    (active, key) => (active[key] != null && !isValidationOptionActive(asArray(active[key])[0]) ? withoutKey(active, key) : active),
     node,
   );
 }

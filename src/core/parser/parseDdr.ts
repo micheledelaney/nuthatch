@@ -133,7 +133,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     fileObject,
     index: buildFileIndex(node, container.ddrInfo),
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
-    activeText: new Map(),
+    scanText: new Map(),
     layoutObjectUidCounts: new Map(),
     objects: [fileObject],
     references: [],
@@ -147,6 +147,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   // Text-derived references for everything so far; each streamed layout gets
   // its own pass (processOneLayout), so its full text can be dropped right after.
   addTextDerivedRefs(fp, fp.objects, 0);
+  fp.scanText.clear();
   if (layoutCatalog) parseLayoutsStreaming(fp, layoutCatalog);
   return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
 }

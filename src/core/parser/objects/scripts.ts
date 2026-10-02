@@ -37,7 +37,7 @@ function withSteps(fp: FileParse, script: FmObject, block: Record<string, unknow
   const steps = block["ObjectList"];
   scanRefs(fp, steps, script);
   // The text is built from FileMaker's pre-rendered StepText (per step,
-  // joined by newlines) rather than collectText(steps): the formatted text
+  // joined by newlines) rather than displayText(steps): the formatted text
   // has real delimiters (`;`, `[`, `]`, …), so search and the placeholder
   // passes see readable steps instead of the raw parameter tree.
   const stepList = scriptSteps(steps, fp.index.stepTextByHash);

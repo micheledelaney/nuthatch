@@ -1,10 +1,10 @@
 import type { FmObject } from "@/types/ddr";
-import { child, collectText, isRecord, textAttr, withoutKey } from "../xmlUtils";
+import { child, displayText, isRecord, textAttr, withoutKey } from "../xmlUtils";
 
 /**
  * A <Theme> names itself with a reverse-DNS id (`com.filemaker.theme.apex_blue`);
  * its friendly label lives in the `Display` attribute, so prefer that. The theme
- * also embeds a base64 preview <Image> that collectText would otherwise pull into
+ * also embeds a base64 preview <Image> that displayText would otherwise pull into
  * the searchable body — reset the text to the names so the model stays lean. The
  * useful design metadata (color scheme, swatch palette, base font size) lives
  * nested under <Metadata>; lift it so the inspector shows what the theme looks
@@ -28,10 +28,10 @@ function themeMetadata(metadata: unknown): Record<string, string> {
   const a: Record<string, string> = {};
   // colorScheme sits at the metadata root or under <charting>.
   const scheme =
-    collectText(metadata["colorScheme"]).trim() ||
-    collectText(isRecord(metadata["charting"]) ? metadata["charting"]["colorScheme"] : undefined).trim();
+    displayText(metadata["colorScheme"]) ||
+    displayText(isRecord(metadata["charting"]) ? metadata["charting"]["colorScheme"] : undefined);
   if (scheme) a.colorScheme = scheme;
-  const baseFont = collectText(isRecord(metadata["layoutbuilder"]) ? metadata["layoutbuilder"]["kBaseFontSize"] : undefined).trim();
+  const baseFont = displayText(isRecord(metadata["layoutbuilder"]) ? metadata["layoutbuilder"]["kBaseFontSize"] : undefined);
   if (baseFont) a.baseFontSize = baseFont;
   // The palette is <swatch1>..<swatchN> hex values; keep them in swatch order.
   const palette = child(metadata, "colorpalette");
@@ -39,7 +39,7 @@ function themeMetadata(metadata: unknown): Record<string, string> {
     const swatches = Object.keys(palette)
       .filter((k) => /^swatch\d+$/.test(k))
       .sort((a, b) => Number(a.slice(6)) - Number(b.slice(6)))
-      .map((k) => collectText(palette[k]).trim())
+      .map((k) => displayText(palette[k]))
       .filter(Boolean);
     if (swatches.length) a.palette = swatches.join(" ");
   }

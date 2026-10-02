@@ -1,7 +1,7 @@
 import type { FmObject, RawReference } from "@/types/ddr";
 import { isBrokenTableOccurrence } from "@/types/ddr";
 import type { FileIndex, FileParse } from "../context";
-import { longestNameEndingAt } from "@/core/identifiers";
+import { missingFieldOccurrences } from "@/core/identifiers";
 import { MISSING_FIELD_TOKEN, MISSING_FUNCTION_TOKEN, MISSING_TABLE_TOKEN, UNKNOWN_TARGET } from "../sentinels";
 import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 
@@ -33,16 +33,16 @@ export function addPlaceholderRefs(fp: FileParse, batch: readonly FmObject[], re
  * Scripts are scanned per step (so the broken edge carries `fromStep` and the
  * right line lights up); every other object is scanned once. The placeholders
  * carry no identity, so it's one edge per step (scripts) or per object, not per
- * distinct missing target. A field is scanned through its *active* calcs only
- * (FileParse.activeText), so a disabled auto-enter calc naming a deleted field
- * doesn't flag it.
+ * distinct missing target.
  *
- * Step parameters and layout-object text are decoded, but every other object's
- * `text` is raw XML text, where a placeholder inside an attribute value stays
- * entity-encoded (`name="&lt;Table Missing&gt;"`) and so isn't matched here. On
- * purpose: those all sit on a `<TableOccurrenceReference id="-1">`, which the
- * element scan already records as the broken reference. The placeholders this
- * pass is for are in calculation text (CDATA, verbatim) and rendered steps.
+ * The placeholders this pass is for are in calculation text and rendered steps,
+ * so every other object is read through FileParse.scanText: the CDATA of what
+ * its element scan read (a field: its *active* calcs only, so a disabled
+ * auto-enter calc naming a deleted field doesn't flag it), after a layout
+ * object's listed terms. Not its search `text`, where a placeholder FileMaker
+ * wrote as an attribute value (`<TableOccurrenceReference id="-1"
+ * name="&lt;Table Missing&gt;">`) reads decoded: those are structural, and the
+ * element scan already records them as the broken reference.
  */
 function forEachPlaceholderUse(
   fp: FileParse,
@@ -58,18 +58,23 @@ function forEachPlaceholderUse(
       }
       continue;
     }
-    const text = fp.activeText.get(obj.uid) ?? obj.text;
+    const text = fp.scanText.get(obj.uid) ?? obj.text;
     if (text.includes(token)) emit(obj, text, {});
   }
 }
 
-/** `fromUid` + step of every reference from `refStart` on that `matches` — e.g.
- * the sites already carrying a broken field edge. */
+/** The sites of every reference from `refStart` on that `matches` — e.g. the
+ * sites already carrying a broken field edge. A reference counts for its step
+ * (a script's placeholders are checked per step) and for its object as a whole
+ * (every other object's are checked once, whatever step inside it — a
+ * button's action — the reference came from). */
 function sitesWith(refs: readonly RawReference[], refStart: number, matches: (r: RawReference) => boolean): Set<string> {
   const sites = new Set<string>();
   for (let i = refStart; i < refs.length; i++) {
     const r = refs[i]!;
-    if (matches(r)) sites.add(siteKey(r.fromUid, r.fromStep));
+    if (!matches(r)) continue;
+    sites.add(siteKey(r.fromUid, r.fromStep));
+    sites.add(siteKey(r.fromUid, undefined));
   }
   return sites;
 }
@@ -82,6 +87,12 @@ function siteKey(uid: string, fromStep: number | undefined): string {
  * FileMaker blanks its name, but it's unverifiable, not broken. */
 function throughUnresolvedOccurrence(r: RawReference, index: FileIndex): boolean {
   return r.viaToId != null && index.toById.get(r.viaToId)?.unresolved === true;
+}
+
+/** A field reference FileMaker left in place with its name blanked because the
+ * field is gone — not one behind a file that was unavailable at export. */
+function isBlankedDeletedField(r: RawReference, index: FileIndex): boolean {
+  return r.toType === "field" && r.toName === "" && !throughUnresolvedOccurrence(r, index);
 }
 
 /**
@@ -105,11 +116,7 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
   // "<Field Missing>" placeholder. Without this check, that single dangling
   // field would be counted and displayed twice. A blank name behind an
   // unavailable file is no such field: it doesn't hide a placeholder.
-  const alreadyBroken = sitesWith(
-    fp.references,
-    refStart,
-    (r) => r.toType === "field" && r.toName === "" && !throughUnresolvedOccurrence(r, fp.index),
-  );
+  const alreadyBroken = sitesWith(fp.references, refStart, (r) => isBlankedDeletedField(r, fp.index));
   forEachPlaceholderUse(fp, batch, MISSING_FIELD_TOKEN, (obj, text, site) => {
     if (alreadyBroken.has(siteKey(obj.uid, site.stepIndex))) return;
     const deleted = deletedFieldVia(text, fp.index);
@@ -130,9 +137,7 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly FmObject[], refStart
  * Returns the occurrence of the first deleted one (the navigable context), or
  * null when every placeholder was unverifiable. */
 function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } | null {
-  for (let pos = text.indexOf(MISSING_FIELD_TOKEN); pos !== -1; pos = text.indexOf(MISSING_FIELD_TOKEN, pos + 1)) {
-    if (!text.endsWith("::", pos)) return {};
-    const name = longestNameEndingAt(text, pos - 2, index.toNames);
+  for (const name of missingFieldOccurrences(text, index.toNames)) {
     const occ = name != null ? index.toByName.get(name) : undefined;
     if (occ?.unresolved) continue;
     return occ ? { viaToId: occ.id } : {};
@@ -156,7 +161,7 @@ function addMissingTargetTableRefs(fp: FileParse, batch: readonly FmObject[], re
   const alreadyBroken = sitesWith(
     fp.references,
     refStart,
-    (r) => r.toType === "field" && (r.forceBroken === true || (r.toName === "" && !throughUnresolvedOccurrence(r, fp.index))),
+    (r) => (r.toType === "field" && r.forceBroken === true) || isBlankedDeletedField(r, fp.index),
   );
   const deadOccurrence = sitesWith(fp.references, refStart, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
   forEachPlaceholderUse(fp, batch, MISSING_TABLE_TOKEN, (obj, text, site) => {

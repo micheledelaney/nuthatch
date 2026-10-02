@@ -1,11 +1,12 @@
 import type { FmFile, FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, attributes, child, collectText, textAttr, uuidText } from "../xmlUtils";
+import { attr, attributes, cdataText, child, displayText, textAttr, uuidText } from "../xmlUtils";
 import { objectUid } from "../uid";
 
 /**
  * The generic object for a catalog item: its attributes, its searchable text,
- * and the <UUID> modification metadata. Null when the item has no `id`.
+ * and the <UUID> modification metadata — and, for the text-based reference
+ * passes, its CDATA (FileParse.scanText). Null when the item has no `id`.
  * `idNamespace` prefixes the id where ids only repeat per parent (a field's
  * table), keeping uids globally unique.
  */
@@ -18,13 +19,15 @@ export function makeObject(
 ): FmObject | null {
   const id = attr(node, "id");
   if (id == null) return null;
+  const uid = objectUid(fp.file.uid, type, idNamespace ? `${idNamespace}.${id}` : id);
+  fp.scanText.set(uid, cdataText(node));
   return newObject(fp.file, {
-    uid: objectUid(fp.file.uid, type, idNamespace ? `${idNamespace}.${id}` : id),
+    uid,
     type,
     id,
     name: textAttr(node, "name") ?? `(${type} ${id})`,
     attributes: { ...attributes(node), ...uuidMeta(node) },
-    text: collectText(node),
+    text: displayText(node),
     ...(parentUid ? { parentUid } : {}),
   });
 }

@@ -1,5 +1,6 @@
 import type { LayoutTriggerInfo } from "@/types/ddr";
-import { asArray, attr, child, children, collectText, enabledLabels, isRecord, ownText, textAttr } from "../xmlUtils";
+import type { FileIndex } from "../context";
+import { asArray, attr, child, children, displayText, enabledLabels, isRecord, ownText, textAttr } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
 
 /** Calculation text from a <Calculation> node. The formula lives in its <Text>,
@@ -8,27 +9,38 @@ import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
  * Not entity-decoded: see decodeEntities' policy. */
 export function calculationText(calc: unknown): string {
   if (!isRecord(calc)) return ownText(calc).trim();
-  if (calc["Text"] != null) return collectText(calc["Text"]).trim();
+  if (calc["Text"] != null) return displayText(calc["Text"]);
   if (calc["Calculation"] != null) return calculationText(child(calc, "Calculation"));
   return ownText(calc).trim();
 }
 
 /** The formula of a node's <Calculation> child, "" when it has none. */
 export function calcOf(node: unknown): string {
-  return isRecord(node) ? calculationText(node["Calculation"]) : "";
+  return isRecord(node) ? calculationText(child(node, "Calculation")) : "";
 }
 
-/** A "TableOccurrence::Field" label from a <FieldReference> (with its nested TO).
- * A deleted field can leave <FieldReference> in place with the TO still named
- * but its own `name` attribute empty — flag it the way a broken reference reads
- * anywhere else in the app. "" when there's no <FieldReference> at all. */
-export function qualifiedField(wrapper: unknown): string {
+/** A "TableOccurrence::Field" label from a <FieldReference> (with its nested TO),
+ * "" when there's no <FieldReference> at all. See fieldRefName for a field
+ * whose name FileMaker left blank. */
+export function qualifiedField(wrapper: unknown, index: FileIndex): string {
   const ref = asArray(wrapper)[0];
   if (!isRecord(ref)) return "";
   const to = textAttr(child(ref, "TableOccurrenceReference"), "name") ?? "";
-  const field = textAttr(ref, "name") ?? "";
-  if (field) return to ? `${to}::${field}` : field;
-  return to ? `${to}::${MISSING_FIELD_TOKEN}` : MISSING_FIELD_TOKEN;
+  const field = fieldRefName(ref, index);
+  return to ? `${to}::${field}` : field;
+}
+
+/** The field a <FieldReference> names. FileMaker leaves the reference in place
+ * with its `name` blank in two cases: the field was deleted — flagged the way
+ * a broken reference reads anywhere else in the app — or it sits behind an
+ * occurrence whose file wasn't available at export, which proves nothing; that
+ * one reads by its id, like any other unnamed object. */
+export function fieldRefName(ref: unknown, index: FileIndex): string {
+  const name = textAttr(ref, "name");
+  if (name) return name;
+  const toId = attr(child(ref, "TableOccurrenceReference"), "id");
+  const unverifiable = toId != null && index.toById.get(toId)?.unresolved === true;
+  return unverifiable ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
 }
 
 /** Strip a single layer of surrounding double-quotes (FileMaker wraps static

@@ -113,13 +113,11 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): void {
 
     // Real layout: parse the single element and process it immediately so the
     // parsed object-tree can be GC'd before the next layout is parsed.
+    // Only an emitted layout takes a place in the order, as in parseScripts.
     const layoutNode = parseLayoutElement(fp, catalogXml.slice(lt, endPos), openTag);
-    if (layoutNode == null) {
-      order++;
-      continue;
-    }
+    if (layoutNode == null) continue;
     const folder = folderPath(folderStack);
-    for (const node of asArray(layoutNode)) processOneLayout(fp, node, folder, order++);
+    for (const node of asArray(layoutNode)) if (processOneLayout(fp, node, folder, order)) order++;
   }
 }
 

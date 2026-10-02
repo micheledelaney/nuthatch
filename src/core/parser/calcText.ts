@@ -78,6 +78,17 @@ export function chunkListMatchesText(chunkList: unknown, calcText: string): bool
  * // to end of line), keeping every other character at its position, so names
  * inside them are never mistaken for references. */
 export function stripLiteralsAndComments(text: string): string {
+  return blankOut(text, true);
+}
+
+/** Blank out comments only, keeping string literals (and every other character
+ * at its position) — for what a literal names, like a `"$$global"` passed by
+ * name, outside comments. */
+export function stripComments(text: string): string {
+  return blankOut(text, false);
+}
+
+function blankOut(text: string, literals: boolean): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -85,7 +96,8 @@ export function stripLiteralsAndComments(text: string): string {
     if (c === '"') {
       let j = i + 1;
       while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
-      out += " ".repeat(Math.min(j + 1, text.length) - i);
+      const end = Math.min(j + 1, text.length);
+      out += literals ? " ".repeat(end - i) : text.slice(i, end);
       i = j + 1;
       continue;
     }
@@ -142,17 +154,6 @@ export function longestNameAt(text: string, pos: number, index: NameIndex): stri
 export function fieldNameCandidate(text: string, start: number): string {
   const m = /^[^;()[\]{}&=≠<>≤≥+\-*/^,¶"\r\n:]*/u.exec(text.slice(start));
   return (m?.[0] ?? "").trim();
-}
-
-/** The longest name in `names` that is a prefix of `candidate` at a name
- * boundary — how a name-based field reference picks its field. */
-export function longestPrefixName(candidate: string, names: Iterable<string>): string | undefined {
-  let best: string | undefined;
-  for (const name of names) {
-    if (!name || (best != null && best.length >= name.length)) continue;
-    if (candidate.startsWith(name) && !isNameChar(candidate[name.length])) best = name;
-  }
-  return best;
 }
 
 /** `$$names` passed by name as a whole string literal — `Map.Clear ( "$$_CMAP" )`,

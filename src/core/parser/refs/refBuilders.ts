@@ -42,3 +42,8 @@ export function brokenRef(fromUid: string, toType: ObjectType, toName: string, k
 export function globalVariableRef(fromUid: string, name: string): RawReference {
   return { fromUid, toType: "globalVariable", toId: name, toName: name, kind: "globalVariable" };
 }
+
+/** A call of this file's custom function `name` (id `id`). */
+export function customFunctionRef(fromUid: string, id: string, name: string): RawReference {
+  return { fromUid, toType: "customFunction", toId: id, toName: name, kind: "customFunction" };
+}

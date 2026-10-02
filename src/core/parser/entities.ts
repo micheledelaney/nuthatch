@@ -21,8 +21,10 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
  * them through `textAttr` (an attribute) and `displayText` (an element's
  * text), the two decoding readers. UI components treat strings off the model
  * as already-decoded and never call decodeEntities a second time: a second
- * pass turns a literal `&amp;` in a name into `&`. (`FmObject.text` is the
- * search index, built from the raw XML; it isn't display text.)
+ * pass turns a literal `&amp;` in a name into `&`. That includes
+ * `FmObject.text`, the search index (`displayText` of the object's XML), which
+ * search shows snippets of. The text-based reference passes read `cdataText`
+ * instead — CDATA only, where placeholders and merge fields appear as written.
  *
  * CDATA is never decoded: its content is literal text. The XML parser keeps it
  * under its own key (CDATA_KEY), so `displayText` decodes only character data.

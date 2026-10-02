@@ -1,5 +1,7 @@
 import type { FmObject, JoinPredicate, RelationshipSide } from "@/types/ddr";
+import type { FileIndex } from "../context";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
+import { fieldRefName } from "./common";
 
 // Keys match the `type` attribute FileMaker writes on <JoinPredicate>.
 // Confirmed from DDR output: Equal, NotEqual, LessOrEqual, GreaterOrEqual,
@@ -18,7 +20,7 @@ const JOIN_OPERATORS: Readonly<Record<string, string>> = {
 };
 
 /** A relationship's table occurrences and join predicates, as detail. */
-export function annotateRelationship(node: Record<string, unknown>, obj: FmObject): FmObject {
+export function annotateRelationship(node: Record<string, unknown>, obj: FmObject, index: FileIndex): FmObject {
   const left = node["LeftTable"];
   const right = node["RightTable"];
   const leftToId = occurrenceId(left);
@@ -28,9 +30,9 @@ export function annotateRelationship(node: Record<string, unknown>, obj: FmObjec
     .map((predicate) => {
       const type = attr(predicate, "type");
       return {
-        leftField: fieldName(predicate["LeftField"]),
+        leftField: fieldName(predicate["LeftField"], index),
         operator: type == null ? "=" : (JOIN_OPERATORS[type] ?? type),
-        rightField: fieldName(predicate["RightField"]),
+        rightField: fieldName(predicate["RightField"], index),
       };
     });
   return {
@@ -69,6 +71,8 @@ function occurrenceId(wrapper: unknown): string | undefined {
   return attr(child(wrapper, "TableOccurrenceReference"), "id");
 }
 
-function fieldName(wrapper: unknown): string {
-  return textAttr(child(wrapper, "FieldReference"), "name") ?? "";
+/** A predicate side's field (see fieldRefName), "" when it names none. */
+function fieldName(wrapper: unknown, index: FileIndex): string {
+  const ref = child(wrapper, "FieldReference");
+  return isRecord(ref) ? fieldRefName(ref, index) : "";
 }

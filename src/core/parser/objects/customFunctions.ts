@@ -1,6 +1,6 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { displayText, textAttr } from "../xmlUtils";
+import { cdataText, displayText, textAttr } from "../xmlUtils";
 import { collectCatalogItems, firstBlockByOwner } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { calcOf } from "./common";
@@ -27,8 +27,11 @@ export function annotateCustomFunction(item: Record<string, unknown>, obj: FmObj
   };
 }
 
-/** The references in a separately stored formula (see customFunctionCalcs). */
+/** The references in a separately stored formula (see customFunctionCalcs),
+ * and its text for the text-based passes, beside the catalog entry's. */
 export function addCustomFunctionCalcRefs(fp: FileParse, obj: FmObject, calcs: CalcBlocks): void {
   const block = calcs.get(obj.id);
-  if (block) scanRefs(fp, block["Calculation"], obj);
+  if (!block) return;
+  scanRefs(fp, block["Calculation"], obj);
+  fp.scanText.set(obj.uid, `${fp.scanText.get(obj.uid) ?? ""}\n${cdataText(block["Calculation"])}`);
 }

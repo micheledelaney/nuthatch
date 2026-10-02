@@ -108,7 +108,8 @@ export interface FmObject {
    *   • script        → `name params` per step, one step per line
    *   • field         → the calc body (also stored in `detail`)
    *   • customFunction→ signature + calc body
-   *   • everything else → `collectText(node)` from the source XML
+   *   • everything else → `displayText(node)` from the source XML (decoded
+   *     like every other string in the model; CDATA verbatim)
    */
   text: string;
   /** Type-specific structured detail for rich display in the inspector. */

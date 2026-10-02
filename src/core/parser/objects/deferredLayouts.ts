@@ -77,9 +77,9 @@ function buttonSteps(node: Record<string, unknown>): { owner: string; index: num
  * Emit the layout references FM 22 records only in <ModifyAction> (see
  * deferredLayoutTargets): join each deferred button to its AddAction object by
  * id (and UUID, if the id is ambiguous), and each step by position and name.
- * The reference comes from the layout and from the button itself, like the
- * ones the element scan emits, and resolves in the file the AddAction step's
- * data source names.
+ * The reference comes from the button itself (its layout gets a copy, like
+ * of every reference its objects record), and resolves in the file the
+ * AddAction step's data source names.
  * Steps whose AddAction copy already names the layout are left to that scan.
  */
 export function addDeferredLayoutRefs(
@@ -117,9 +117,7 @@ export function addDeferredLayoutRefs(
         ...(isExternal ? { toFileName: fileName } : {}),
       };
       const site = { stepIndex: target.index + 1, disabled: attr(step, "enable") === "False" };
-      pushRef(fp.references, { fromUid: layoutObj.uid, ...ref }, site);
-      const buttonUid = uidOfElement.get(match);
-      if (buttonUid) pushRef(fp.references, { fromUid: buttonUid, ...ref }, site);
+      pushRef(fp.references, { fromUid: uidOfElement.get(match) ?? layoutObj.uid, ...ref }, site);
     }
   }
 }

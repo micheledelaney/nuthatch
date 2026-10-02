@@ -58,12 +58,12 @@ export function isElementKey(key: string): boolean {
 export function ownText(node: unknown): string {
   if (typeof node === "string") return node;
   if (!isRecord(node)) return "";
-  return [cdataText(node[CDATA_KEY]), node["#text"] == null ? "" : String(node["#text"])].join("");
+  return [cdataValue(node[CDATA_KEY]), node["#text"] == null ? "" : String(node["#text"])].join("");
 }
 
 /** The content of a CDATA value: a node with several CDATA sections gets them
  * as an array, which read as one run of text. */
-function cdataText(value: unknown): string {
+function cdataValue(value: unknown): string {
   if (value == null) return "";
   return Array.isArray(value) ? value.join("") : String(value);
 }
@@ -139,38 +139,43 @@ export function enabledLabels(node: unknown, pairs: ReadonlyArray<readonly [stri
 }
 
 /**
- * Recursively gather all human-readable text from a node: text nodes, CDATA,
- * and `name` attribute values. Used to build the full-text search index and to
- * detect global variables.
+ * All the human-readable text under a node — character data, CDATA, and `name`
+ * attribute values — for display and search: a description, a label, an
+ * object's searchable `text`. Entity-decoded (the parser runs with entity
+ * expansion off) and trimmed. CDATA stays verbatim: its content is literal
+ * text, so decoding it would turn a typed `&amp;` into `&`.
  */
-export function collectText(node: unknown): string {
-  const out: string[] = [];
-  gatherText(node, out, false);
-  return out.join(" ");
-}
-
-/** The text under a node for display — a description, comment, label — gathered
- * like collectText but entity-decoded (the parser runs with entity expansion
- * off) and trimmed. CDATA stays verbatim: its content is literal text, so
- * decoding it would turn a typed `&amp;` into `&`. */
 export function displayText(node: unknown): string {
   const out: string[] = [];
-  gatherText(node, out, true);
+  gatherText(node, out, "display");
   return out.join(" ").trim();
 }
 
-/** Recursive accumulator for collectText / displayText. Pushes fragments into
+/**
+ * The CDATA under a node, verbatim: formulas, layout text and labels, which
+ * FileMaker writes as CDATA. Everything else in the XML is entity-encoded, so
+ * this is the only text where a placeholder FileMaker leaves for a deleted
+ * target (`<Field Missing>`) or a merged variable (`<<$$x>>`) appears as
+ * written — what the text-based reference passes read.
+ */
+export function cdataText(node: unknown): string {
+  const out: string[] = [];
+  gatherText(node, out, "cdata");
+  return out.join(" ");
+}
+
+/** Recursive accumulator for displayText / cdataText. Pushes fragments into
  * `out` and joins only once — joining at every recursive call (as an earlier
  * version did) is O(n²) and, on the largest layouts, allocates gigabytes of
  * discarded intermediate strings. */
-function gatherText(node: unknown, out: string[], decode: boolean): void {
+function gatherText(node: unknown, out: string[], mode: "display" | "cdata"): void {
   if (node == null) return;
   if (typeof node === "string" || typeof node === "number") {
-    pushText(out, String(node), decode);
+    if (mode === "display") pushText(out, String(node), true);
     return;
   }
   if (Array.isArray(node)) {
-    for (const item of node) gatherText(item, out, decode);
+    for (const item of node) gatherText(item, out, mode);
     return;
   }
   if (isRecord(node)) {
@@ -190,11 +195,11 @@ function gatherText(node: unknown, out: string[], decode: boolean): void {
       // once the stray guid is stripped back out downstream.
       if (key === "UUID") continue;
       if (key === CDATA_KEY) {
-        pushText(out, cdataText(value), false);
+        pushText(out, cdataValue(value), false);
       } else if (key === ATTR_PREFIX + "name" || key === "#text") {
-        pushText(out, String(value), decode);
+        if (mode === "display") pushText(out, String(value), true);
       } else if (!key.startsWith(ATTR_PREFIX)) {
-        gatherText(value, out, decode);
+        gatherText(value, out, mode);
       }
     }
   }

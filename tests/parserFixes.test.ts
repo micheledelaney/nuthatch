@@ -419,6 +419,83 @@ describe("what gets parsed", () => {
     expect(object(result, "F0:field:1.2").detail).toBeUndefined();
   });
 
+  it("shows an auto-enter calc that's on beside an auto-entered Data value", () => {
+    // As in the SampleA sample: FileMaker 26 marks each option enable="…".
+    const autoEnter = (enable: string): string =>
+      `<AutoEnter type="ConstantData" overwriteExisting="True" alwaysEvaluate="True"><ConstantData>0</ConstantData>` +
+      `<Calculated enable="${enable}"><Calculation><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><Text><![CDATA[T::a]]></Text></Calculation></Calculated></AutoEnter>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE.replace('<Field id="2" name="b"></Field>', `<Field id="2" name="b">${autoEnter("True")}</Field><Field id="3" name="c">${autoEnter("False")}</Field>`)}</AddAction>`,
+      ),
+    );
+    const on = object(result, "F0:field:1.2");
+    expect(on.detail).toEqual({ kind: "calculation", signature: "Auto-enter calculation", body: "T::a" });
+    expect(on.attributes).toMatchObject({ autoEnter: "Data: 0", calcContextToId: "1" });
+    expect(object(result, "F0:field:1.3").detail).toBeUndefined();
+  });
+
+  it("counts a global passed by name in a formula's text, but not one in its comment", () => {
+    // No chunk list to read (no DDR_INFO block), so the text is scanned.
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><CustomFunctionsCatalog><CustomFunction id="1" name="F"><Calculation>
+          <DDRREF kind="ChunkList" hash="H1">_P1</DDRREF><Text><![CDATA[$$a & Evaluate ( "$$b" ) // "$$c"]]></Text>
+        </Calculation></CustomFunction></CustomFunctionsCatalog></AddAction>`,
+      ),
+    );
+    expect(refsFrom(result, "F0:customFunction:1")).toEqual(["globalVariable:$$a globalVariable", "globalVariable:$$b globalVariable"]);
+  });
+
+  it("gives a layout without an id no place in the order, like a script", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>
+          <ScriptCatalog><Script id="1" name="A"></Script><Script name="No id"></Script><Script id="2" name="B"></Script></ScriptCatalog>
+          <LayoutCatalog><Layout id="1" name="A"></Layout><Layout name="No id"></Layout><Layout id="2" name="B"></Layout></LayoutCatalog>
+        </AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:script:2").order).toBe(1);
+    expect(object(result, "F0:layout:2").order).toBe(1);
+  });
+
+  it("decodes an object's search text, without reading a placeholder name as a broken use", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE.replace(
+          '<Field id="2" name="b"></Field>',
+          `<Field id="2" name="b"><AutoEnter type="Looked_up"><Looked_up>
+            <FieldReference id="9" name="Q &amp; A"><TableOccurrenceReference id="-1" name="&lt;Table Missing&gt;"></TableOccurrenceReference></FieldReference>
+          </Looked_up></AutoEnter></Field>`,
+        )}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:field:1.2").text).toContain("<Table Missing>");
+    expect(object(result, "F0:field:1.2").text).toContain("Q & A");
+    expect(forcedFrom(result, "F0:field:1.2")).toEqual([]);
+    expect(buildModel(result).brokenReferences.filter((r) => r.fromUid === "F0:field:1.2")).toHaveLength(1);
+  });
+
+  it("flags a deleted field in a custom function's separately stored formula (FM 22)", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <CustomFunctionsCatalog><CustomFunction id="1" name="F"></CustomFunction></CustomFunctionsCatalog>
+          <CalcsForCustomFunctions><CustomFunctionCalc><CustomFunctionReference id="1" name="F"></CustomFunctionReference>
+            <Calculation><Text><![CDATA[T::<Field Missing>]]></Text></Calculation>
+          </CustomFunctionCalc></CalcsForCustomFunctions>
+        </AddAction>`,
+      ),
+    );
+    expect(forcedFrom(result, "F0:customFunction:1")).toEqual(["field <Field Missing> via 1"]);
+  });
+
   it("streams layouts whose text holds layout markup", () => {
     const result = parse(
       doc(
@@ -434,6 +511,120 @@ describe("what gets parsed", () => {
     expect(result.errors).toEqual([]);
     expect(result.objects.filter((o) => o.type === "layout").map((o) => o.name)).toEqual(["A", "B"]);
     expect(object(result, "F0:layoutObject:1.1").detail).toMatchObject({ info: '</Layout><Layout id="9" name="X">' });
+  });
+});
+
+/** TABLE plus an external occurrence X (id 2) whose file wasn't available at
+ * export: its data source exists, but it has no base table. */
+const TABLE_AND_UNAVAILABLE = TABLE.replace(
+  "</TableOccurrenceCatalog>",
+  `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference><DataSourceReference id="1" name="Other"></DataSourceReference></BaseTableSourceReference></TableOccurrence>
+  </TableOccurrenceCatalog>
+  <ExternalDataSourceCatalog><ExternalDataSource id="1" name="Other"></ExternalDataSource></ExternalDataSourceCatalog>`,
+);
+
+/** A <FieldReference> FileMaker left with a blank name, through occurrence `to`. */
+function blankField(id: string, to: string, toName: string): string {
+  return `<FieldReference id="${id}" name="" UUID=""><TableOccurrenceReference id="${to}" name="${toName}"></TableOccurrenceReference></FieldReference>`;
+}
+
+function editBox(id: string, fieldRef: string, extra = ""): string {
+  return `<LayoutObject id="${id}" type="Edit Box" name=""><Field>${fieldRef}</Field>${extra}</LayoutObject>`;
+}
+
+/** The broken edges the parser itself records (forceBroken) from `uid`. */
+function forcedFrom(result: ParseResult, uid: string): string[] {
+  return result.references
+    .filter((r) => r.fromUid === uid && r.forceBroken)
+    .map((r) => `${r.toType} ${r.toName}${r.viaToId ? ` via ${r.viaToId}` : ""}`)
+    .sort();
+}
+
+describe("field labels", () => {
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE_AND_UNAVAILABLE}
+        <RelationshipCatalog><Relationship id="1">
+          <LeftTable><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></LeftTable>
+          <RightTable><TableOccurrenceReference id="2" name="X"></TableOccurrenceReference></RightTable>
+          <JoinPredicateList><JoinPredicate type="Equal">
+            <LeftField>${blankField("9", "1", "T")}</LeftField><RightField>${blankField("7", "2", "X")}</RightField>
+          </JoinPredicate></JoinPredicateList>
+        </Relationship></RelationshipCatalog>
+        ${layout(editBox("1", blankField("7", "2", "X")) + editBox("2", blankField("9", "1", "T")))}
+      </AddAction>`,
+    ),
+  );
+
+  it("reads a field behind an unavailable file by its id, not as missing", () => {
+    expect(object(result, "F0:layoutObject:10.1").name).toBe("X::(field 7)");
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual([]);
+  });
+
+  it("still reads a deleted field as missing", () => {
+    expect(object(result, "F0:layoutObject:10.2").name).toBe("T::<Field Missing>");
+  });
+
+  it("labels a relationship's blank predicate fields the same way", () => {
+    expect(object(result, "F0:relationship:1").detail).toMatchObject({
+      predicates: [{ leftField: "<Field Missing>", rightField: "(field 7)" }],
+    });
+  });
+});
+
+describe("what a layout reports", () => {
+  /** An empty chunk list: FileMaker's output for a calc that names a deleted field. */
+  const emptyList = (pointer: string, hash: string): string => `<${pointer} hash="${hash}"><ChunkList></ChunkList></${pointer}>`;
+  const conditionalFormat = (formula: string): string =>
+    `<Conditions><Formatting><Condition><Calculation><DDRREF kind="ChunkList" hash="H5">_P5</DDRREF><Text><![CDATA[${formula}]]></Text></Calculation></Condition></Formatting></Conditions>`;
+
+  it("flags a deleted field in one object's calc although another object reads a deleted occurrence", () => {
+    // As on the Production sample's Duration layout.
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(
+          editBox("1", blankField("2", "-1", "&lt;Table Missing&gt;")) +
+            editBox("2", `<FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference>`, conditionalFormat("T::<Field Missing> = 1")),
+        )}</AddAction>`,
+        `<Calcs>${emptyList("_P5", "H5")}</Calcs>`,
+      ),
+    );
+    expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1"]);
+  });
+
+  it("flags a field object whose field and occurrence were deleted on its layout too", () => {
+    // As on the Contacts sample's Contact-dev layout.
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(editBox("1", `<FieldReference id="0" name="" UUID=""></FieldReference>`))}</AddAction>`));
+    expect(object(result, "F0:layoutObject:10.1").name).toBe("<Field Missing>");
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing>"]);
+    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing>"]);
+  });
+
+  it("flags a button's broken Set Field once, as a script's", () => {
+    const setField =
+      `<Step id="1" name="Set Field" enable="True"><ParameterValues>` +
+      `<Parameter type="FieldReference">${blankField("5", "1", "T")}</Parameter>` +
+      `<Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation><DDRREF kind="ChunkList" hash="H6">_P6</DDRREF><Text><![CDATA[T::<Field Missing>]]></Text></Calculation></Calculation></Parameter>` +
+      `</ParameterValues></Step>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${setField}</ObjectList></Script></StepsForScripts>
+          ${layout(`<LayoutObject id="1" type="Button" name=""><Button><action>${setField}</action></Button></LayoutObject>`)}
+        </AddAction>`,
+        `<Calcs>${emptyList("_P6", "H6")}</Calcs>`,
+      ),
+    );
+    const broken = buildModel(result).brokenReferences;
+    const from = (uid: string): number => broken.filter((r) => r.fromUid === uid).length;
+    expect(from("F0:script:1")).toBe(1);
+    expect(from("F0:layoutObject:10.1")).toBe(1);
+    expect(from("F0:layout:10")).toBe(1);
   });
 });
 

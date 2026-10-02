@@ -1,10 +1,10 @@
 import type { FmObject, ObjectDetail } from "@/types/ddr";
-import type { FileParse } from "../context";
-import { attr, child, children, collectText, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
+import type { FileIndex, FileParse } from "../context";
+import { attr, cdataText, child, children, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { UNKNOWN_TARGET } from "../sentinels";
 import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
-import { activeFieldNode } from "../refs/activeOptions";
+import { activeFieldNode, isAutoEnterOptionActive, isValidationOptionActive } from "../refs/activeOptions";
 import { makeObject } from "./catalogItems";
 import { calcOf, calculationText, qualifiedField } from "./common";
 
@@ -33,12 +33,12 @@ function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tab
     // the owning table to keep object uids globally unique.
     const base = makeObject(fp, field, "field", tableUid, tableId);
     if (!base || !isRecord(field)) continue;
-    const fieldObj = annotateField(field, base);
+    const fieldObj = annotateField(field, base, fp.index);
     fp.objects.push(fieldObj);
     // The element scan skips disabled auto-enter / validation calcs; the
     // placeholder passes (which read text, not elements) must skip them too.
     const active = activeFieldNode(field);
-    if (active !== field) fp.activeText.set(fieldObj.uid, collectText(active));
+    if (active !== field) fp.scanText.set(fieldObj.uid, cdataText(active));
     scanRefs(fp, field, fieldObj);
   }
 }
@@ -99,11 +99,11 @@ const STRICT_TYPE_LABELS: Readonly<Record<string, string>> = {
  * validation. (`fieldType` and `dataType` already arrive via the element's own
  * attributes.)
  */
-function annotateField(fieldNode: Record<string, unknown>, fieldObj: FmObject): FmObject {
+function annotateField(fieldNode: Record<string, unknown>, fieldObj: FmObject, index: FileIndex): FmObject {
   const storage = child(fieldNode, "Storage");
   const autoEnter = child(fieldNode, "AutoEnter");
   const formula = fieldFormula(fieldNode, autoEnter, storage);
-  const detail = formula?.detail ?? summaryDetail(fieldNode) ?? lookupDetail(autoEnter);
+  const detail = formula?.detail ?? summaryDetail(fieldNode) ?? lookupDetail(autoEnter, index);
   return {
     ...fieldObj,
     attributes: {
@@ -155,8 +155,10 @@ function containerStorage(storage: unknown): string {
 /**
  * A calculated/summary field carries its formula in a nested <Calculation>; an
  * ordinary field may instead carry an auto-enter calculation under
- * <AutoEnter type="Calculated">. Either is surfaced as rich detail (like a
- * custom function's body), labeling the auto-enter case so it reads as such.
+ * <AutoEnter><Calculated> — in effect by the same rule the reference scan uses
+ * (isAutoEnterOptionActive), which also holds beside an auto-entered Data
+ * value. Either is surfaced as rich detail (like a custom function's body),
+ * labeling the auto-enter case so it reads as such.
  */
 function fieldFormula(
   fieldNode: Record<string, unknown>,
@@ -164,7 +166,7 @@ function fieldFormula(
   storage: unknown,
 ): { detail?: ObjectDetail; attributes: Record<string, string> } | undefined {
   const calc = fieldNode["Calculation"];
-  const calculated = isRecord(autoEnter) && attr(autoEnter, "type") === "Calculated" ? autoEnter["Calculated"] : undefined;
+  const calculated = isAutoEnterOptionActive(autoEnter, "Calculated") ? child(autoEnter, "Calculated") : undefined;
   const autoEnterCalc = calc == null && isRecord(calculated) ? calculated["Calculation"] : undefined;
   const formula = calc ?? autoEnterCalc;
   if (formula == null) return undefined;
@@ -198,13 +200,12 @@ function summaryDetail(fieldNode: Record<string, unknown>): ObjectDetail | undef
 
 /** A "looked-up value" auto-enter field carries no formula — instead an enabled
  * <Looked_up> naming the source field it copies from, formatted like a value
- * list's field source. (When the lookup is disabled, FileMaker clears the
- * AutoEnter's type but leaves the stale <Looked_up> in place, so checking the
- * type here already excludes it.) */
-function lookupDetail(autoEnter: unknown): ObjectDetail | undefined {
+ * list's field source. (A disabled lookup stays in the XML; it's skipped by the
+ * same rule the reference scan uses.) */
+function lookupDetail(autoEnter: unknown, index: FileIndex): ObjectDetail | undefined {
   const lookedUp = child(autoEnter, "Looked_up");
-  if (attr(autoEnter, "type") !== "Looked_up" || !isRecord(lookedUp)) return undefined;
-  const source = qualifiedField(lookedUp["FieldReference"]);
+  if (!isAutoEnterOptionActive(autoEnter, "Looked_up") || !isRecord(lookedUp)) return undefined;
+  const source = qualifiedField(lookedUp["FieldReference"], index);
   return source ? { kind: "lookup", source } : undefined;
 }
 
@@ -253,14 +254,14 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
   if (!isRecord(validation)) return {};
 
   const requirements: string[] = [];
-  const strict = collectText(validation["Strict"]).trim();
+  const strict = displayText(validation["Strict"]);
   if (strict) requirements.push(STRICT_TYPE_LABELS[strict] ?? `Strict data type: ${strict}`);
   if (attr(validation, "notEmpty") === "True") requirements.push("Not empty");
   if (attr(validation, "unique") === "True") requirements.push("Unique");
   if (attr(validation, "existing") === "True") requirements.push("Existing value");
   // Newer exports write a `maxLength` attribute, FM 22 a <MaximumSize> element;
   // for a container field the limit is in kilobytes.
-  const maxLength = attr(validation, "maxLength") ?? collectText(validation["MaximumSize"]).trim();
+  const maxLength = attr(validation, "maxLength") ?? displayText(validation["MaximumSize"]);
   if (maxLength) {
     const unit = attr(fieldNode, "datatype") === "Binary" ? "KB" : maxLength === "1" ? "character" : "characters";
     requirements.push(`Max ${maxLength} ${unit}`);
@@ -277,7 +278,7 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
   // Validation by calculation: <Calculated><Calculation>, left in place with
   // enable="False" when the option is switched off.
   const calculated = child(validation, "Calculated");
-  const isCalculated = isRecord(calculated) && attr(calculated, "enable") !== "False";
+  const isCalculated = isValidationOptionActive(calculated);
   if (isCalculated) requirements.push("By calculation");
   if (requirements.length === 0) return {};
 
@@ -300,7 +301,7 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
 function validationMessage(validation: Record<string, unknown>): string {
   const messageCalc = child(validation, "MessageCalc");
   if (isRecord(messageCalc)) {
-    return attr(messageCalc, "enable") === "False" ? "" : calcOf(messageCalc);
+    return isValidationOptionActive(messageCalc) ? calcOf(messageCalc) : "";
   }
   return displayText(validation["Message"]);
 }

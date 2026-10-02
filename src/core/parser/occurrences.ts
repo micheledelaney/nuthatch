@@ -17,6 +17,17 @@ export interface OccurrenceSource {
   unresolved: boolean;
 }
 
+/** A local occurrence's base-table id; undefined for an external occurrence
+ * (its base table lives in another file) and for a broken one. */
+export function localBaseTableId(source: OccurrenceSource): string | undefined {
+  return source.external ? undefined : source.baseTableId;
+}
+
+/** External, with its base table recorded: its file was open at export. */
+export function fileOpenAtExport(source: OccurrenceSource): boolean {
+  return source.external && source.baseTableId != null;
+}
+
 /**
  * Read a table occurrence's base table and — for an external occurrence — its
  * data source. Both live inside a <BaseTableSourceReference> wrapper, not

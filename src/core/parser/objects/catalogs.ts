@@ -2,7 +2,6 @@ import type { FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { isRecord } from "../xmlUtils";
 import { collectCatalogItems } from "../catalogWalk";
-import { occurrenceSource } from "../occurrences";
 import { scanRefs } from "../refs/scanRefs";
 import { makeObject } from "./catalogItems";
 import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs } from "./customFunctions";
@@ -35,7 +34,7 @@ interface CatalogSpec {
   scan?: "none" | ((item: Item) => unknown);
   /** References recorded after the scan, from outside the item's own element
    * scan (a separately stored formula, the sets granting a privilege, …). */
-  addRefs?: (fp: FileParse, item: Item, obj: FmObject) => void;
+  addRefs?: (item: Item, obj: FmObject) => void;
 }
 
 /** The catalogs, in the order their objects are emitted. Missing catalogs are
@@ -58,24 +57,30 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       catalogKey: "TableOccurrenceCatalog",
       itemTag: "TableOccurrence",
       type: "tableOccurrence",
-      annotate: (item, obj) => annotateTableOccurrence(item, obj, occurrenceSource(item, fp.index.dataSourceIds)),
+      // Every occurrence with an id is in the file index, which already read its source.
+      annotate: (item, obj) => annotateTableOccurrence(item, obj, fp.index.toById.get(obj.id)!),
     },
-    { catalogKey: "RelationshipCatalog", itemTag: "Relationship", type: "relationship", annotate: annotateRelationship },
+    {
+      catalogKey: "RelationshipCatalog",
+      itemTag: "Relationship",
+      type: "relationship",
+      annotate: (item, obj) => annotateRelationship(item, obj, fp.index),
+    },
     {
       catalogKey: "ValueListCatalog",
       itemTag: "ValueList",
       type: "valueList",
-      annotate: (item, obj) => annotateValueList(item, obj, valueLists),
+      annotate: (item, obj) => annotateValueList(item, obj, valueLists, fp.index),
       // Only the in-effect parts of its contents are dependencies (addValueListRefs).
       scan: "none",
-      addRefs: (refFp, item, obj) => addValueListRefs(refFp, item, obj, valueLists),
+      addRefs: (item, obj) => addValueListRefs(fp, item, obj, valueLists),
     },
     {
       catalogKey: "CustomFunctionsCatalog",
       itemTag: "CustomFunction",
       type: "customFunction",
       annotate: (item, obj) => annotateCustomFunction(item, obj, cfCalcs),
-      addRefs: (refFp, _item, obj) => addCustomFunctionCalcRefs(refFp, obj, cfCalcs),
+      addRefs: (_item, obj) => addCustomFunctionCalcRefs(fp, obj, cfCalcs),
     },
     {
       catalogKey: "ExtendedPrivilegesCatalog",
@@ -83,7 +88,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       type: "extendedPrivilege",
       annotate: annotateExtendedPrivilege,
       scan: "none",
-      addRefs: addExtendedPrivilegeGrants,
+      addRefs: (item, obj) => addExtendedPrivilegeGrants(fp, item, obj),
     },
     { catalogKey: "FileAccessCatalog", itemTag: "Authorization", type: "fileAccess", annotate: annotateFileAccess, scan: "none" },
     {
@@ -116,7 +121,7 @@ export function parseCatalogs(fp: FileParse, containerNode: Record<string, unkno
       const obj = spec.annotate ? spec.annotate(item, base) : base;
       fp.objects.push(obj);
       if (spec.scan !== "none") scanRefs(fp, spec.scan ? spec.scan(item) : item, obj);
-      spec.addRefs?.(fp, item, obj);
+      spec.addRefs?.(item, obj);
     }
   }
 }

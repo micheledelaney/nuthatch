@@ -1,11 +1,11 @@
 import type { FmObject } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, children, collectText, displayText, enabledLabels, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
+import { attr, cdataText, child, children, displayText, enabledLabels, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { objectUid } from "../uid";
 import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { newObject } from "./catalogItems";
-import { isPerformScriptStep } from "../stepNames";
+import { isPerformScriptStep } from "../steps";
 import { calcOf, stripOuterQuotes } from "./common";
 
 const MENU_MODES: ReadonlyArray<readonly [string, string]> = [
@@ -53,7 +53,7 @@ export function annotateCustomMenuSet(node: Record<string, unknown>, obj: FmObje
   if (comment) a.comment = comment;
   const count = attr(child(node, "CustomMenuList"), "membercount");
   if (count) a.menus = count;
-  const sourceUuid = collectText(node["SourceUUID"]).trim();
+  const sourceUuid = displayText(node["SourceUUID"]);
   if (sourceUuid) a.sourceUuid = sourceUuid;
   return { ...obj, attributes: { ...obj.attributes, ...a } };
 }
@@ -79,14 +79,16 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
       if (!isRecord(item)) continue;
       const index = attr(item, "index") ?? String(order);
       const isSeparator = attr(item, "isSeparatorItem") === "True";
+      const uid = objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`);
+      fp.scanText.set(uid, cdataText(item));
       const obj = newObject(fp.file, {
-        uid: objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`),
+        uid,
         type: "customMenuItem",
         id: index,
         name: menuItemName(item),
         parentUid: menuUid,
         attributes: menuItemAttributes(item, menuName),
-        text: collectText(item),
+        text: displayText(item),
         order: order++,
         ...(isSeparator ? { isSeparator: true } : {}),
       });

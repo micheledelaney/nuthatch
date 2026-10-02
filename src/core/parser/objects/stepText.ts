@@ -1,6 +1,5 @@
 import type { ScriptStep } from "@/types/ddr";
-import { renderedStepText } from "../context";
-import { INSERT_TEXT_STEP } from "../stepNames";
+import { INSERT_TEXT_STEP, renderedStepText } from "../steps";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 import { charForCode, decodeEntities } from "../entities";
 

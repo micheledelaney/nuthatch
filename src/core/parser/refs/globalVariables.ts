@@ -30,26 +30,27 @@ function pathListGlobals(pathList: string): string[] {
     .filter((entry) => entry.startsWith("$$"));
 }
 
-/** The text-only global-variable uses (data-source paths, layout merge
- * variables) of a batch of objects. Layout text is scanned in full, so this
- * runs before the layout is compacted. */
-export function addTextGlobalRefs(fp: FileParse, batch: readonly FmObject[]): void {
+/** The `$$globals` the data sources in a batch of objects name in their path lists. */
+export function addDataSourcePathGlobalRefs(fp: FileParse, batch: readonly FmObject[]): void {
   for (const obj of batch) {
     if (obj.type !== "externalDataSource") continue;
     for (const name of pathListGlobals(obj.attributes.path ?? "")) fp.references.push(globalVariableRef(obj.uid, name));
   }
-  for (const obj of batch) {
-    if ((obj.type !== "layout" && obj.type !== "layoutObject") || !obj.text.includes("<<$$")) continue;
-    // One reference per merge, so every use counts (dedupeRefs collapses them).
-    for (const m of obj.text.matchAll(MERGE_VARIABLE_RE)) fp.references.push(globalVariableRef(obj.uid, m[1]!.trim()));
-  }
+}
+
+/** The `$$globals` merged into a layout's or layout object's own element text
+ * (`<<$$name>>`): one reference per merge, so every use counts (dedupeRefs
+ * collapses them). */
+export function addMergeVariableRefs(fp: FileParse, fromUid: string, text: string): void {
+  if (!text.includes("<<$$")) return;
+  for (const m of text.matchAll(MERGE_VARIABLE_RE)) fp.references.push(globalVariableRef(fromUid, m[1]!.trim()));
 }
 
 /** One navigable object per distinct `$$name` the file uses (the same $$x in two
  * files is two objects), so a variable lists its users and each script/calc the
  * globals it touches. `occurrences` counts uses before references are
  * de-duplicated, so a calc that reads $$x twice counts two. A use on a layout
- * is recorded by the layout object and by its layout; it counts once. */
+ * object is copied onto its layout (addObjectRefsToLayout); it counts once. */
 export function globalVariableObjects(fp: FileParse): FmObject[] {
   const layoutObjectUids = new Set(fp.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid));
   const counts = new Map<string, number>();

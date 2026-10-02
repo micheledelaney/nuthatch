@@ -1,9 +1,10 @@
 import type { FmObject, LayoutObjectInfo, ObjectDetail } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, collectText, isElementKey, isRecord, textAttr } from "../xmlUtils";
+import { asArray, attr, cdataText, child, displayText, isElementKey, isRecord, textAttr } from "../xmlUtils";
 import { FILE_DEFAULT_MENU_SET } from "../sentinels";
 import { objectUid } from "../uid";
 import { scanRefs } from "../refs/scanRefs";
+import { addMergeVariableRefs } from "../refs/globalVariables";
 import { addTextDerivedRefs } from "../refs/textRefs";
 import { makeObject, newObject, placeInCatalog } from "./catalogItems";
 import { stripOuterQuotes } from "./common";
@@ -11,45 +12,77 @@ import { addDeferredLayoutRefs } from "./deferredLayouts";
 import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./layoutDetail";
 
 /** What emitting one layout's objects needs: each object's own XML element (to
- * scan it), and the uid each element ends up with (for the FM 22 deferred
- * button targets, which name the element). */
+ * scan it), the elements of the objects that are listed on their own (which
+ * every other element's own scan leaves out), and the uid each element ends up
+ * with (for the FM 22 deferred button targets, which name the element). */
 interface LayoutObjectsContext {
   fp: FileParse;
   sources: LayoutObjectSources;
+  listedElements: ReadonlySet<unknown>;
   uidOfElement: Map<Record<string, unknown>, string>;
 }
 
 /**
  * One layout from LayoutCatalog (structured like ScriptCatalog: a flat
  * document-ordered list with folder markers and separator items), with its
- * layout objects, references, and text-derived references. The layout's full
- * text (collectText of every object on it — by far the largest thing in a big
- * model) is only needed for those text passes, so the layout is stored with a
- * compact term list instead as soon as they're done (compactLayoutText).
+ * layout objects, references, and text-derived references; false when it has
+ * no id. Each object reports what its own element uses, and the layout what
+ * the rest of its element does — and, since a layout lists everything on it,
+ * a copy of every one of its objects' references, made once they're complete.
+ * The layout is stored with a compact term list as its text
+ * (compactLayoutText), not the full text of every object on it.
  */
-export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): void {
+export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): boolean {
   const base = makeObject(fp, layout, "layout");
-  if (!base) return;
+  if (!base) return false;
   const objStart = fp.objects.length;
   const refStart = fp.references.length;
   const full = buildLayout(fp, layout, placeInCatalog(base, order, folder));
-  const batch = [...fp.objects.slice(objStart), full];
+  const layoutObjects = fp.objects.slice(objStart);
+  const batch = [...layoutObjects, full];
   addTextDerivedRefs(fp, batch, refStart);
-  for (const obj of batch) fp.activeText.delete(obj.uid);
+  for (const obj of batch) fp.scanText.delete(obj.uid);
+  // After the text passes, so the layout's placeholder check weighs only its own references.
+  addObjectRefsToLayout(fp, layoutObjects, full.uid, refStart);
   fp.objects.push(full.detail?.kind === "layout" ? { ...full, text: compactLayoutText(full, full.detail) } : full);
+  return true;
 }
 
-/** The layout object (full text), after its layout objects and references. */
+/** The layout object, after its layout objects and its own references. */
 function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): FmObject {
   if (placed.isSeparator) return placed;
   const annotated = annotateLayout(layout, placed);
-  const extracted = layoutDetail(layout, fp.index.stepTextByHash);
-  const cx: LayoutObjectsContext = { fp, sources: extracted?.sources ?? new Map(), uidOfElement: new Map() };
+  const extracted = layoutDetail(layout, fp.index);
+  const sources = extracted?.sources ?? new Map();
+  const listedElements = new Set([...sources].filter(([lo]) => isListed(lo)).map(([, element]) => element));
+  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map() };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
-  // The layout lists everything on it, too: its own settings and every object's.
-  scanRefs(fp, layout, obj);
+  // Its own settings, triggers and parts, and any object not listed on its own.
+  scanOwnElement(fp, ownElement(layout, listedElements), obj);
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return obj;
+}
+
+/** Copy every reference the layout's objects recorded (from `refStart` on)
+ * onto the layout itself. */
+function addObjectRefsToLayout(fp: FileParse, layoutObjects: readonly FmObject[], layoutUid: string, refStart: number): void {
+  const objectUids = new Set(layoutObjects.map((o) => o.uid));
+  const end = fp.references.length;
+  for (let i = refStart; i < end; i++) {
+    const ref = fp.references[i]!;
+    if (objectUids.has(ref.fromUid)) fp.references.push({ ...ref, fromUid: layoutUid });
+  }
+}
+
+/** Record what an element holds for `owner`: its references, the globals
+ * merged into its text, and the text the placeholder pass reads — after
+ * `listedText`, the terms a layout object lists (a field binding whose
+ * <FieldReference> is gone shows only there). */
+function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): void {
+  scanRefs(fp, own, owner);
+  const literal = cdataText(own);
+  addMergeVariableRefs(fp, owner.uid, literal);
+  fp.scanText.set(owner.uid, listedText ? `${listedText}\n${literal}` : literal);
 }
 
 /** Surface the table occurrence a layout shows records from (a nested
@@ -62,7 +95,7 @@ function annotateLayout(node: unknown, obj: FmObject): FmObject {
   if (toName) a.tableOccurrence = toName;
   // hidden="True" leaves the layout out of the layout (menu) pop-up.
   if (attr(child(node, "Options"), "hidden") === "True") a.includeInLayoutMenus = "No";
-  const clientType = collectText(node["ClientType"]).trim();
+  const clientType = displayText(node["ClientType"]);
   if (clientType && clientType !== "0") a.clientType = clientType;
   const menuSet = textAttr(child(child(node, "MenuSet"), "CustomMenuSetReference"), "name");
   if (menuSet && menuSet !== FILE_DEFAULT_MENU_SET) a.menuSet = menuSet;
@@ -85,11 +118,7 @@ function addLayoutObjects(cx: LayoutObjectsContext, detail: LayoutDetail, layout
 function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
   const { fp } = cx;
   return infos.map((lo) => {
-    // `uuid` is only populated once FileMaker has stamped this specific object with
-    // a per-edit UUID — an object never touched since it was placed has none, which
-    // is the common case, not an edge case. Only skip when there's truly nothing to
-    // build a uid from (below, `id` is preferred and `uuid` is just the fallback).
-    if (!lo.id && !lo.uuid) {
+    if (!isListed(lo)) {
       // Nothing to list it by — but the objects inside it are still objects.
       return lo.children?.length ? { ...lo, children: addLayoutObjectTree(cx, lo.children, parentUid, idChain) } : lo;
     }
@@ -111,17 +140,24 @@ function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[]
       // Everything the object itself uses — its field, script, value list,
       // triggers, and the calcs behind its label, tooltip, hide condition,
       // conditional formatting, web viewer, and button action — but not what
-      // the objects inside it use: each of those reports its own.
-      const own = withoutNestedObjects(element);
-      scanRefs(fp, own, obj);
-      // The placeholder passes read the same element: its listed terms miss the
-      // calcs only the element holds (a portal filter, a button step, a trigger
-      // parameter).
-      fp.activeText.set(uid, `${obj.text}\n${collectText(own)}`);
+      // the listed objects inside it use: each of those reports its own. The
+      // placeholder pass reads the same element, after the listed terms (which
+      // miss the calcs only the element holds: a portal filter, a button step,
+      // a trigger parameter).
+      scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text);
     }
     if (!lo.children || lo.children.length === 0) return withUid;
     return { ...withUid, children: addLayoutObjectTree(cx, lo.children, uid, chain ?? idChain) };
   });
+}
+
+/** Whether a layout object is listed as an object of its own. `uuid` is only
+ * populated once FileMaker has stamped this specific object with a per-edit
+ * UUID — an object never touched since it was placed has none, which is the
+ * common case — so only an object with neither has nothing to build a uid from
+ * (`id` is preferred and `uuid` is just the fallback). */
+function isListed(lo: LayoutObjectInfo): boolean {
+  return Boolean(lo.id || lo.uuid);
 }
 
 /** The object's uid, with a stable `#N` suffix on every repeat (see
@@ -172,19 +208,21 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
   return a;
 }
 
-/** A layout object's element without the layout objects nested in it — except
- * a popover's panel, which isn't an object of its own (its contents hang off
- * the popover button; see childObjects). */
-function withoutNestedObjects(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutNestedObjects);
+/** A layout's or layout object's element without the layout objects nested in
+ * it that are listed on their own (`listed`): what it shows and uses itself.
+ * A nested object that isn't listed — a popover's panel, whose contents hang
+ * off the popover button (see childObjects), or one with neither id nor UUID —
+ * stays part of it. */
+function ownElement(node: unknown, listed: ReadonlySet<unknown>): unknown {
+  if (Array.isArray(node)) return node.map((n) => ownElement(n, listed));
   if (!isRecord(node)) return node;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     if (key === "LayoutObject") {
-      const panels = asArray(value).filter((lo) => attr(lo, "type") === "PopoverPanel");
-      if (panels.length > 0) out[key] = panels.map(withoutNestedObjects);
+      const kept = asArray(value).filter((lo) => !listed.has(lo));
+      if (kept.length > 0) out[key] = kept.map((lo) => ownElement(lo, listed));
     } else {
-      out[key] = isElementKey(key) ? withoutNestedObjects(value) : value;
+      out[key] = isElementKey(key) ? ownElement(value, listed) : value;
     }
   }
   return out;

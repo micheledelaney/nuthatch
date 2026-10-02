@@ -1,17 +1,18 @@
 import type { FileParse } from "../context";
 import { attr, child } from "../xmlUtils";
-import { edgeKind } from "../refTags";
 import {
   fieldNameCandidate,
   globalVariablesInText,
   longestNameAt,
   quotedGlobalVariables,
   skipWhitespace,
+  stripComments,
   stripLiteralsAndComments,
   type NameIndex,
 } from "../calcText";
 import { isNameChar, longestNameEndingAt } from "@/core/identifiers";
-import { globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
+import { localBaseTableId } from "../occurrences";
+import { customFunctionRef, globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
 
 /**
  * Best-effort references from a formula's own text, for a calc whose chunk list
@@ -32,9 +33,11 @@ export function scanCalcTextRefs(fp: FileParse, rawText: string, calc: Record<st
   if (owner.type === "field") addBareFieldRefs(fp, text, calc, owner, ctx);
   forEachBareName(text, fp.index.cfIndex, false, (name) => {
     const cfId = fp.index.cfByName.get(name);
-    if (cfId != null) pushRef(fp.references, { fromUid: owner.uid, toType: "customFunction", toId: cfId, toName: name, kind: "customFunction" }, ctx);
+    if (cfId != null) pushRef(fp.references, customFunctionRef(owner.uid, cfId, name), ctx);
   });
-  for (const name of [...globalVariablesInText(text), ...quotedGlobalVariables(rawText)]) {
+  // A name passed as a string literal counts, but not one in a comment: the
+  // chunk list makes a comment a chunk of its own, never scanned for globals.
+  for (const name of [...globalVariablesInText(text), ...quotedGlobalVariables(stripComments(rawText))]) {
     pushRef(fp.references, globalVariableRef(owner.uid, name), ctx);
   }
 }
@@ -50,9 +53,10 @@ function addQualifiedFieldRefs(fp: FileParse, text: string, owner: RefOwner, ctx
     const to = index.toByName.get(toName);
     if (!to) continue;
     // As with a chunk list's field chunk, the occurrence is referenced too.
-    pushRef(out, { fromUid, toType: "tableOccurrence", toId: to.id, toName, kind: edgeKind("tableOccurrence", ctx.stepName) }, ctx);
-    if (to.localBaseTableId != null) {
-      const fields = index.fieldsByTable.get(to.localBaseTableId);
+    pushRef(out, { fromUid, toType: "tableOccurrence", toId: to.id, toName, kind: "tableOccurrence" }, ctx);
+    const baseTableId = localBaseTableId(to);
+    if (baseTableId != null) {
+      const fields = index.fieldsByTable.get(baseTableId);
       const field = fields ? longestNameAt(text, pos + 2, fields.index) : undefined;
       const fieldId = field != null ? fields?.idByName.get(field) : undefined;
       if (field != null && fieldId != null) {
@@ -72,7 +76,8 @@ function addQualifiedFieldRefs(fp: FileParse, text: string, owner: RefOwner, ctx
 function addBareFieldRefs(fp: FileParse, text: string, calc: Record<string, unknown>, owner: RefOwner, ctx: ScanContext): void {
   const contextToId = attr(child(calc, "TableOccurrenceReference"), "id");
   const to = contextToId != null ? fp.index.toById.get(contextToId) : undefined;
-  const fields = to?.localBaseTableId != null ? fp.index.fieldsByTable.get(to.localBaseTableId) : undefined;
+  const baseTableId = to ? localBaseTableId(to) : undefined;
+  const fields = baseTableId != null ? fp.index.fieldsByTable.get(baseTableId) : undefined;
   if (!to || !fields) return;
   forEachBareName(text, fields.index, true, (name) => {
     const fieldId = fields.idByName.get(name);

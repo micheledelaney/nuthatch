@@ -9,7 +9,7 @@ import type {
 import { ORPHAN_CANDIDATE_TYPES, isBrokenTableOccurrence } from "@/types/ddr";
 import { buildReportCard } from "@/core/analysis/reportCard";
 import { findUnusedChains } from "@/core/analysis/unusedChains";
-import { longestPrefixName } from "@/core/parser/calcText";
+import { longestPrefixName } from "@/core/identifiers";
 import { buildDataSourceIndex, type DataSourceIndex } from "./dataSources";
 
 /**

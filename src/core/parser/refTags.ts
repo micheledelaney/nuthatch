@@ -1,5 +1,5 @@
 import type { ObjectType, RefKind } from "@/types/ddr";
-import { GO_TO_LAYOUT_STEP, SET_FIELD_STEP, isPerformScriptStep } from "./stepNames";
+import { GO_TO_LAYOUT_STEP, SET_FIELD_STEP, isPerformScriptStep } from "./steps";
 
 /**
  * FMSaveAsXML element tag -> referenced object type.

@@ -9,7 +9,7 @@ import { calculationText } from "../objects/common";
 import { activeAutoEnter, activeValidation } from "./activeOptions";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
-import { brokenRef, globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
+import { brokenRef, customFunctionRef, globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
 
 /**
  * Walk an object body and record a reference for every nested element whose tag
@@ -214,9 +214,7 @@ function scanChunks(fp: FileParse, value: unknown, owner: RefOwner, ctx: ScanCon
       const raw = el["#text"];
       const text = typeof raw === "string" ? decodeEntities(raw.trim()) : "";
       const cfId = type === "CustomFunctionRef" && text ? fp.index.cfByName.get(text) : undefined;
-      if (cfId != null) {
-        pushRef(fp.references, { fromUid: owner.uid, toType: "customFunction", toId: cfId, toName: text, kind: "customFunction" }, ctx);
-      }
+      if (cfId != null) pushRef(fp.references, customFunctionRef(owner.uid, cfId, text), ctx);
       const globals =
         type === "VariableReference" && text.startsWith("$$")
           ? [text]

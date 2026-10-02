@@ -2,7 +2,7 @@ import type { FmFile, FmObject, RawReference } from "@/types/ddr";
 import { asArray, attr, child, isElementKey, isRecord, textAttr } from "./xmlUtils";
 import { makeNameIndex, type NameIndex } from "./calcText";
 import { collectCatalogItems, fieldCatalogs } from "./catalogWalk";
-import { occurrenceSource } from "./occurrences";
+import { occurrenceSource, type OccurrenceSource } from "./occurrences";
 import type { DeferredButton } from "./objects/deferredLayouts";
 
 /**
@@ -16,12 +16,14 @@ export interface FileParse {
   readonly index: FileIndex;
   /** Button layout targets recorded only in FM 22's <ModifyAction>, by layout id. */
   readonly deferredLayoutTargets: ReadonlyMap<string, DeferredButton[]>;
-  /** Field uid → the text of its in-effect calcs, for a field whose XML still
-   * carries disabled auto-enter / validation calcs. The text-based passes scan
-   * this instead of `obj.text`, as the element scan skips those calcs too.
-   * While its layout is processed, it also maps each layout object to its
-   * terms plus its own element's text: what its element scan read. */
-  readonly activeText: Map<string, string>;
+  /** Object uid → the text the placeholder pass reads in place of `obj.text`,
+   * for an object whose `text` isn't what its element scan read: a field whose
+   * XML still carries disabled auto-enter / validation calcs (which the element
+   * scan skips) maps to its in-effect calcs' text; while its layout is
+   * processed, the layout and each layout object map to their own element's
+   * text — what each shows and uses itself — after a layout object's listed
+   * terms. */
+  readonly scanText: Map<string, string>;
   /** How many times each layout-object uid has been assigned. FileMaker can
    * clone a whole layout-object subtree without regenerating any identifier in
    * it, so id, the ancestor chain, and even UUID can all collide; the first
@@ -61,27 +63,9 @@ export interface FileIndex {
   dataSourceIds: ReadonlySet<string>;
 }
 
-export interface OccurrenceInfo {
+/** A table occurrence of the file: its id and where its records come from. */
+export interface OccurrenceInfo extends OccurrenceSource {
   id: string;
-  /** Local base-table id; undefined for external occurrences (their base table
-   * lives in another file) and for broken ones. */
-  localBaseTableId?: string;
-  external: boolean;
-  /** External, with its base table recorded: its file was open at export. */
-  fileOpenAtExport?: boolean;
-  /** External, and its file wasn't available at export (see occurrenceSource). */
-  unresolved: boolean;
-}
-
-/** FileMaker's rendered text for a step, looked up by the hash on its
- * `<DDRREF kind="StepText">` pointer (entities intact). */
-export function renderedStepText(stepTextByHash: ReadonlyMap<string, string>, step: Record<string, unknown>): string | undefined {
-  for (const ref of asArray(step["DDRREF"])) {
-    if (!isRecord(ref) || attr(ref, "kind") !== "StepText") continue;
-    const hash = attr(ref, "hash");
-    if (hash != null) return stepTextByHash.get(hash);
-  }
-  return undefined;
 }
 
 /** Build the reference-resolution lookups for a file: every chunk-list pointer's
@@ -183,15 +167,8 @@ function occurrenceIndex(
   for (const to of collectCatalogItems(containerNode["TableOccurrenceCatalog"], "TableOccurrence")) {
     const id = attr(to, "id");
     if (id == null) continue;
-    const source = occurrenceSource(to, dataSourceIds);
+    const info: OccurrenceInfo = { id, ...occurrenceSource(to, dataSourceIds) };
     const name = textAttr(to, "name") ?? "";
-    const info: OccurrenceInfo = {
-      id,
-      external: source.external,
-      unresolved: source.unresolved,
-      ...(!source.external && source.baseTableId != null ? { localBaseTableId: source.baseTableId } : {}),
-      ...(source.external && source.baseTableId != null ? { fileOpenAtExport: true } : {}),
-    };
     if (name && !toByName.has(name)) toByName.set(name, info);
     if (!toById.has(id)) toById.set(id, info);
   }

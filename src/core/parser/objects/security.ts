@@ -6,9 +6,9 @@ import type {
   PrivilegeSetTableAccess,
 } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { attr, child, children, collectText, displayText, enabledLabels, isRecord, textAttr, withoutKey } from "../xmlUtils";
+import { attr, child, children, displayText, enabledLabels, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { objectUid } from "../uid";
-import { calculationText } from "./common";
+import { calcOf } from "./common";
 
 // ---- accounts -----------------------------------------------------------------
 
@@ -31,7 +31,7 @@ export function annotateAccount(node: Record<string, unknown>, obj: FmObject): F
   // password lives in <INSECURE_PASSWORD> (older) or <PasswordEncrypted>
   // (newer), as direct text or a nested <Data>.
   if (isRecord(auth) && attr(node, "type") === "FileMaker") {
-    a.password = collectText(auth["PasswordEncrypted"] ?? auth["INSECURE_PASSWORD"]).trim() ? "Yes" : "No";
+    a.password = displayText(auth["PasswordEncrypted"] ?? auth["INSECURE_PASSWORD"]) ? "Yes" : "No";
   }
   // The granted privilege set is a nested <PrivilegeSetReference name=…>.
   const privName = textAttr(child(node, "PrivilegeSetReference"), "name");
@@ -42,7 +42,7 @@ export function annotateAccount(node: Record<string, unknown>, obj: FmObject): F
     // Searchable text without <Authentication>: it holds the stored password
     // (salt + hash, or in older exports <INSECURE_PASSWORD>), which must stay
     // out of search, diffs and the AI export. Only the account name is kept.
-    text: collectText([isRecord(auth) ? auth["AccountName"] : undefined, withoutKey(node, "Authentication")]),
+    text: displayText([isRecord(auth) ? auth["AccountName"] : undefined, withoutKey(node, "Authentication")]),
     attributes: { ...obj.attributes, ...a, ...descriptionAttribute(node) },
   };
 }
@@ -272,8 +272,8 @@ function grantLabel(labels: Readonly<Record<string, string>>, raw: string | unde
  * node, e.g. <View access="Calculation"><Calculation><Text>…</Text></Calculation></View>.
  * Not entity-decoded, like other calculation bodies (see decodeEntities). */
 function recordGrantCondition(node: unknown): string | undefined {
-  if (!isRecord(node) || attr(node, "access") !== "Calculation") return undefined;
-  return calculationText(child(node, "Calculation")) || undefined;
+  if (attr(node, "access") !== "Calculation") return undefined;
+  return calcOf(node) || undefined;
 }
 
 /** The `<Fields access=…>` summary for one table, expanded into per-field

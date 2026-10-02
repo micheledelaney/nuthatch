@@ -1,9 +1,10 @@
-import { renderedStepText, type FileParse } from "../context";
+import type { FileParse } from "../context";
 import { attr, findElement, isRecord } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { edgeKind } from "../refTags";
 import { UNKNOWN_TARGET } from "../sentinels";
-import { GO_TO_LAYOUT_STEP, GO_TO_RELATED_RECORD_STEP, isPerformScriptStep } from "../stepNames";
+import { fileOpenAtExport } from "../occurrences";
+import { GO_TO_LAYOUT_STEP, GO_TO_RELATED_RECORD_STEP, isPerformScriptStep, renderedStepText } from "../steps";
 import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 
 // FileMaker wraps the file name in typographic curly quotes (U+201C…U+201D);
@@ -63,7 +64,8 @@ export function addStepTargetRefs(fp: FileParse, step: Record<string, unknown>, 
   const container = findElement(params, "LayoutReferenceContainer");
   const occurrence = findElement(params, "TableOccurrenceReference");
   const occurrenceId = attr(occurrence, "id");
-  const externalVerifiable = occurrenceId != null && fp.index.toById.get(occurrenceId)?.fileOpenAtExport === true;
+  const occurrenceInfo = occurrenceId != null ? fp.index.toById.get(occurrenceId) : undefined;
+  const externalVerifiable = occurrenceInfo != null && fileOpenAtExport(occurrenceInfo);
   const layoutGone =
     isRecord(container) &&
     (attr(container, "External") !== "True" || externalVerifiable) &&

@@ -1,5 +1,6 @@
 import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
-import { asArray, attr, child, children, collectText, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
+import type { FileIndex } from "../context";
+import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
 import { BUTTON_ACTION_TAGS, calcOf, calculationText, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
 import { stepParams } from "./stepText";
@@ -10,7 +11,7 @@ export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
 export type LayoutObjectSources = Map<LayoutObjectInfo, Record<string, unknown>>;
 
 interface DetailContext {
-  stepTextByHash: ReadonlyMap<string, string>;
+  index: FileIndex;
   sources: LayoutObjectSources;
 }
 
@@ -21,13 +22,10 @@ interface DetailContext {
  * out so the inspector shows what the layout actually contains, not just which
  * table occurrence it is anchored to.
  */
-export function layoutDetail(
-  node: unknown,
-  stepTextByHash: ReadonlyMap<string, string>,
-): { detail: LayoutDetail; sources: LayoutObjectSources } | undefined {
+export function layoutDetail(node: unknown, index: FileIndex): { detail: LayoutDetail; sources: LayoutObjectSources } | undefined {
   const partsList = child(node, "PartsList");
   if (!isRecord(node) || !isRecord(partsList)) return undefined;
-  const cx: DetailContext = { stepTextByHash, sources: new Map() };
+  const cx: DetailContext = { index, sources: new Map() };
   const rawParts = layoutParts(partsList, cx);
   if (rawParts.length === 0) return undefined;
   const declaredWidth = num(attr(node, "width"));
@@ -108,7 +106,7 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
   const bounds = child(obj, "Bounds");
   // Per-object styling lives in <LocalCSS> as a CSS string; normalised to one
   // declaration per line so it displays cleanly and diffs line-by-line.
-  const style = normalizeLocalCss(collectText(obj["LocalCSS"]));
+  const style = normalizeLocalCss(displayText(obj["LocalCSS"]));
   const label = behaviorLine(obj);
   // Text objects: the CDATA content (may contain <<merge fields>>).
   const text = !label && type === "Text" && isRecord(child(obj, "Text")) ? firstTextValue(child(obj, "Text")) : undefined;
@@ -134,8 +132,8 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
     ...(isRecord(portalTo) ? { portalTable: textAttr(portalTo, "name") ?? "" } : {}),
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
     ...(kids ? { children: kids } : {}),
-    ...fieldBinding(obj),
-    ...buttonAction(obj, cx.stepTextByHash),
+    ...fieldBinding(obj, cx.index),
+    ...buttonAction(obj, cx.index.stepTextByHash),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(tooltip ? { tooltip: stripOuterQuotes(tooltip) } : {}),
@@ -154,24 +152,14 @@ function panelLabel(obj: Record<string, unknown>): string | undefined {
 }
 
 /**
- * The objects nested in this one: a portal's fields, a tab / slide control's
- * panels, a panel's objects, a group's members, a button bar's segments, and a
- * popover's contents. The popover panel is a <LayoutObject type="PopoverPanel">
- * under <PopoverButton> (or a bare <PopoverPanel> element); either way the panel
- * itself is skipped and its objects hang off the button. Groups, button bars,
- * and popovers only count when they hold something.
+ * The objects nested in this one: a popover's contents, a button bar's segments
+ * or a group's members, or the objects in a portal, a tab / slide control
+ * (its panels), or a panel. The popover panel is a <LayoutObject
+ * type="PopoverPanel"> under <PopoverButton> (or a bare <PopoverPanel>
+ * element); either way the panel itself is skipped and its objects hang off the
+ * button. Popovers, button bars and groups only count when they hold something.
  */
 function childObjects(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo[] | undefined {
-  let kids: LayoutObjectInfo[] | undefined;
-  for (const tag of ["Portal", "TabControl", "SlideControl", "TabPanel", "SlidePanel"]) {
-    const holder = child(obj, tag);
-    if (isRecord(holder)) kids = layoutObjects(holder["ObjectList"], cx);
-  }
-  for (const tag of ["GroupedButton", "ButtonBar"]) {
-    const holder = child(obj, tag);
-    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], cx) : [];
-    if (members.length > 0) kids = members;
-  }
   const popover = child(obj, "PopoverButton");
   if (isRecord(popover)) {
     const panels = [
@@ -179,9 +167,15 @@ function childObjects(obj: Record<string, unknown>, cx: DetailContext): LayoutOb
       ...asArray(popover["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
     ];
     const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], cx) : []));
-    if (contents.length > 0) kids = contents;
+    if (contents.length > 0) return contents;
   }
-  return kids;
+  for (const tag of ["ButtonBar", "GroupedButton"]) {
+    const holder = child(obj, tag);
+    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], cx) : [];
+    if (members.length > 0) return members;
+  }
+  const holder = ["SlidePanel", "TabPanel", "SlideControl", "TabControl", "Portal"].map((tag) => child(obj, tag)).find(isRecord);
+  return holder ? layoutObjects(holder["ObjectList"], cx) : undefined;
 }
 
 /**
@@ -191,14 +185,14 @@ function childObjects(obj: Record<string, unknown>, cx: DetailContext): LayoutOb
  * anywhere else in the app. A field object's attached value list (drop-down,
  * checkbox set, …) lives as a sibling of <FieldReference> under <Display>.
  */
-function fieldBinding(obj: Record<string, unknown>): Partial<LayoutObjectInfo> {
+function fieldBinding(obj: Record<string, unknown>, index: FileIndex): Partial<LayoutObjectInfo> {
   const fieldNode = child(obj, "Field");
   if (!isRecord(fieldNode)) return {};
   const fieldRef = child(fieldNode, "FieldReference");
   const vlRef = child(child(fieldNode, "Display"), "ValueListReference");
   const vlId = attr(vlRef, "id");
   return {
-    fieldRef: qualifiedField(fieldRef) || MISSING_FIELD_TOKEN,
+    fieldRef: qualifiedField(fieldRef, index) || MISSING_FIELD_TOKEN,
     ...(vlId ? { valueListRef: { id: vlId, name: textAttr(vlRef, "name") ?? "" } } : {}),
   };
 }
@@ -210,15 +204,12 @@ function buttonAction(
   obj: Record<string, unknown>,
   stepTextByHash: ReadonlyMap<string, string>,
 ): Pick<LayoutObjectInfo, "scriptRef" | "actionStep"> {
-  let scriptRef: LayoutObjectInfo["scriptRef"];
-  let actionStep: LayoutObjectInfo["actionStep"];
-  for (const tag of BUTTON_ACTION_TAGS) {
-    const button = child(obj, tag);
-    if (scriptRef || !isRecord(button)) continue;
-    scriptRef = extractScriptRef(button["action"]);
-    if (!scriptRef) actionStep = actionStepOf(button["action"], stepTextByHash) ?? actionStep;
-  }
-  return { ...(scriptRef ? { scriptRef } : {}), ...(actionStep ? { actionStep } : {}) };
+  const button = BUTTON_ACTION_TAGS.map((tag) => child(obj, tag)).find(isRecord);
+  if (!button) return {};
+  const scriptRef = extractScriptRef(button["action"]);
+  if (scriptRef) return { scriptRef };
+  const actionStep = actionStepOf(button["action"], stepTextByHash);
+  return actionStep ? { actionStep } : {};
 }
 
 /** Hide-object-when and conditional-formatting calculations:
