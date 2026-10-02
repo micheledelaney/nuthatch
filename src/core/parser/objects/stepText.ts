@@ -44,7 +44,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   //      `Go to Related Record [ … ]\n[ Show only related records ]` render
   //      on one line. Newlines INSIDE brackets (Import/Export's per-mapping
   //      layout) survive — the depth tracker only flattens at depth 0.
-  const decoded = decodeEntities(raw.replace(/&#(?:13|10|x[Aa]|x[Dd]);/g, "\n")).trim();
+  const decoded = decodeStepText(raw).trim();
   const undisabled = decoded.replace(/^\/\/\s*/, "");
   const stripped = name.startsWith("#")
     ? undisabled.replace(/^#\s*/, "")
@@ -59,6 +59,13 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
     if (text) return base ? `${base} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
   }
   return base;
+}
+
+/** Decode a piece of step text, keeping CR/LF entities as real newlines
+ * (decodeEntities alone would collapse them to spaces, flattening Import
+ * Records' per-mapping layout or an Insert Text value's lines). */
+function decodeStepText(raw: string): string {
+  return decodeEntities(raw.replace(/&#(?:13|10|x[Aa]|x[Dd]);/g, "\n"));
 }
 
 /** Decode FileMaker's {{charN}} attribute encoding to the actual character. */
@@ -82,7 +89,7 @@ function insertTextValue(step: Record<string, unknown>): string | undefined {
     const textEl = child(param, "Text");
     if (!isRecord(textEl)) continue;
     const raw = attr(textEl, "value");
-    return raw == null ? undefined : decodeFmChars(raw);
+    return raw == null ? undefined : decodeFmChars(decodeStepText(raw));
   }
   return undefined;
 }

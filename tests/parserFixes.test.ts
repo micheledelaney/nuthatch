@@ -164,12 +164,21 @@ describe("decoding", () => {
             <RightField><FieldReference id="2" name="z"></FieldReference></RightField>
           </JoinPredicate></JoinPredicateList>
         </Relationship></RelationshipCatalog>
+        <BaseTableCatalog><BaseTable id="1" name="T"></BaseTable></BaseTableCatalog>
+        <FieldsForTables><FieldCatalog><BaseTableReference id="1" name="T"></BaseTableReference>
+          <ObjectList><Field id="1" name="a" comment="FileMaker&apos;s own id"></Field></ObjectList>
+        </FieldCatalog></FieldsForTables>
         <CustomFunctionsCatalog><CustomFunction id="1" name="F"><Display>F ( a &amp; b )</Display></CustomFunction></CustomFunctionsCatalog>
         <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
         <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference>
-          <ObjectList><Step id="1" name="Q &amp; A" enable="True"></Step></ObjectList>
+          <ObjectList><Step id="1" name="Q &amp; A" enable="True"></Step>
+            <Step id="2" name="Insert Text" enable="True"><DDRREF kind="StepText" hash="S2"></DDRREF>
+              <ParameterValues><Parameter type="Text"><Text value="a &amp; b&#13;c"></Text></Parameter></ParameterValues>
+            </Step>
+          </ObjectList>
         </Script></StepsForScripts>
       </AddAction>`,
+      `<Script><ObjectList><_ datatype="StepText" hash="S2">Insert Text [ Select ]</_></ObjectList></Script>`,
     ),
   );
 
@@ -180,9 +189,19 @@ describe("decoding", () => {
     });
   });
 
+  it("decodes attribute values copied from the XML", () => {
+    expect(object(result, "F0:field:1.1").attributes.comment).toBe("FileMaker's own id");
+  });
+
+  it("decodes an Insert Text value, keeping its line breaks", () => {
+    expect(object(result, "F0:script:1").detail).toMatchObject({
+      steps: [{}, { name: "Insert Text", params: '[ Select ] [ Text: "a & b\nc" ]' }],
+    });
+  });
+
   it("decodes a custom function's signature and a script step's name", () => {
     expect(object(result, "F0:customFunction:1").detail).toMatchObject({ signature: "F ( a & b )" });
-    expect(object(result, "F0:script:1").detail).toMatchObject({ steps: [{ name: "Q & A" }] });
+    expect(object(result, "F0:script:1").detail).toMatchObject({ steps: [{ name: "Q & A" }, {}] });
   });
 });
 

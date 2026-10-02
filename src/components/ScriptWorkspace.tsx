@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { type FmObject, type ScriptStep, type SolutionModel } from "@/types/ddr";
-import { Highlight, LinkedCode, decodeEntities } from "./Highlight";
+import { Highlight, LinkedCode } from "./Highlight";
 
 const INDENT_PX = 18;
 const PARAMS_COLLAPSE_THRESHOLD = 120;
@@ -123,10 +123,10 @@ export function ScriptWorkspace({
             <span className="sw-ln">{step.index}</span>
             <span className="sw-step" style={{ paddingLeft: depth * INDENT_PX }}>
               {isComment ? (
-                <span className="sw-comment"># {decodeEntities(step.params)}</span>
+                <span className="sw-comment"># {step.params}</span>
               ) : (
                 <>
-                  <span className={nameClass ? `sw-name ${nameClass}` : "sw-name"}>{decodeEntities(step.name)}</span>
+                  <span className={nameClass ? `sw-name ${nameClass}` : "sw-name"}>{step.name}</span>
                   {step.params && (
                     <span className="sw-params">
                       {" "}

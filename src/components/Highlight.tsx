@@ -1,10 +1,7 @@
 import { Fragment } from "react";
-import { decodeEntities } from "@/core/parser/entities";
 import { isWordChar } from "@/core/identifiers";
 import { objectLabel, type FmObject, type SolutionModel } from "@/types/ddr";
 import { FieldRefLink } from "./FieldRefLink";
-
-export { decodeEntities };
 
 type TokenClass = "string" | "var" | "field" | "func" | "kw" | "num" | "op" | "missing" | "comment" | null;
 
@@ -87,7 +84,7 @@ function FieldToken({ text }: { text: string }) {
 
 /** Render text with FileMaker-flavored syntax highlighting. */
 export function Highlight({ text }: { text: string }) {
-  const tokens = tokenize(decodeEntities(text));
+  const tokens = tokenize(text);
   return (
     <>
       {tokens.map((t, i) => (
@@ -162,13 +159,12 @@ export function LinkedCode({
   model?: SolutionModel;
   fileUid?: string;
 }) {
-  const decoded = decodeEntities(text);
   // Unique candidates, longest name first so "DATA~MAIN" wins over "DATA" and
   // "Access.canEdit" wins over "Access".
   const cands = [...new Map(objects.filter((o) => o.name).map((o) => [o.name, o])).values()].sort(
     (a, b) => b.name.length - a.name.length,
   );
-  if (cands.length === 0) return <Highlight text={decoded} />;
+  if (cands.length === 0) return <Highlight text={text} />;
 
   // Occurrence candidates (longest name first), kept separate from `cands` so
   // that detecting the `TO::` half of a qualified ref never depends on the
@@ -181,7 +177,7 @@ export function LinkedCode({
     .filter((o) => o.type === "tableOccurrence" && o.name)
     .sort((a, b) => b.name.length - a.name.length);
 
-  const comments = commentRanges(decoded);
+  const comments = commentRanges(text);
   const inComment = (pos: number) => comments.some(([s, e]) => pos >= s && pos < e);
   const canQualify = model != null && fileUid != null;
 
@@ -189,9 +185,9 @@ export function LinkedCode({
   let plainStart = 0;
   let i = 0;
   const flush = (end: number) => {
-    if (end > plainStart) out.push(<Highlight key={`h${plainStart}`} text={decoded.slice(plainStart, end)} />);
+    if (end > plainStart) out.push(<Highlight key={`h${plainStart}`} text={text.slice(plainStart, end)} />);
   };
-  while (i < decoded.length) {
+  while (i < text.length) {
     if (inComment(i)) {
       i++;
       continue;
@@ -204,16 +200,16 @@ export function LinkedCode({
     if (canQualify) {
       const toCand = occCands.find(
         (o) =>
-          decoded.startsWith(o.name, i) &&
-          !isWordChar(decoded[i - 1] ?? "") &&
-          decoded.startsWith("::", i + o.name.length),
+          text.startsWith(o.name, i) &&
+          !isWordChar(text[i - 1] ?? "") &&
+          text.startsWith("::", i + o.name.length),
       );
       if (toCand) {
         const fieldStart = i + toCand.name.length + 2;
         const fieldHit = cands.find(
           (o) =>
-            decoded.startsWith(o.name, fieldStart) &&
-            !isWordChar(decoded[fieldStart + o.name.length] ?? ""),
+            text.startsWith(o.name, fieldStart) &&
+            !isWordChar(text[fieldStart + o.name.length] ?? ""),
         );
         if (fieldHit) qualifiedLength = toCand.name.length + 2 + fieldHit.name.length;
       }
@@ -221,12 +217,12 @@ export function LinkedCode({
 
     const hit = cands.find(
       (o) =>
-        decoded.startsWith(o.name, i) &&
+        text.startsWith(o.name, i) &&
         // Don't match the tail of a $local / $$global variable: `$_id_parent`
         // must not link its `_id_parent` portion to a same-named field/TO.
-        decoded[i - 1] !== "$" &&
-        !isWordChar(decoded[i - 1] ?? "") &&
-        !isWordChar(decoded[i + o.name.length] ?? ""),
+        text[i - 1] !== "$" &&
+        !isWordChar(text[i - 1] ?? "") &&
+        !isWordChar(text[i + o.name.length] ?? ""),
     );
     if (!hit && qualifiedLength === 0) {
       i++;
@@ -234,7 +230,7 @@ export function LinkedCode({
     }
     flush(i);
     if (qualifiedLength > 0) {
-      const span = decoded.slice(i, i + qualifiedLength);
+      const span = text.slice(i, i + qualifiedLength);
       out.push(
         <FieldRefLink key={`q${i}`} qualified={span} model={model!} fileUid={fileUid!} onGo={onGo} />,
       );
@@ -255,6 +251,6 @@ export function LinkedCode({
     }
     plainStart = i;
   }
-  flush(decoded.length);
+  flush(text.length);
   return <>{out}</>;
 }

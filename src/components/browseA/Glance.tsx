@@ -1,6 +1,5 @@
 import type React from "react";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
-import { decodeEntities } from "@/core/parser/entities";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
@@ -60,7 +59,7 @@ function linkOrText(obj: FmObject | null, fallback: string | undefined, onGo: On
       </>
     );
   }
-  return fallback ? renderWithBrokenPlaceholders(decodeEntities(fallback)) : null;
+  return fallback ? renderWithBrokenPlaceholders(fallback) : null;
 }
 
 /** How a field keeps its value: global, unstored (unstored calcs and every
@@ -152,7 +151,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         fieldThirdRow(obj, model, onGo),
       ];
     case "layout": {
-      const to = byName(model, f, "tableOccurrence", decodeEntities(a.tableOccurrence ?? ""));
+      const to = byName(model, f, "tableOccurrence", a.tableOccurrence ?? "");
       return [
         { label: "Occurrence", value: linkOrText(to, a.tableOccurrence, onGo) },
         { label: "Base table", value: linkOrText(baseTableOf(model, to), to?.attributes.baseTable, onGo) },
@@ -166,7 +165,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         { label: "Position", value: a.position },
       ];
     case "tableOccurrence": {
-      const source = a.externalDataSource ? decodeEntities(a.externalDataSource) : undefined;
+      const source = a.externalDataSource || undefined;
       return [
         { label: "Base table", value: linkOrText(baseTableOf(model, obj), a.baseTable, onGo) },
         {
@@ -269,7 +268,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     case "externalDataSource": {
       const occurrences = countWhere(
         model,
-        (o) => o.fileUid === f && o.type === "tableOccurrence" && decodeEntities(o.attributes.externalDataSource ?? "") === obj.name,
+        (o) => o.fileUid === f && o.type === "tableOccurrence" && (o.attributes.externalDataSource ?? "") === obj.name,
       );
       // The file a path points at, e.g. "file:Invoices.fmp12" -> "Invoices".
       const target = (a.path ?? "").split(/[:/\n]/).filter(Boolean).pop()?.replace(/\.fmp12$/i, "");
@@ -283,7 +282,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     case "customMenuSet":
       return [
         { label: "Menus", value: a.menus },
-        { label: "Used by", value: plural(countWhere(model, (o) => o.fileUid === f && o.type === "layout" && decodeEntities(o.attributes.menuSet ?? "") === obj.name), "layout") },
+        { label: "Used by", value: plural(countWhere(model, (o) => o.fileUid === f && o.type === "layout" && (o.attributes.menuSet ?? "") === obj.name), "layout") },
         { label: "Comment", value: a.comment },
       ];
     case "customMenu":

@@ -16,10 +16,11 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
  * **Policy.** Decode once, at the boundary between parsed XML and stored
  * model: the parser decodes every name, label, and attribute value — and the
  * rendered script-step text (stepParams, which keeps `&#13;` as newlines) —
- * before writing it into `FmObject.attributes`, `text`, or `detail`. UI
- * components should treat strings off the model as already-decoded and not
- * call decodeEntities a second time: a second pass turns a literal `&amp;` in
- * a name into `&`.
+ * before writing it into `FmObject.name`, `attributes`, or `detail`. UI
+ * components treat strings off the model as already-decoded and never call
+ * decodeEntities a second time: a second pass turns a literal `&amp;` in a
+ * name into `&`. (`FmObject.text` is the search index, built from the raw XML;
+ * it isn't display text.)
  *
  * Calculation formulas are the exception that needs no decoding at all: every
  * export writes them as CDATA, so calculationText returns them verbatim

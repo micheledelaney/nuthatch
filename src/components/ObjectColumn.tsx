@@ -23,7 +23,7 @@ import {
 } from "@/core/model/refResolution";
 import { RelationshipERD } from "./RelationshipERD";
 import { ScriptWorkspace } from "./ScriptWorkspace";
-import { Highlight, LinkedCode, decodeEntities } from "./Highlight";
+import { Highlight, LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
 import { TypePill } from "./TypePill";
 
@@ -301,10 +301,9 @@ function LinkedValue({
   refIndex: RefIndex;
   onGo: (uid: string, rowKey: string) => void;
 }) {
-  const decoded = decodeEntities(value);
-  const target = refIndex.resolve(decoded);
+  const target = refIndex.resolve(value);
   if (target) return <ObjLink obj={target} onGo={onGo} />;
-  return <>{renderWithBrokenPlaceholders(decoded)}</>;
+  return <>{renderWithBrokenPlaceholders(value)}</>;
 }
 
 /** The CSS class an inline-resolved `TO::Field` should wear in a property
@@ -464,7 +463,7 @@ export function DetailsProps({
                 <ColorSwatch value={value} />
               ) : key === "externalDataSource" && isBrokenTableOccurrence(obj) ? (
                 // FileMaker couldn't resolve the source (e.g. "<unknown>") — flag it.
-                <span className="broken-value">{decodeEntities(value)}</span>
+                <span className="broken-value">{value}</span>
               ) : (
                 <LinkedValue value={value} refIndex={refIndex} onGo={onGo} />
               )}

@@ -1,5 +1,7 @@
 /** Helpers for navigating the loosely-typed object tree from fast-xml-parser. */
 
+import { decodeEntities } from "./entities";
+
 export const ATTR_PREFIX = "@_";
 
 /** Coerce a fast-xml-parser node (single | array | undefined) into an array. */
@@ -15,13 +17,14 @@ export function attr(node: unknown, name: string): string | undefined {
   return raw == null ? undefined : String(raw);
 }
 
-/** Collect every `key`-prefixed attribute on a node into a plain string map. */
+/** Collect every attribute on a node into a plain string map, entity-decoded
+ * (the parser runs with entity expansion off). */
 export function attributes(node: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!isRecord(node)) return out;
   for (const [k, v] of Object.entries(node)) {
     if (k.startsWith(ATTR_PREFIX) && v != null) {
-      out[k.slice(ATTR_PREFIX.length)] = String(v).trim();
+      out[k.slice(ATTR_PREFIX.length)] = decodeEntities(String(v).trim());
     }
   }
   return out;
