@@ -3,7 +3,6 @@ import {
   OBJECT_TYPE_META,
   objectLabel,
   isBrokenTableOccurrence,
-  isUnresolvedTableOccurrence,
   type FmObject,
   type LayoutBounds,
   type LayoutObjectInfo,
@@ -13,15 +12,14 @@ import {
   type PrivilegeSetObjectAccess,
   type PrivilegeSetTableAccess,
   type SolutionModel,
+  type SortField,
 } from "@/types/ddr";
 import { buildDependencyView, type DependencyEdge } from "@/core/analysis/dependencies";
 import type { CallNode } from "@/core/analysis/callChain";
 import { BROKEN_PLACEHOLDER_RE } from "@/core/identifiers";
-import {
-  findMissingFieldOccurrences,
-  resolveQualifiedRef,
-  type RefResolution,
-} from "@/core/model/refResolution";
+import { findMissingFieldOccurrences } from "@/core/model/refResolution";
+import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
+import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { ScriptWorkspace } from "./ScriptWorkspace";
 import { Highlight, LinkedCode } from "./Highlight";
@@ -31,23 +29,16 @@ import { TypePill } from "./TypePill";
 /** How many rows a References / Referenced By widget shows before "Show more". */
 const DETAIL_REF_PREVIEW_LIMIT = 10;
 
-/** For field references, return `OCCURRENCE::field`; null for all other types.
- * Prefers the named occurrence from viaUid; falls back to the field's parent
- * base table when the reference has no occurrence context (e.g. summary fields
- * resolved via viaBaseTableId). */
-function fieldRefLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): string | null {
-  const type = edge.target?.type ?? edge.ref.toType;
-  if (type !== "field") return null;
+/** A referencing field in a Referenced by list as `OCCURRENCE::field`; null
+ * for all other types. Prefers the named occurrence from viaUid; falls back to
+ * the field's parent base table. */
+function sourceFieldLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): string | null {
+  const obj = edge.target;
+  if (obj?.type !== "field") return null;
   const occ = edge.ref.viaUid ? byUid.get(edge.ref.viaUid) : undefined;
-  const parentTable = edge.target?.parentUid ? byUid.get(edge.target.parentUid) : undefined;
+  const parentTable = obj.parentUid ? byUid.get(obj.parentUid) : undefined;
   const occName = occ?.name ?? parentTable?.name;
-  const fieldName = edge.target?.name ?? edge.ref.toName;
-  if (/Missing>$/.test(fieldName)) return null;
-  // FileMaker leaves a field's name blank when it was deleted — or when it
-  // sits behind a file that wasn't available at export, which can't be
-  // verified: that one reads as FileMaker's own step text writes it.
-  if (!fieldName) return occ && isUnresolvedTableOccurrence(occ) ? `${occ.name}::<File Missing>` : null;
-  return occName ? `${occName}::${fieldName}` : fieldName;
+  return occName ? `${occName}::${obj.name}` : obj.name;
 }
 
 /** Attributes rendered explicitly below (or internal markers) — kept out of the
@@ -311,15 +302,6 @@ function LinkedValue({
   return <>{renderWithBrokenPlaceholders(value)}</>;
 }
 
-/** The CSS class an inline-resolved `TO::Field` should wear in a property
- * sheet row, given the resolver's verdict. `external` dims + chips, `broken`
- * goes red, `resolved` / null clears the class. */
-function resolutionToClass(res: RefResolution | null): string {
-  if (!res || res.kind === "resolved") return "";
-  if (res.kind === "external") return "external";
-  return "broken";
-}
-
 /** Small warning icon shown in the detail header when an object is broken or
  * has broken outbound references. */
 export function BrokenBadge({ title }: { title: string }) {
@@ -333,9 +315,12 @@ export function BrokenBadge({ title }: { title: string }) {
 /** Wrap any FileMaker `<… Missing …>` / `<unknown>` placeholder in a
  * `broken-value` span so it reads as broken everywhere it shows up (titles,
  * attribute rows, layout-object names), instead of mixing in with normal
- * text. The placeholder pattern itself lives in @/core/identifiers. */
-export function renderWithBrokenPlaceholders(text: string): React.ReactNode {
-  if (!text.includes("<")) return text;
+ * text. The placeholder pattern itself lives in @/core/identifiers. Pass
+ * `broken: false` for an object's own name when the model finds nothing
+ * broken about it: a text object's merge field can read `<File Missing>`
+ * because its file was closed at export. */
+export function renderWithBrokenPlaceholders(text: string, broken = true): React.ReactNode {
+  if (!broken || !text.includes("<")) return text;
   const re = new RegExp(BROKEN_PLACEHOLDER_RE.source, "g");
   const parts: React.ReactNode[] = [];
   let last = 0;
@@ -552,6 +537,43 @@ export function OccurrenceRelationships({
   );
 }
 
+/** How a sort field orders records, in the Sort dialog's words. */
+function sortOrderText(f: SortField): string {
+  if (f.order === "Custom") return f.valueList ? `custom order of “${f.valueList}”` : "custom order";
+  return f.order.toLowerCase();
+}
+
+/** A sort order: each field with its direction, and the summary field it's
+ * reordered by, if any, as the owner (relationship or portal) references them. */
+function SortFieldList({
+  fields,
+  model,
+  owner,
+  onGo,
+}: {
+  fields: SortField[];
+  model: SolutionModel;
+  owner: string;
+  onGo: (uid: string, rowKey: string) => void;
+}) {
+  const field = (qualified: string) => <FieldRefLink qualified={qualified} model={model} owner={owner} onGo={onGo} />;
+  return (
+    <ol className="value-list">
+      {fields.map((f, i) => (
+        <li key={i}>
+          {field(f.field)} <span className="subtle">{sortOrderText(f)}</span>
+          {f.summaryField && (
+            <>
+              {" "}
+              <span className="subtle">· reordered by</span> {field(f.summaryField)}
+            </>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** A collapsible section with a header, count, and chevron — rendered as a
  * bordered "widget" card, matching the report card's metric-tile look. */
 export function Section({
@@ -608,7 +630,7 @@ export function Detail({
             stepRefs={refIndex.byStep}
             scriptGlobals={refIndex.scriptGlobals}
             model={model}
-            fileUid={owner.fileUid}
+            owner={owner.uid}
             onGo={onGo}
           />
         )}
@@ -622,7 +644,7 @@ export function Detail({
         {detail.signature && <div className="signature">{detail.signature}</div>}
         <pre className="code">
           {detail.body ? (
-            <LinkedCode text={detail.body} objects={refIndex.targets} onGo={onGo} model={model} fileUid={owner.fileUid} />
+            <LinkedCode text={detail.body} objects={refIndex.targets} onGo={onGo} model={model} owner={owner.uid} />
           ) : (
             "(empty)"
           )}
@@ -639,7 +661,7 @@ export function Detail({
     return (
       <Section title="Definition">
         <pre className="code">
-          <LinkedCode text={text} objects={fieldObjs} onGo={onGo} model={model} fileUid={owner.fileUid} />
+          <LinkedCode text={text} objects={fieldObjs} onGo={onGo} model={model} owner={owner.uid} />
         </pre>
       </Section>
     );
@@ -651,7 +673,7 @@ export function Detail({
         <dl className="kv compact">
           <dt>Looked up from</dt>
           <dd>
-            <FieldRefLink qualified={detail.source} model={model} fileUid={owner.fileUid} onGo={onGo} />
+            <FieldRefLink qualified={detail.source} model={model} owner={owner.uid} onGo={onGo} />
           </dd>
         </dl>
       </Section>
@@ -659,6 +681,10 @@ export function Detail({
   }
 
   if (detail.kind === "relationship") {
+    const sides = [
+      [detail.leftTable, detail.left?.sortFields],
+      [detail.rightTable, detail.right?.sortFields],
+    ] as const;
     return (
       <Section title="Relationship">
         <RelationshipERD
@@ -670,6 +696,21 @@ export function Detail({
           resolve={refIndex.resolve}
           onGo={onGo}
         />
+        {sides.some(([, fields]) => fields) && (
+          <dl className="kv compact">
+            {sides.map(
+              ([table, fields], i) =>
+                fields && (
+                  <Fragment key={i}>
+                    <dt>{table} sorted by</dt>
+                    <dd>
+                      <SortFieldList fields={fields} model={model} owner={owner.uid} onGo={onGo} />
+                    </dd>
+                  </Fragment>
+                ),
+            )}
+          </dl>
+        )}
       </Section>
     );
   }
@@ -690,7 +731,7 @@ export function Detail({
     return <PrivilegeSetDetail detail={detail} />;
   }
 
-  return <ValueListDetail detail={detail} refIndex={refIndex} model={model} fileUid={owner.fileUid} onGo={onGo} />;
+  return <ValueListDetail detail={detail} refIndex={refIndex} model={model} owner={owner.uid} onGo={onGo} />;
 }
 
 /** A privilege set's custom privileges: per-table record access (with an
@@ -1031,12 +1072,12 @@ function LayoutTriggerRow({
         </div>
         {trigger.parameterFieldName && (
           <div className="layout-trigger-info">
-            Parameter field: <LinkedCode text={trigger.parameterFieldName} objects={targets} onGo={onGo} model={model} fileUid={owner.fileUid} />
+            Parameter field: <LinkedCode text={trigger.parameterFieldName} objects={targets} onGo={onGo} model={model} owner={owner.uid} />
           </div>
         )}
         {trigger.parameter && (
           <div className="layout-trigger-info">
-            Parameter: <LinkedCode text={trigger.parameter} objects={targets} onGo={onGo} model={model} fileUid={owner.fileUid} />
+            Parameter: <LinkedCode text={trigger.parameter} objects={targets} onGo={onGo} model={model} owner={owner.uid} />
           </div>
         )}
       </dd>
@@ -1115,8 +1156,9 @@ function LayoutObjectColumnDetail({
     return model.byUid.get(`${fileUid}:script:${id}`) ?? null;
   }
 
-  const fieldResolution = detail.fieldRef ? resolveQualifiedRef(detail.fieldRef, model, fileUid) : null;
-  const fieldClassName = resolutionToClass(fieldResolution);
+  const fieldRef = detail.fieldRef ? ownFieldRef(model, owner.uid, detail.fieldRef) : undefined;
+  const fieldStatus = fieldRef ? refStatus(fieldRef, model.byUid) : "ok";
+  const fieldClassName = fieldStatus === "broken" ? "broken" : fieldStatus === "ok" ? "" : "external";
   const scriptObj = detail.scriptRef ? scriptTarget(detail.scriptRef.id) : null;
   const scriptName = detail.scriptRef?.name || (detail.scriptRef?.id ? `Script ${detail.scriptRef.id}` : "");
   const valueListObj = detail.valueListRef?.id
@@ -1166,11 +1208,17 @@ function LayoutObjectColumnDetail({
             <li title={detail.fieldRef} className={fieldClassName}>
               <TypePill type="field" short />
               <span className="ellipsis">
-                <FieldRefLink qualified={detail.fieldRef} model={model} fileUid={fileUid} onGo={onGo} />
+                <FieldRefLink qualified={detail.fieldRef} model={model} owner={owner.uid} onGo={onGo} />
               </span>
               {fieldClassName === "external" && <RefStatusChip kind="external" />}
             </li>
           </ul>
+        </Section>
+      )}
+
+      {detail.portalSort && (
+        <Section title="Sort order" count={detail.portalSort.length}>
+          <SortFieldList fields={detail.portalSort} model={model} owner={owner.uid} onGo={onGo} />
         </Section>
       )}
 
@@ -1319,6 +1367,8 @@ function LayoutObjectTree({
   const [open, setOpen] = useState(false);
   const hasChildren = (obj.children?.length ?? 0) > 0;
   const { text, dim } = layoutObjLabel(obj);
+  // A placeholder in its label reads as broken only when the model says so.
+  const broken = model == null || obj.uid == null || brokenSourcesFor(model).has(obj.uid);
 
   function scriptTarget(id: string | undefined): FmObject | null {
     if (!id || !model || !fileUid) return null;
@@ -1351,7 +1401,7 @@ function LayoutObjectTree({
         <span
           className={`lo-label${dim ? " lo-label-dim" : ""}${obj.uid && onGo ? " lo-label-selectable" : ""}`}
           onClick={obj.uid && onGo ? () => onGo(obj.uid!, `lo:${obj.uid}`) : undefined}
-        >{renderWithBrokenPlaceholders(text)}</span>
+        >{renderWithBrokenPlaceholders(text, broken)}</span>
         {obj.scriptRef && (() => {
           const target = scriptTarget(obj.scriptRef.id);
           const sName = obj.scriptRef.name || (obj.scriptRef.id ? `Script ${obj.scriptRef.id}` : "");
@@ -1504,6 +1554,15 @@ function LayoutObjectRow({
         <div className="layout-portal-meta">
           {obj.portalTable}
           {obj.portalRows ? ` · ${obj.portalRows} rows` : ""}
+        </div>
+      )}
+      {isPortal && obj.portalSort && (
+        <div className="layout-obj-info">
+          Sorted by{" "}
+          {renderWithBrokenPlaceholders(
+            obj.portalSort.map((f) => f.field).join(", "),
+            model == null || obj.uid == null || brokenSourcesFor(model).has(obj.uid),
+          )}
         </div>
       )}
       {obj.fieldRef && <div className="layout-obj-info">{obj.fieldRef}</div>}
@@ -1675,13 +1734,14 @@ function ValueListDetail({
   detail,
   refIndex,
   model,
-  fileUid,
+  owner,
   onGo,
 }: {
   detail: Extract<ObjectDetail, { kind: "valueList" }>;
   refIndex: RefIndex;
   model: SolutionModel;
-  fileUid: string;
+  /** The value list's uid: its own field references are shown. */
+  owner: string;
   onGo: (uid: string, rowKey: string) => void;
 }) {
   const { source, customValues, field } = detail;
@@ -1694,7 +1754,7 @@ function ValueListDetail({
           <dt>Field</dt>
           <dd>
             {field.primaryField ? (
-              <FieldRefLink qualified={field.primaryField} model={model} fileUid={fileUid} onGo={onGo} />
+              <FieldRefLink qualified={field.primaryField} model={model} owner={owner} onGo={onGo} />
             ) : (
               "(none)"
             )}
@@ -1703,7 +1763,7 @@ function ValueListDetail({
             <>
               <dt>{field.showOnlySecondary ? "Displays only" : "Also displays"}</dt>
               <dd>
-                <FieldRefLink qualified={field.secondaryField} model={model} fileUid={fileUid} onGo={onGo} />
+                <FieldRefLink qualified={field.secondaryField} model={model} owner={owner} onGo={onGo} />
               </dd>
             </>
           )}
@@ -1801,29 +1861,17 @@ export function GroupedRefList({
             {group.edges.map((edge, i) => {
               // edge.target is the SOURCE object for inbound, the TARGET for outbound.
               const obj = edge.target;
-              const unresolved = side === "to" && !obj;
-              // A deleted object (FileMaker emits "<… Missing>" or an empty name) is
-              // broken; so is anything flagged broken in resolution. A field behind
-              // a file that wasn't available at export has an empty name too, but
-              // can't be verified — not broken, as the parser reads it. A target that
-              // merely lives in another, unloaded file is "external" — not an error.
-              const via = edge.ref.viaUid ? byUid.get(edge.ref.viaUid) : undefined;
-              const unverifiable = unresolved && edge.ref.toName === "" && via != null && isUnresolvedTableOccurrence(via);
-              const deleted = unresolved && !unverifiable && (edge.ref.toName === "" || /Missing>$/.test(edge.ref.toName));
-              const broken = unresolved && (edge.ref.broken || deleted);
-              const external = unresolved && !broken;
+              // The target's status and label are the model's (core/model/refStatus):
+              // deleted is broken; a field behind a file that wasn't available at
+              // export can't be verified; one in another, unloaded file is external.
+              const status = side === "to" ? refStatus(edge.ref, byUid) : "ok";
+              const broken = status === "broken";
+              const unverifiable = status === "unverifiable";
+              const external = status === "external" || unverifiable;
               const unused = obj != null && (isUnused?.(obj.uid) ?? false);
               const rowKey = `${edge.ref.fromUid}-${edge.ref.toId}-${group.type}-${i}`;
               const type = obj?.type ?? edge.ref.toType;
-              const label =
-                fieldRefLabel(edge, byUid) ??
-                (obj
-                  ? objectLabel(obj)
-                  : edge.ref.toName
-                    ? edge.ref.toName
-                    : deleted
-                      ? `<${OBJECT_TYPE_META[edge.ref.toType].label} Missing>`
-                      : `${OBJECT_TYPE_META[edge.ref.toType].label} ${edge.ref.toId}`);
+              const label = side === "to" ? refLabel(edge.ref, byUid) : (sourceFieldLabel(edge, byUid) ?? (obj ? objectLabel(obj) : edge.ref.fromUid));
               const title = broken
                 ? `Broken — ${label}`
                 : unverifiable

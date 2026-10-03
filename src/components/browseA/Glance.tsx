@@ -4,6 +4,7 @@ import { chainTops } from "@/core/analysis/unusedChains";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders } from "../ObjectColumn";
+import { brokenSourcesFor } from "./refStats";
 import type { Fact } from "./facts";
 import { isInUnusedChain } from "./filters";
 
@@ -81,7 +82,7 @@ function fieldThirdRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceR
   }
   if (d?.kind === "summary") return { label: "Summarizes", value: `${d.operation} ${d.fields.join(", ")}` };
   if (d?.kind === "lookup") {
-    return { label: "Looks up", value: <FieldRefLink qualified={d.source} model={model} fileUid={obj.fileUid} onGo={onGo} /> };
+    return { label: "Looks up", value: <FieldRefLink qualified={d.source} model={model} owner={obj.uid} onGo={onGo} /> };
   }
   return { label: "Auto-enter", value: a.autoEnter ?? "None" };
 }
@@ -120,7 +121,7 @@ function boundTo(obj: FmObject, model: SolutionModel, onGo: OnGo): React.ReactNo
   const lo = obj.detail?.kind === "layoutObject" ? obj.detail : undefined;
   const f = obj.fileUid;
   if (!lo) return null;
-  if (lo.fieldRef) return <FieldRefLink qualified={lo.fieldRef} model={model} fileUid={f} onGo={onGo} />;
+  if (lo.fieldRef) return <FieldRefLink qualified={lo.fieldRef} model={model} owner={obj.uid} onGo={onGo} />;
   if (lo.scriptRef) {
     const script = byId(model, f, "script", lo.scriptRef.id) ?? byName(model, f, "script", lo.scriptRef.name);
     return linkOrText(script, lo.scriptRef.name, onGo);
@@ -225,7 +226,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         {
           label: "Values",
           value: field ? (
-            <FieldRefLink qualified={field.primaryField} model={model} fileUid={f} onGo={onGo} />
+            <FieldRefLink qualified={field.primaryField} model={model} owner={obj.uid} onGo={onGo} />
           ) : (
             plural(custom, "custom value")
           ),
@@ -390,7 +391,7 @@ export function Glance({
     <section className="op-glance" aria-label="At a glance">
       <div className="op-glance-head">
         <h1 className="op-glance-name" title={objectLabel(obj)}>
-          {renderWithBrokenPlaceholders(objectLabel(obj))}
+          {renderWithBrokenPlaceholders(objectLabel(obj), brokenSourcesFor(model).has(obj.uid))}
         </h1>
         {actions}
       </div>

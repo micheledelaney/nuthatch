@@ -12,7 +12,8 @@ import { OBJECT_TYPE_META } from "@/types/ddr";
 export function buildReportCard(
   parsed: ParseResult,
   references: FmReference[],
-  broken: FmReference[],
+  /** Objects with a broken reference (see brokenSources). */
+  brokenSources: ReadonlySet<string>,
   unreferenced: FmObject[],
   unusedChain: FmObject[],
 ): ReportCard {
@@ -46,7 +47,7 @@ export function buildReportCard(
     fileCount: parsed.files.length,
     countsByType,
     referenceCount: references.length,
-    brokenReferenceCount: new Set(broken.map((r) => r.fromUid)).size,
+    brokenReferenceCount: brokenSources.size,
     unreferencedCount: unreferenced.length,
     unusedChainCount: unusedChain.length,
     unstoredCalculationCount,

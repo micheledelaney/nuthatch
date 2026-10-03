@@ -64,7 +64,7 @@ export function search(
 /** True if `field` is exposed under a table occurrence whose name contains
  * `toQuery` and the field's own name contains `fieldQuery` (case-insensitive
  * substrings, matching the plain-search behavior above). Scoped to
- * occurrences in the field's own file, same as `resolveQualifiedRef`. */
+ * occurrences in the field's own file. */
 function matchesQualifiedName(model: SolutionModel, field: FmObject, toQuery: string, fieldQuery: string): boolean {
   if (!field.name.toLowerCase().includes(fieldQuery)) return false;
   const table = field.parentUid ? model.byUid.get(field.parentUid) : undefined;

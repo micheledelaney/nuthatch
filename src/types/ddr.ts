@@ -196,6 +196,8 @@ export type ObjectDetail =
       portalTable?: string;
       /** Portal: visible row count. */
       portalRows?: number;
+      /** Portal: the fields its records are sorted by. */
+      portalSort?: SortField[];
     }
   | {
       kind: "layout";
@@ -317,6 +319,21 @@ export interface RelationshipSide {
   cascadeDelete: boolean;
   /** "Sort records" is enabled for this side. */
   sorted: boolean;
+  /** The fields it sorts by, when sorted. */
+  sortFields?: SortField[];
+}
+
+/** One field of a sort order (a relationship's or a portal's), as the Sort
+ * dialog lists it. */
+export interface SortField {
+  /** "TableOccurrence::Field" (see qualifiedField). */
+  field: string;
+  /** "Ascending", "Descending", or "Custom" (in a value list's order). */
+  order: string;
+  /** A custom order's value list. */
+  valueList?: string;
+  /** "Reorder based on summary field": the summary field, as "TableOccurrence::Field". */
+  summaryField?: string;
 }
 
 /** A layout part (Body, Header, …) and the objects placed on it. */
@@ -356,6 +373,8 @@ export interface LayoutObjectInfo {
   portalTable?: string;
   /** Portal: number of rows visible (<Options show="N">). */
   portalRows?: number;
+  /** Portal: the fields its records are sorted by (Portal Setup ▸ Sort portal records). */
+  portalSort?: SortField[];
   /** Nested objects: portal fields, tab/slide panel contents, group members. */
   children?: LayoutObjectInfo[];
   /** Field binding: "TO::FieldName" for field-type objects. */

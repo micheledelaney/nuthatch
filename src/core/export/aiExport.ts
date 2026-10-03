@@ -1,6 +1,7 @@
 import { version as NUTHATCH_VERSION } from "../../../package.json";
 import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
+import { brokenSources } from "@/core/analysis/dependencies";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -44,7 +45,7 @@ const REF_COLUMNS = [
 ] as const;
 
 export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportFile[] {
-  const brokenFrom = new Set(model.brokenReferences.map((r) => r.fromUid));
+  const brokenFrom = brokenSources(model);
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
   const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
   return [
@@ -172,7 +173,7 @@ dependency questions ("what uses X?", "can I delete X?") are a lookup in
 - **Analysis:** ${info.analysisName} (project: ${info.projectName})
 - **Analysis saved:** ${new Date(info.savedAt).toISOString()}
 - **Exported:** ${new Date(info.exportedAt).toISOString()}
-- **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length}
+- **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length} (in ${card.brokenReferenceCount} objects)
 - **Unreferenced objects:** ${card.unreferencedCount} · **Used only by unreferenced objects:** ${card.unusedChainCount}
 
 This is a snapshot. If the FileMaker solution has changed since the date

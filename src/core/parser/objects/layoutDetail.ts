@@ -3,7 +3,7 @@ import type { FileIndex, StepTexts } from "../context";
 import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
 import { calculationText, literalText } from "../calcText";
-import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers } from "./common";
+import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers, sortFields } from "./common";
 import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
@@ -116,6 +116,7 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
   const portal = child(obj, "Portal");
   const portalTo = child(portal, "TableOccurrenceReference");
   const portalOptions = child(portal, "Options");
+  const portalSort = sortFields(child(portal, "SortSpecification"), index);
   const kids = childObjects(obj, index);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
   const tooltip = calcOf(child(obj, "Tooltip"));
@@ -132,9 +133,10 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
       : {}),
     ...(style ? { style } : {}),
     ...(info ? { info } : {}),
-    // Portal: the table occurrence it shows and its visible row count.
+    // Portal: the table occurrence it shows, its visible row count and its sort.
     ...(isRecord(portalTo) ? { portalTable: textAttr(portalTo, "name") ?? "" } : {}),
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
+    ...(portalSort.length > 0 ? { portalSort } : {}),
     ...(kids ? { children: kids.map((kid) => kid.info) } : {}),
     ...fieldBinding(obj, index),
     ...buttonAction(obj, index.stepTexts),

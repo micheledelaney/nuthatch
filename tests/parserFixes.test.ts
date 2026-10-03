@@ -5,6 +5,9 @@
 import { describe, expect, it } from "vitest";
 import { parseDocuments } from "@/core/parser/parseDdr";
 import { buildModel } from "@/core/model/buildModel";
+import { buildDependencyView } from "@/core/analysis/dependencies";
+import { brokenSourcesFor, refStatsFor } from "@/components/browseA/refStats";
+import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
 import { occurrencesBeforeMissingField } from "@/core/identifiers";
 import type { FmObject, ParseResult } from "@/types/ddr";
 
@@ -1337,5 +1340,166 @@ describe("script step text in another language", () => {
 
   it("isn't reported in English", () => {
     expect(parse(exportWith((i) => `Go to Layout [ “L${i}” ]`)).errors).toEqual([]);
+  });
+});
+
+describe("sort orders", () => {
+  const sortSpec = (sorts: string): string => `<SortSpecification value="True" blanksLast="False" maintain="True"><SortList>${sorts}</SortList></SortSpecification>`;
+  const sort = (type: string, field: string, extra = ""): string => `<Sort type="${type}"><PrimaryField>${field}</PrimaryField>${extra}</Sort>`;
+  const tField = (id: string, name: string): string => `<FieldReference id="${id}" name="${name}"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE}
+        <RelationshipCatalog><Relationship id="1">
+          <LeftTable><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference>${sortSpec(sort("Ascending", tField("1", "a")) + sort("Descending", blankField("14", "1", "T")))}</LeftTable>
+          <RightTable><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><SortSpecification value="False"></SortSpecification></RightTable>
+          <JoinPredicateList><JoinPredicate type="Equal"><LeftField>${tField("1", "a")}</LeftField><RightField>${tField("2", "b")}</RightField></JoinPredicate></JoinPredicateList>
+        </Relationship></RelationshipCatalog>
+        ${layout(
+          `<LayoutObject id="1" type="Portal" name=""><Portal><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><Options index="1" show="6">401</Options>` +
+            sortSpec(
+              sort("Custom", tField("1", "a"), `<ValueListReference id="3" name="Order"></ValueListReference>`) +
+                sort("Ascending", tField("2", "b"), `<SummaryField>${tField("1", "a")}</SummaryField>`),
+            ) +
+            `</Portal></LayoutObject>`,
+        )}
+      </AddAction>`,
+    ),
+  );
+
+  it("lists a relationship side's sort fields in order, a deleted one as missing", () => {
+    const detail = object(result, "F0:relationship:1").detail;
+    expect(detail).toMatchObject({
+      left: { sorted: true, sortFields: [{ field: "T::a", order: "Ascending" }, { field: "T::<Field Missing>", order: "Descending" }] },
+    });
+    expect(detail).toMatchObject({ right: { cascadeCreate: false, cascadeDelete: false, sorted: false } });
+    expect(detail?.kind === "relationship" && detail.right).not.toHaveProperty("sortFields");
+  });
+
+  it("lists a portal's sort fields, with a custom order's value list and a summary field", () => {
+    expect(object(result, "F0:layoutObject:10.1").detail).toMatchObject({
+      portalSort: [
+        { field: "T::a", order: "Custom", valueList: "Order" },
+        { field: "T::b", order: "Ascending", summaryField: "T::a" },
+      ],
+    });
+  });
+});
+
+describe("a deleted field with the id of another table's field", () => {
+  // As SampleA's MAP_EDIT loaded without its local file: no field
+  // is found, and field ids are only unique within a table, so X's field 7 is
+  // no repeat of Y's, while Z's is: Z is another occurrence of Y's table.
+  const EXTERNAL = TABLE.replace(
+    "</TableOccurrenceCatalog>",
+    `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference>
+      <DataSourceReference id="1" name="EXT"></DataSourceReference><BaseTableReference id="1" name="T1" UUID="U1"></BaseTableReference>
+    </BaseTableSourceReference></TableOccurrence>
+    <TableOccurrence id="3" name="Y" type="External"><BaseTableSourceReference>
+      <DataSourceReference id="1" name="EXT"></DataSourceReference><BaseTableReference id="2" name="T2" UUID="U2"></BaseTableReference>
+    </BaseTableSourceReference></TableOccurrence>
+    <TableOccurrence id="4" name="Z" type="External"><BaseTableSourceReference>
+      <DataSourceReference id="1" name="EXT"></DataSourceReference><BaseTableReference id="2" name="T2" UUID="U2"></BaseTableReference>
+    </BaseTableSourceReference></TableOccurrence></TableOccurrenceCatalog>
+    <ExternalDataSourceCatalog><ExternalDataSource id="1" name="EXT"></ExternalDataSource></ExternalDataSourceCatalog>`,
+  );
+  const field7 = (to: string, toName: string): string =>
+    `<FieldReference id="7" name="b"><TableOccurrenceReference id="${to}" name="${toName}"></TableOccurrenceReference></FieldReference>`;
+  const model = buildModel(
+    parse(doc("MAIN", `<AddAction>${EXTERNAL}${layout(editBox("1", field7("3", "Y")) + editBox("2", blankField("7", "2", "X")) + editBox("3", field7("4", "Z")))}</AddAction>`)),
+  );
+  const LAYOUT = "F0:layout:10";
+
+  it("has a row of its own in the layout's References, unlike the same field through another occurrence", () => {
+    const fields = buildDependencyView(model, LAYOUT)!.outbound.filter((e) => e.ref.toType === "field");
+    expect(fields.map((e) => `${e.ref.toName || "(blank)"}: ${e.ref.broken ? "broken" : "not found"}`).sort()).toEqual(["(blank): broken", "b: not found"]);
+  });
+
+  it("is counted by the badge, the navigator's dot and the report card alike", () => {
+    const listed = buildDependencyView(model, LAYOUT)!.outbound.filter((e) => e.ref.broken).length;
+    expect([listed, refStatsFor(model, LAYOUT).broken]).toEqual([1, 1]);
+    expect(brokenSourcesFor(model).has(LAYOUT)).toBe(true);
+    expect(model.reportCard.brokenReferenceCount).toBe(brokenSourcesFor(model).size);
+  });
+});
+
+describe("what a field reference shows as", () => {
+  // X's file wasn't available at export (no base table); Y's was, but isn't
+  // loaded; occurrence -1 is FileMaker's <Table Missing>, a deleted one.
+  const OCCURRENCES = TABLE.replace(
+    "</TableOccurrenceCatalog>",
+    `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference><DataSourceReference id="1" name="Other"></DataSourceReference></BaseTableSourceReference></TableOccurrence>
+    <TableOccurrence id="3" name="Y" type="External"><BaseTableSourceReference>
+      <DataSourceReference id="2" name="EXT"></DataSourceReference><BaseTableReference id="1" name="T" UUID="U1"></BaseTableReference>
+    </BaseTableSourceReference></TableOccurrence></TableOccurrenceCatalog>
+    <ExternalDataSourceCatalog><ExternalDataSource id="1" name="Other"></ExternalDataSource><ExternalDataSource id="2" name="EXT"></ExternalDataSource></ExternalDataSourceCatalog>`,
+  );
+  const named = (id: string, name: string, to: string, toName: string): string =>
+    `<FieldReference id="${id}" name="${name}"><TableOccurrenceReference id="${to}" name="${toName}"></TableOccurrenceReference></FieldReference>`;
+  const model = buildModel(
+    parse(
+      doc(
+        "MAIN",
+        `<AddAction>${OCCURRENCES}${layout(
+          editBox("1", named("1", "a", "1", "T")) +
+            editBox("2", blankField("9", "1", "T")) +
+            editBox("3", blankField("7", "2", "X")) +
+            editBox("4", named("5", "b", "3", "Y")) +
+            editBox("5", blankField("4", "-1", "&lt;Table Missing&gt;")),
+        )}</AddAction>`,
+      ),
+    ),
+  );
+  /** The layout object's field as its detail names it, and what that shows as. */
+  const shown = (id: string): string => {
+    const uid = `F0:layoutObject:10.${id}`;
+    const detail = model.byUid.get(uid)?.detail;
+    const fieldRef = detail?.kind === "layoutObject" ? detail.fieldRef! : "";
+    const ref = ownFieldRef(model, uid, fieldRef);
+    return ref ? `${fieldRef} -> ${refLabel(ref, model.byUid)}: ${refStatus(ref, model.byUid)}` : `${fieldRef} -> no reference`;
+  };
+
+  it("is found", () => {
+    expect(shown("1")).toBe("T::a -> T::a: ok");
+  });
+
+  it("is deleted, by FileMaker's name for it", () => {
+    expect(shown("2")).toBe("T::<Field Missing> -> T::<Field Missing>: broken");
+    expect(shown("5")).toBe("<Table Missing>::<Field Missing> -> <Table Missing>::<Field Missing>: broken");
+  });
+
+  it("can't be verified behind a file that wasn't available at export", () => {
+    expect(shown("3")).toBe("X::(field 7) -> X::<File Missing>: unverifiable");
+  });
+
+  it("is in another file while that file isn't loaded", () => {
+    expect(shown("4")).toBe("Y::b -> Y::b: external");
+  });
+
+  it("is found only among the object's own references", () => {
+    expect(ownFieldRef(model, "F0:layoutObject:10.1", "T::<Field Missing>")).toBeUndefined();
+  });
+});
+
+describe("a lookup that copies from no field", () => {
+  // Nothing selected under "Copy value from field" in FileMaker's Lookup dialog.
+  const lookup = (enable: string): string =>
+    TABLE.replace(
+      '<Field id="2" name="b"></Field>',
+      `<Field id="2" name="b"><AutoEnter type="Looked_up"><Looked_up${enable}>
+        <FieldReference id="0" name="" UUID=""></FieldReference><Context><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></Context>
+      </Looked_up></AutoEnter></Field>`,
+    );
+
+  it("says so, and isn't broken", () => {
+    const result = parse(doc("MAIN", `<AddAction>${lookup("")}</AddAction>`));
+    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "lookup", source: "(no field set)" });
+    expect(buildModel(result).brokenReferences.filter((r) => r.fromUid === "F0:field:1.2")).toEqual([]);
+  });
+
+  it("counts for nothing while switched off", () => {
+    const result = parse(doc("MAIN", `<AddAction>${lookup(' enable="False"')}</AddAction>`));
+    expect(object(result, "F0:field:1.2").detail?.kind).not.toBe("lookup");
   });
 });

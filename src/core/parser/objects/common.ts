@@ -1,4 +1,4 @@
-import type { LayoutTriggerInfo } from "@/types/ddr";
+import type { LayoutTriggerInfo, SortField } from "@/types/ddr";
 import type { FileIndex } from "../context";
 import { asArray, attr, child, children, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
@@ -18,6 +18,24 @@ export function qualifiedField(wrapper: unknown, index: FileIndex): string {
   const to = textAttr(child(ref, "TableOccurrenceReference"), "name") ?? "";
   const field = fieldRefName(ref, index);
   return to ? `${to}::${field}` : field;
+}
+
+/** The fields a <SortSpecification> sorts by, in order; none when its "Sort
+ * records" box is off (FileMaker then writes no list). */
+export function sortFields(spec: unknown, index: FileIndex): SortField[] {
+  if (attr(spec, "value") !== "True") return [];
+  return children(child(spec, "SortList"), "Sort")
+    .filter(isRecord)
+    .map((sort) => {
+      const valueList = textAttr(child(sort, "ValueListReference"), "name");
+      const summaryField = qualifiedField(child(child(sort, "SummaryField"), "FieldReference"), index);
+      return {
+        field: qualifiedField(child(child(sort, "PrimaryField"), "FieldReference"), index),
+        order: attr(sort, "type") ?? "Ascending",
+        ...(valueList ? { valueList } : {}),
+        ...(summaryField ? { summaryField } : {}),
+      };
+    });
 }
 
 /** The field a <FieldReference> names. FileMaker leaves the reference in place

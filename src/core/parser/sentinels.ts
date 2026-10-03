@@ -16,6 +16,11 @@ export const MISSING_TABLE_TOKEN = "<Table Missing>";
 /** Left in calculation text where a custom function was deleted. */
 export const MISSING_FUNCTION_TOKEN = "<Function Missing>";
 
+/** The label of a lookup that copies from no field: nothing is selected under
+ * "Copy value from field" (FileMaker writes `<FieldReference id="0" name="">`).
+ * Not a deleted field, so not broken. */
+export const NO_FIELD_LABEL = "(no field set)";
+
 /** Sentinel `toId` for a broken edge whose target no longer exists. */
 export const MISSING_REF_ID = "<missing>";
 

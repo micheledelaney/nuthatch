@@ -1,7 +1,7 @@
 import type { FmObject, ObjectDetail } from "@/types/ddr";
 import type { FileIndex, FileParse, TextScan } from "../context";
 import { attr, cdataText, child, children, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
-import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
+import { MISSING_FIELD_TOKEN, NO_FIELD_LABEL, UNKNOWN_TARGET } from "../sentinels";
 import { ownValue } from "../ownValue";
 import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
@@ -215,6 +215,9 @@ function summaryDetail(fieldNode: Record<string, unknown>): ObjectDetail | undef
 function lookupDetail(autoEnter: unknown, index: FileIndex): ObjectDetail | undefined {
   const lookedUp = child(autoEnter, "Looked_up");
   if (!isAutoEnterOptionActive(autoEnter, "Looked_up") || !isRecord(lookedUp)) return undefined;
+  // A lookup never pointed at a field names `<FieldReference id="0" name="">`.
+  const ref = child(lookedUp, "FieldReference");
+  if (attr(ref, "id") === "0" && !textAttr(ref, "name")) return { kind: "lookup", source: NO_FIELD_LABEL };
   const source = qualifiedField(lookedUp["FieldReference"], index);
   return source ? { kind: "lookup", source } : undefined;
 }
