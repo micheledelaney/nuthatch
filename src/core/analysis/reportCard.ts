@@ -8,14 +8,14 @@ import type {
 } from "@/types/ddr";
 import { OBJECT_TYPE_META } from "@/types/ddr";
 
-const GLOBAL_VAR_RE = /\$\$[A-Za-z0-9_]+/g;
-
 /** Compute the report-card metrics for the solution. */
 export function buildReportCard(
   parsed: ParseResult,
   references: FmReference[],
-  broken: FmReference[],
+  /** Objects with a broken reference (see brokenSources). */
+  brokenSources: ReadonlySet<string>,
   unreferenced: FmObject[],
+  unusedChain: FmObject[],
 ): ReportCard {
   const countsByType = emptyCounts();
   for (const obj of parsed.objects) {
@@ -24,17 +24,18 @@ export function buildReportCard(
   }
 
   const unstoredCalculationCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.unstored === "true",
+    (o) => o.type === "field" && o.attributes.unstored === "Yes",
   ).length;
 
   const deepCalcCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.unstored === "true" && (o.relationshipDepth ?? 0) >= 2,
+    (o) => o.type === "field" && o.attributes.unstored === "Yes" && (o.relationshipDepth ?? 0) >= 2,
   ).length;
 
-  const globalVariableCount = countGlobalVariables(parsed.objects);
+  // The parser's global-variable objects: one per name per file, whatever its case.
+  const globalVariableCount = countsByType.globalVariable;
 
   const globalFieldCount = parsed.objects.filter(
-    (o) => o.type === "field" && o.attributes.global === "true",
+    (o) => o.type === "field" && o.attributes.global === "Yes",
   ).length;
 
   // Active FileMaker-auth accounts with no password set.
@@ -46,8 +47,9 @@ export function buildReportCard(
     fileCount: parsed.files.length,
     countsByType,
     referenceCount: references.length,
-    brokenReferenceCount: new Set(broken.map((r) => r.fromUid)).size,
+    brokenReferenceCount: brokenSources.size,
     unreferencedCount: unreferenced.length,
+    unusedChainCount: unusedChain.length,
     unstoredCalculationCount,
     deepCalcCount,
     globalVariableCount,
@@ -57,15 +59,6 @@ export function buildReportCard(
   };
   reportCard.riskFlags = deriveRiskFlags(reportCard);
   return reportCard;
-}
-
-function countGlobalVariables(objects: FmObject[]): number {
-  const names = new Set<string>();
-  for (const obj of objects) {
-    const matches = obj.text.match(GLOBAL_VAR_RE);
-    if (matches) for (const m of matches) names.add(m);
-  }
-  return names.size;
 }
 
 function deriveRiskFlags(card: ReportCard): RiskFlag[] {
@@ -86,6 +79,14 @@ function deriveRiskFlags(card: ReportCard): RiskFlag[] {
     flags.push({
       severity: "warn",
       message: `${card.unreferencedCount} potentially unreferenced object${plural(card.unreferencedCount)}.`,
+    });
+  }
+  // "info", not "warn": the saved-analyses trend counts warn flags, and this
+  // adds no new problem — it shows how far the unreferenced ones reach.
+  if (card.unusedChainCount > 0) {
+    flags.push({
+      severity: "info",
+      message: `${card.unusedChainCount} object${plural(card.unusedChainCount)} used only by unreferenced objects.`,
     });
   }
   if (card.unstoredCalculationCount > 0) {

@@ -30,6 +30,8 @@ export interface Snapshot {
   edgesFrom: Map<string, ActualEdge[]>;
   /** Oracle refs of the unreferenced objects (ignored types left out). */
   unreferenced: Set<string>;
+  /** Oracle refs of the objects in unused chains (ignored types left out). */
+  unusedChain: Set<string>;
   /** globalVariable name → the refs of every object (and its ancestors) using it. */
   globalUsers: Map<string, Set<string>>;
   reportCard: ReportCard;
@@ -62,6 +64,10 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
       refOf.set(o.uid, `${file}:field:${table}::${o.name}`);
     } else if (o.type === "relationship" && o.detail?.kind === "relationship") {
       refOf.set(o.uid, `${file}:relationship:${o.detail.leftTable} → ${o.detail.rightTable}`);
+    } else if (o.type === "layoutObject" && o.attributes.objectName) {
+      // A named layout object goes by its object name (Inspector ▸ Position ▸
+      // Name): its display name ("Portal (TO_Child)") can repeat on a layout.
+      refOf.set(o.uid, `${file}:layoutObject:${o.attributes.objectName}`);
     } else {
       refOf.set(o.uid, `${file}:${o.type}:${o.name}`);
     }
@@ -89,6 +95,9 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
     edgesFrom,
     unreferenced: new Set(
       model.unreferenced.filter((o) => !ignoredTypes.has(o.type)).map((o) => refOf.get(o.uid) ?? o.uid),
+    ),
+    unusedChain: new Set(
+      model.unusedChain.filter((o) => !ignoredTypes.has(o.type)).map((o) => refOf.get(o.uid) ?? o.uid),
     ),
     globalUsers: new Map(),
     reportCard: model.reportCard,

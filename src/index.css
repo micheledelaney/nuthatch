@@ -2703,6 +2703,11 @@ ul.rel-cascade li {
   color: var(--text-dim);
   cursor: default;
 }
+/* A script nothing in use reaches — dimmed like an unreferenced Browse row. */
+.tree .call-node.unused {
+  opacity: 0.5;
+  font-style: italic;
+}
 
 /* Script call-chain graph (detail view): callers above ▸ active ▸ callees below */
 .call-graph-wrap {
@@ -3300,6 +3305,23 @@ ul.rel-cascade li {
   min-width: 0;
   margin: 0;
   word-break: break-word;
+}
+/* Used only by: several linked objects, wrapping onto more lines. */
+.op-glance-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.op-glance-list-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.op-glance-note {
+  color: var(--text-dim);
 }
 .op-glance-empty {
   color: var(--text-dim);

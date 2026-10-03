@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { type FmObject, type ScriptStep, type SolutionModel } from "@/types/ddr";
-import { Highlight, LinkedCode, decodeEntities } from "./Highlight";
+import { Highlight, LinkedCode } from "./Highlight";
 
 const INDENT_PX = 18;
 const PARAMS_COLLAPSE_THRESHOLD = 120;
@@ -59,7 +59,7 @@ export function ScriptWorkspace({
   stepRefs,
   scriptGlobals,
   model,
-  fileUid,
+  owner,
   onGo,
 }: {
   steps: ScriptStep[];
@@ -69,9 +69,9 @@ export function ScriptWorkspace({
   stepRefs?: Map<number, FmObject[]>;
   /** Global variable objects used anywhere in the script — merged into every step. */
   scriptGlobals?: FmObject[];
-  /** Model + fileUid for LinkedCode's qualified-ref delegation. */
+  /** Model + the script's uid for LinkedCode's qualified-ref delegation. */
   model?: SolutionModel;
-  fileUid?: string;
+  owner?: string;
   onGo?: (uid: string, rowKey: string) => void;
 }) {
   const lines = layout(steps);
@@ -123,10 +123,10 @@ export function ScriptWorkspace({
             <span className="sw-ln">{step.index}</span>
             <span className="sw-step" style={{ paddingLeft: depth * INDENT_PX }}>
               {isComment ? (
-                <span className="sw-comment"># {decodeEntities(step.params)}</span>
+                <span className="sw-comment"># {step.params}</span>
               ) : (
                 <>
-                  <span className={nameClass ? `sw-name ${nameClass}` : "sw-name"}>{decodeEntities(step.name)}</span>
+                  <span className={nameClass ? `sw-name ${nameClass}` : "sw-name"}>{step.name}</span>
                   {step.params && (
                     <span className="sw-params">
                       {" "}
@@ -134,7 +134,7 @@ export function ScriptWorkspace({
                         // Link even while collapsed — the truncated preview still
                         // shows real references, and they should be clickable. A
                         // name cut off at the truncation boundary just won't match.
-                        <LinkedCode text={paramsText} objects={refs} onGo={onGo} model={model} fileUid={fileUid} />
+                        <LinkedCode text={paramsText} objects={refs} onGo={onGo} model={model} owner={owner} />
                       ) : (
                         <Highlight text={paramsText} />
                       )}

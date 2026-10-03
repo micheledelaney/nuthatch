@@ -31,6 +31,7 @@ interface Oracle {
   sources: Record<string, { exact: boolean; edges: ExpectedEdge[]; undecidedEdges?: ExpectedEdge[] }>;
   absentEdges?: { from: string; to: string; step?: number; why: string }[];
   unreferenced: { exact: string[]; undecided?: string[] };
+  unusedChain: { exact: string[] };
   brokenSources: { exact: string[] };
   globalVariables: Record<string, string[]>;
   reportCard: Record<string, unknown>;
@@ -45,11 +46,68 @@ export interface Check {
 /** Attribute values that differ for one export (e.g. a version without a feature), by ref. */
 export type AttributeOverrides = Record<string, Record<string, unknown>>;
 
-export function loadOracle(path: string, overrides: AttributeOverrides = {}): Oracle {
-  const oracle = JSON.parse(readFileSync(path, "utf8")) as Oracle;
-  const attributes = { ...oracle.objects.attributes };
-  for (const [ref, attrs] of Object.entries(overrides)) attributes[ref] = { ...attributes[ref], ...attrs };
-  return { ...oracle, objects: { ...oracle.objects, attributes } };
+/** What a build with appended items adds to a base oracle (expected-appended.json).
+ * Lists are appended, maps merged by key (attributes by ref, then by attribute),
+ * and a source with `extends: true` adds its edges to the base source's. */
+interface OracleAddendum {
+  objects?: Partial<Oracle["objects"]>;
+  sources?: Record<string, Oracle["sources"][string] & { extends?: boolean }>;
+  absentEdges?: Oracle["absentEdges"];
+  unreferenced?: { add: string[] };
+  unusedChain?: { add: string[] };
+  brokenSources?: { add: string[] };
+  globalVariables?: Record<string, string[]>;
+  reportCard?: Record<string, unknown>;
+  mainAlone?: { reportCard?: Record<string, unknown> };
+}
+
+/** The oracle at `path`, plus the addendum at `addendumPath` if given, with the
+ * per-export attribute overrides applied last. */
+export function loadOracle(path: string, overrides: AttributeOverrides = {}, addendumPath?: string): Oracle {
+  const base = JSON.parse(readFileSync(path, "utf8")) as Oracle;
+  const oracle = addendumPath ? withAddendum(base, JSON.parse(readFileSync(addendumPath, "utf8")) as OracleAddendum) : base;
+  return { ...oracle, objects: { ...oracle.objects, attributes: mergeAttributes(oracle.objects.attributes, overrides) } };
+}
+
+function mergeAttributes(base: AttributeOverrides = {}, more: AttributeOverrides = {}): AttributeOverrides {
+  const out = { ...base };
+  for (const [ref, attrs] of Object.entries(more)) out[ref] = { ...out[ref], ...attrs };
+  return out;
+}
+
+function withAddendum(base: Oracle, add: OracleAddendum): Oracle {
+  const o = base.objects;
+  const a = add.objects ?? {};
+  const sources = { ...base.sources };
+  for (const [src, { extends: extending, ...spec }] of Object.entries(add.sources ?? {})) {
+    const prior = sources[src];
+    sources[src] = extending && prior ? { ...prior, edges: [...prior.edges, ...spec.edges] } : spec;
+  }
+  const globalVariables = { ...base.globalVariables };
+  for (const [name, users] of Object.entries(add.globalVariables ?? {})) globalVariables[name] = [...(globalVariables[name] ?? []), ...users];
+  return {
+    ...base,
+    objects: {
+      ...o,
+      absent: [...o.absent, ...(a.absent ?? [])],
+      present: [...(o.present ?? []), ...(a.present ?? [])],
+      counts: { ...o.counts, ...a.counts },
+      attributes: mergeAttributes(o.attributes, a.attributes),
+      folders: { ...o.folders, ...a.folders },
+      separators: { ...o.separators, ...a.separators },
+      relationshipDepth: { ...o.relationshipDepth, ...a.relationshipDepth },
+      details: { ...o.details, ...a.details },
+      layoutObjects: [...(o.layoutObjects ?? []), ...(a.layoutObjects ?? [])],
+    },
+    sources,
+    absentEdges: [...(base.absentEdges ?? []), ...(add.absentEdges ?? [])],
+    unreferenced: { ...base.unreferenced, exact: [...base.unreferenced.exact, ...(add.unreferenced?.add ?? [])] },
+    unusedChain: { exact: [...base.unusedChain.exact, ...(add.unusedChain?.add ?? [])] },
+    brokenSources: { exact: [...base.brokenSources.exact, ...(add.brokenSources?.add ?? [])] },
+    globalVariables,
+    reportCard: { ...base.reportCard, ...add.reportCard },
+    mainAlone: { ...base.mainAlone, reportCard: { ...base.mainAlone?.reportCard, ...add.mainAlone?.reportCard } },
+  };
 }
 
 // ---- value matching ----------------------------------------------------------
@@ -293,14 +351,26 @@ export function buildChecks(oracle: Oracle, snapshot: () => Snapshot, mainAlone:
     ];
   });
 
+  add("unused chain", () => {
+    const snap = snapshot();
+    const expected = new Set(oracle.unusedChain.exact.filter((r) => !skip(r)));
+    return [
+      ...[...expected].filter((r) => !snap.unusedChain.has(r)).map((r) => `expected in an unused chain: ${r}`),
+      ...[...snap.unusedChain].filter((r) => !expected.has(r)).map((r) => `in an unused chain, but shouldn't be: ${r}`),
+    ];
+  });
+
   add("broken sources", () => {
     const snap = snapshot();
-    const left = new Set([...snap.edgesFrom].filter(([, es]) => es.some((e) => e.to.startsWith("broken:"))).map(([u]) => u));
+    const broken = new Set([...snap.edgesFrom].filter(([, es]) => es.some((e) => e.to.startsWith("broken:"))).map(([u]) => u));
+    const left = new Set(broken);
     const failures: string[] = [];
     for (const b of oracle.brokenSources.exact) {
       const uids = lookup(snap, b.replace("/**", ""));
       const scope = b.endsWith("/**") ? descendants(snap, uids) : uids;
-      if (!scope.some((u) => left.has(u))) failures.push(`expected broken references from ${b}`);
+      // Against every broken source, not just those no earlier entry covered:
+      // an object can be listed on its own and inside its parent's "/**".
+      if (!scope.some((u) => broken.has(u))) failures.push(`expected broken references from ${b}`);
       scope.forEach((u) => left.delete(u));
     }
     return [...failures, ...[...left].map((u) => `unexpected broken reference from ${snap.refOf.get(u)}`)];

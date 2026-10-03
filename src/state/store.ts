@@ -70,9 +70,9 @@ export type AccountPwFilter = "all" | "none" | "set";
 export type PrivCapFilter = "all" | "create" | "edit" | "delete" | "readonly";
 
 /** Cross-cutting reference-health filter, applied to whatever type is selected:
- * objects nothing references (unreferenced), or that have a broken outbound
- * reference (broken). */
-export type RefFilter = "all" | "unreferenced" | "broken";
+ * objects nothing references (unreferenced), objects used only by unused ones
+ * (unusedChain), or that have a broken outbound reference (broken). */
+export type RefFilter = "all" | "unreferenced" | "unusedChain" | "broken";
 
 /** Layout sub-filter (only meaningful when navType is "layout"). */
 export type LayoutFilter = "all" | "hasTriggers";

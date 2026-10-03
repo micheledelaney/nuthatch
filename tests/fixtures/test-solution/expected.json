@@ -12,7 +12,7 @@
     "exact": "exact: true means the source's outbound edges must equal the listed set (nothing missing, nothing extra). exact: false means the listed edges must exist; extras are allowed.",
     "unverified": "A string explaining why FileMaker's XML for this case hasn't been observed yet. A mismatch there is a question to investigate first, not automatically a parser bug.",
     "matchers": "Attribute values: a plain string must match exactly; {\"contains\": s} is a substring match; {\"oneOf\": [..]} matches any; {\"absent\": true} means the attribute must not be set; {\"present\": true} means it must be set.",
-    "ignoredTypes": "Object types listed in ignoredTypes aren't checked: edges to them are neither required nor flagged as extra, and they're left out of the unreferenced check."
+    "ignoredTypes": "Object types listed in ignoredTypes aren't checked: edges to them are neither required nor flagged as extra, and they're left out of the unreferenced and unused-chain checks."
   },
   "ignoredTypes": ["theme"],
   "objects": {
@@ -63,7 +63,7 @@
       "MAIN:field:T_Main::f_ValMsgCalc": {"validation": "Not empty, Existing value", "validationMessage": "\"Bad: \" & f_Text"},
       "MAIN:field:T_Main::f_ValMsgOff": {"validation": "Not empty", "validationMessage": {"absent": true}},
       "MAIN:field:T_Main::f_ValDelVL": {"validation": {"contains": "In value list"}},
-      "MAIN:field:T_Main::g_Global": {"global": "true"},
+      "MAIN:field:T_Main::g_Global": {"global": "Yes"},
       "MAIN:field:T_Main::f_Rep": {"repetitions": "5"},
       "MAIN:field:T_Main::f_Indexed": {"indexing": "All", "indexLanguage": "German"},
       "MAIN:field:T_Main::f_Cont": {"containerStorage": "External (Secure) · TEST_MAIN/", "validation": "Max 500 KB"},
@@ -74,10 +74,10 @@
       "MAIN:field:T_Main::f_LastVisited": {"autoEnter": "Value from last visited record"},
       "MAIN:field:T_Main::f_AECalc": {"autoEnterOptions": "Prohibit modification"},
       "MAIN:field:T_Main::c_Stored": {"unstored": {"absent": true}},
-      "MAIN:field:T_Main::c_Unstored": {"unstored": "true"},
-      "MAIN:field:T_Main::c_Deep": {"unstored": "true"},
-      "MAIN:field:T_Main::c_Ext": {"unstored": "true"},
-      "MAIN:field:T_Main::c_DelTO": {"unstored": "true"},
+      "MAIN:field:T_Main::c_Unstored": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_Deep": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_Ext": {"unstored": "Yes"},
+      "MAIN:field:T_Main::c_DelTO": {"unstored": "Yes"},
       "MAIN:tableOccurrence:TO_Ext": {"baseTable": "E_Table", "externalDataSource": "DS_Ext"},
       "MAIN:tableOccurrence:TO_ExtMissing": {"baseTableId": {"absent": true}, "baseTableUnresolved": {"present": true}},
       "MAIN:tableOccurrence:TO_VarPath": {"baseTableId": {"absent": true}, "baseTableUnresolved": {"present": true}},
@@ -109,8 +109,15 @@
       "MAIN:account:Admin": {"password": "Yes", "privilegeSet": "[Full Access]"},
       "MAIN:extendedPrivilege:xpTest": {"description": "Test keyword"},
       "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}},
+      "MAIN:customMenuItem:Paste": {"itemType": "Command", "_note": "M_Sub's item"},
+      "MAIN:customMenuItem:Copy": {"itemType": "Command"},
+      "MAIN:customMenuItem:Run S_Main": {"itemType": "Performs script", "overrides": {"contains": "Name"}, "_note": "named by its title calculation, not by the script it runs"},
+      "MAIN:customMenuItem:M_Sub": {"itemType": "Submenu"},
+      "MAIN:customMenuItem:Shortcut item": {"itemType": "Command", "shortcut": {"present": true}, "_note": "BUILD.md: command Select All, shortcut ⌘⇧K. The exports have neither (pinned)."},
+      "MAIN:customMenuItem:Conditional item": {"itemType": "Command", "installCondition": "Get ( WindowMode ) = 0"},
+      "MAIN:customMenuItem:Deleted script item": {"itemType": "Performs script"},
       "MAIN:valueList:VL_External": {"source": "External"},
-      "MAIN:field:T_Main::c_DelField": {"unstored": "true"}
+      "MAIN:field:T_Main::c_DelField": {"unstored": "Yes"}
     },
     "folders": {
       "MAIN:script:S_Main": "Test",
@@ -682,6 +689,13 @@
       "EXT:script:ES_Script": "MAIN S_Main step 4 (cross-file)",
       "EXT:valueList:EVL_List": "MAIN VL_External (cross-file)",
       "EXT:layout:EL_Layout": "MAIN S_Main step 13 (cross-file; unverified, see sources)"
+    }
+  },
+  "unusedChain": {
+    "_rule": "Objects referenced only by unused ones: an unreferenced object that isn't a layout or script shown in FileMaker's menus, or another object in the chain (see src/core/analysis/unusedChains.ts). Never includes an unreferenced object. Candidate types only, as for unreferenced. Must equal this set.",
+    "exact": ["EXT:valueList:EVL_List"],
+    "_why": {
+      "EXT:valueList:EVL_List": "used only by VL_External (unreferenced); VL_ExtDeleted's data source is deleted, so its reference is broken and doesn't count"
     }
   },
   "brokenSources": {

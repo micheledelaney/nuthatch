@@ -1,4 +1,5 @@
-import type { ObjectType } from "@/types/ddr";
+import type { ObjectType, RefKind } from "@/types/ddr";
+import { GO_TO_LAYOUT_STEP, SET_FIELD_STEP, isPerformScriptStep } from "./steps";
 
 /**
  * FMSaveAsXML element tag -> referenced object type.
@@ -27,8 +28,8 @@ export const FMSAVEAS_REF_TAGS: Readonly<Record<string, ObjectType>> = {
   // Each account names the privilege set it's granted via <PrivilegeSetReference>.
   PrivilegeSetReference: "privilegeSet",
   // Layouts, Install Menu Set steps, and File Options name a custom menu set.
-  // The built-in "[File Default]" / "[Standard FileMaker Menus]" entries are
-  // pseudo references and are skipped by scanRefs.
+  // The built-in PSEUDO_MENU_SETS entries are pseudo references and are
+  // skipped by scanRefs.
   CustomMenuSetReference: "customMenuSet",
   // External table occurrences, cross-file steps (Perform Script, Go to Related
   // Record, Open File, …), and external value lists all name the external data
@@ -36,17 +37,17 @@ export const FMSAVEAS_REF_TAGS: Readonly<Record<string, ObjectType>> = {
   DataSourceReference: "externalDataSource",
 };
 
-/** Built-in menu-set names that aren't objects in the file's catalog. */
-export const PSEUDO_MENU_SETS: ReadonlySet<string> = new Set(["[File Default]", "[Standard FileMaker Menus]"]);
-
 /**
- * Refine the edge "kind" for display, based on the containing script step's
- * name and the target type. Falls back to the target type.
+ * Refine the edge "kind" of a script step's own target — the script a Perform
+ * Script runs, the layout a Go to Layout goes to, the field a Set Field sets —
+ * from the step's name. Falls back to the target type. Not for what the step's
+ * calculations read: those are plain uses (scanRefs scans them with
+ * `inChunkList`).
  */
-export function edgeKind(targetType: ObjectType, stepName: string | undefined): string {
-  const step = (stepName ?? "").toLowerCase();
-  if (targetType === "script" && step.includes("perform script")) return "performScript";
-  if (targetType === "layout" && step.includes("go to layout")) return "goToLayout";
-  if (targetType === "field" && step.includes("set field")) return "setField";
+export function edgeKind(targetType: ObjectType, stepName: string | undefined): RefKind {
+  if (stepName == null) return targetType;
+  if (targetType === "script" && isPerformScriptStep(stepName)) return "performScript";
+  if (targetType === "layout" && stepName === GO_TO_LAYOUT_STEP) return "goToLayout";
+  if (targetType === "field" && stepName === SET_FIELD_STEP) return "setField";
   return targetType;
 }

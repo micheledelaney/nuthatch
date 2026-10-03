@@ -108,7 +108,8 @@ export interface FmObject {
    *   • script        → `name params` per step, one step per line
    *   • field         → the calc body (also stored in `detail`)
    *   • customFunction→ signature + calc body
-   *   • everything else → `collectText(node)` from the source XML
+   *   • everything else → `displayText(node)` from the source XML (decoded
+   *     like every other string in the model; CDATA verbatim)
    */
   text: string;
   /** Type-specific structured detail for rich display in the inspector. */
@@ -195,6 +196,8 @@ export type ObjectDetail =
       portalTable?: string;
       /** Portal: visible row count. */
       portalRows?: number;
+      /** Portal: the fields its records are sorted by. */
+      portalSort?: SortField[];
     }
   | {
       kind: "layout";
@@ -316,6 +319,21 @@ export interface RelationshipSide {
   cascadeDelete: boolean;
   /** "Sort records" is enabled for this side. */
   sorted: boolean;
+  /** The fields it sorts by, when sorted. */
+  sortFields?: SortField[];
+}
+
+/** One field of a sort order (a relationship's or a portal's), as the Sort
+ * dialog lists it. */
+export interface SortField {
+  /** "TableOccurrence::Field" (see qualifiedField). */
+  field: string;
+  /** "Ascending", "Descending", or "Custom" (in a value list's order). */
+  order: string;
+  /** A custom order's value list. */
+  valueList?: string;
+  /** "Reorder based on summary field": the summary field, as "TableOccurrence::Field". */
+  summaryField?: string;
 }
 
 /** A layout part (Body, Header, …) and the objects placed on it. */
@@ -355,14 +373,12 @@ export interface LayoutObjectInfo {
   portalTable?: string;
   /** Portal: number of rows visible (<Options show="N">). */
   portalRows?: number;
+  /** Portal: the fields its records are sorted by (Portal Setup ▸ Sort portal records). */
+  portalSort?: SortField[];
   /** Nested objects: portal fields, tab/slide panel contents, group members. */
   children?: LayoutObjectInfo[];
   /** Field binding: "TO::FieldName" for field-type objects. */
   fieldRef?: string;
-  /** Raw field numeric id — used to emit a RawReference, not rendered. */
-  fieldToId?: string;
-  /** Raw table occurrence numeric id for the field binding — used for viaToId. */
-  fieldViaToId?: string;
   /** Script called by a button or grouped button — enables navigation to the script. */
   scriptRef?: { id?: string; name: string; uuid?: string };
   /** Value list attached to a field object's format (drop-down, checkbox set, …). */
@@ -444,6 +460,12 @@ export interface JoinPredicate {
   rightField: string;
 }
 
+/** How a reference uses its target: the target's type for a plain use; what a
+ * script step or trigger does with it (performScript, goToLayout, setField,
+ * trigger); a menu's item (menuItem); a privilege set granting an extended
+ * privilege (extendedPrivilege). */
+export type RefKind = ObjectType | "performScript" | "goToLayout" | "setField" | "trigger" | "menuItem" | "extendedPrivilege";
+
 /** A directed dependency edge between two objects. */
 export interface FmReference {
   fromUid: string;
@@ -453,7 +475,7 @@ export interface FmReference {
   toId: string;
   toName: string;
   /** Human-readable edge kind, e.g. "performScript", "goToLayout", "field". */
-  kind: string;
+  kind: RefKind;
   /** True when the target type+id could not be resolved within its file. */
   broken: boolean;
   /** 1-based index of the script step this reference originates from, if any. */
@@ -476,6 +498,8 @@ export interface ReportCard {
    * count as the navigator's Broken filter (not the number of broken refs). */
   brokenReferenceCount: number;
   unreferencedCount: number;
+  /** Objects used only by unreferenced objects (or by each other): the unused chains. */
+  unusedChainCount: number;
   unstoredCalculationCount: number;
   /** Unstored calculation fields whose relationship depth is >= 2 (multi-hop). */
   deepCalcCount: number;
@@ -503,6 +527,8 @@ export interface SolutionModel {
   inbound: Map<string, FmReference[]>;
   brokenReferences: FmReference[];
   unreferenced: FmObject[];
+  /** Objects whose every use is itself unused (see core/analysis/unusedChains). */
+  unusedChain: FmObject[];
   reportCard: ReportCard;
   parseErrors: string[];
 }
@@ -521,7 +547,7 @@ export interface RawReference {
   toType: ObjectType;
   toId: string;
   toName: string;
-  kind: string;
+  kind: RefKind;
   /**
    * Name of the external data source (file) this reference targets, when the
    * reference sits beside a <DataSourceReference> (e.g. Perform Script in an

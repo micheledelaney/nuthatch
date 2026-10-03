@@ -1,10 +1,7 @@
 import { Fragment } from "react";
-import { decodeEntities } from "@/core/parser/entities";
 import { isWordChar } from "@/core/identifiers";
 import { objectLabel, type FmObject, type SolutionModel } from "@/types/ddr";
 import { FieldRefLink } from "./FieldRefLink";
-
-export { decodeEntities };
 
 type TokenClass = "string" | "var" | "field" | "func" | "kw" | "num" | "op" | "missing" | "comment" | null;
 
@@ -87,7 +84,7 @@ function FieldToken({ text }: { text: string }) {
 
 /** Render text with FileMaker-flavored syntax highlighting. */
 export function Highlight({ text }: { text: string }) {
-  const tokens = tokenize(decodeEntities(text));
+  const tokens = tokenize(text);
   return (
     <>
       {tokens.map((t, i) => (
@@ -150,48 +147,47 @@ export function LinkedCode({
   objects,
   onGo,
   model,
-  fileUid,
+  owner,
 }: {
   text: string;
   objects: FmObject[];
   onGo: (uid: string, rowKey: string) => void;
-  /** When passed, qualified `TO::Field` matches delegate to FieldRefLink so
-   * the field half goes through the same resolver the property sheets use —
-   * keeps external/missing rendering consistent everywhere. Optional for
-   * back-compat with callers that haven't been threaded through yet. */
+  /** When passed, qualified `TO::Field` matches delegate to FieldRefLink, which
+   * shows the owner's own reference to that field the way the property sheets
+   * do. Optional for callers that link names only. */
   model?: SolutionModel;
-  fileUid?: string;
+  /** The object the text belongs to (its uid). */
+  owner?: string;
 }) {
-  const decoded = decodeEntities(text);
   // Unique candidates, longest name first so "DATA~MAIN" wins over "DATA" and
   // "Access.canEdit" wins over "Access".
   const cands = [...new Map(objects.filter((o) => o.name).map((o) => [o.name, o])).values()].sort(
     (a, b) => b.name.length - a.name.length,
   );
-  if (cands.length === 0) return <Highlight text={decoded} />;
+  if (cands.length === 0) return <Highlight text={text} />;
 
   // Occurrence candidates (longest name first), kept separate from `cands` so
   // that detecting the `TO::` half of a qualified ref never depends on the
   // by-name dedup above: in FileMaker a field, base table, and layout can all
   // share the occurrence's name (e.g. "Stock", "Stock_Batches"), and
   // whichever won the dedup would otherwise shadow the occurrence and break the
-  // `TO::Field` link. The field target is then resolved by id via the
-  // occurrence's base table (resolveQualifiedRef), not by name-matching.
+  // `TO::Field` link. The field shown is then the owner's own reference to it
+  // (ownFieldRef), with the model's verdict on it.
   const occCands = objects
     .filter((o) => o.type === "tableOccurrence" && o.name)
     .sort((a, b) => b.name.length - a.name.length);
 
-  const comments = commentRanges(decoded);
+  const comments = commentRanges(text);
   const inComment = (pos: number) => comments.some(([s, e]) => pos >= s && pos < e);
-  const canQualify = model != null && fileUid != null;
+  const canQualify = model != null && owner != null;
 
   const out: React.ReactNode[] = [];
   let plainStart = 0;
   let i = 0;
   const flush = (end: number) => {
-    if (end > plainStart) out.push(<Highlight key={`h${plainStart}`} text={decoded.slice(plainStart, end)} />);
+    if (end > plainStart) out.push(<Highlight key={`h${plainStart}`} text={text.slice(plainStart, end)} />);
   };
-  while (i < decoded.length) {
+  while (i < text.length) {
     if (inComment(i)) {
       i++;
       continue;
@@ -199,21 +195,21 @@ export function LinkedCode({
     // Detect the `TO::Field` shape first, using the occurrence-only candidates
     // for the `TO` half so a same-named field/table/layout can't shadow it.
     // The whole span renders through FieldRefLink (one source of truth for
-    // resolved / external / broken styling), which resolves the field by id.
+    // resolved / external / broken styling), which shows the owner's reference.
     let qualifiedLength = 0;
     if (canQualify) {
       const toCand = occCands.find(
         (o) =>
-          decoded.startsWith(o.name, i) &&
-          !isWordChar(decoded[i - 1] ?? "") &&
-          decoded.startsWith("::", i + o.name.length),
+          text.startsWith(o.name, i) &&
+          !isWordChar(text[i - 1] ?? "") &&
+          text.startsWith("::", i + o.name.length),
       );
       if (toCand) {
         const fieldStart = i + toCand.name.length + 2;
         const fieldHit = cands.find(
           (o) =>
-            decoded.startsWith(o.name, fieldStart) &&
-            !isWordChar(decoded[fieldStart + o.name.length] ?? ""),
+            text.startsWith(o.name, fieldStart) &&
+            !isWordChar(text[fieldStart + o.name.length] ?? ""),
         );
         if (fieldHit) qualifiedLength = toCand.name.length + 2 + fieldHit.name.length;
       }
@@ -221,12 +217,12 @@ export function LinkedCode({
 
     const hit = cands.find(
       (o) =>
-        decoded.startsWith(o.name, i) &&
+        text.startsWith(o.name, i) &&
         // Don't match the tail of a $local / $$global variable: `$_id_parent`
         // must not link its `_id_parent` portion to a same-named field/TO.
-        decoded[i - 1] !== "$" &&
-        !isWordChar(decoded[i - 1] ?? "") &&
-        !isWordChar(decoded[i + o.name.length] ?? ""),
+        text[i - 1] !== "$" &&
+        !isWordChar(text[i - 1] ?? "") &&
+        !isWordChar(text[i + o.name.length] ?? ""),
     );
     if (!hit && qualifiedLength === 0) {
       i++;
@@ -234,9 +230,9 @@ export function LinkedCode({
     }
     flush(i);
     if (qualifiedLength > 0) {
-      const span = decoded.slice(i, i + qualifiedLength);
+      const span = text.slice(i, i + qualifiedLength);
       out.push(
-        <FieldRefLink key={`q${i}`} qualified={span} model={model!} fileUid={fileUid!} onGo={onGo} />,
+        <FieldRefLink key={`q${i}`} qualified={span} model={model!} owner={owner!} onGo={onGo} />,
       );
       i += qualifiedLength;
     } else if (hit) {
@@ -255,6 +251,6 @@ export function LinkedCode({
     }
     plainStart = i;
   }
-  flush(decoded.length);
+  flush(text.length);
   return <>{out}</>;
 }

@@ -1,0 +1,225 @@
+{
+  "fixture": {
+    "spec": "BUILD.md: the items marked (appended)",
+    "exports": "XML FM26/APPENDED TESTS/TEST_MAIN.xml, XML FM26/APPENDED TESTS/TEST_EXT.xml",
+    "scenario": "Final snapshot of the build with the appended items. This file holds only what they add to or change in expected.json; the test merges the two."
+  },
+  "conventions": {
+    "merge": "Lists are appended to expected.json's (objects.absent/present/layoutObjects, absentEdges, and the add lists of unreferenced/unusedChain/brokenSources). Maps are merged by key (counts, folders, details, reportCard; attributes by ref, then by attribute). A source with \"extends\": true adds its edges to expected.json's source of the same name.",
+    "layoutObjects": "A layout object with an object name (Inspector ▸ Position ▸ Name) is referred to by it: \"MAIN:layoutObject:obj_PortalFilter\".",
+    "kinds": "Every edge here states its kind."
+  },
+  "objects": {
+    "absent": ["MAIN:field:T_Child::DEL_Field5"],
+    "present": [
+      "MAIN:field:T_Main::c_Fallback",
+      "MAIN:field:T_Main::f_ContInFile",
+      "MAIN:valueList:VL_SecondOnly",
+      "MAIN:layout:L_Calcs",
+      "MAIN:layoutObject:obj_PortalFilter",
+      "MAIN:layoutObject:obj_ButtonParam",
+      "MAIN:layoutObject:obj_ButtonStep",
+      "MAIN:layoutObject:obj_TriggerParam",
+      "MAIN:layoutObject:obj_Label",
+      "MAIN:layoutObject:obj_ExtGTRR",
+      "MAIN:customMenuItem:TO_Main::f_Text & TO_Child::<Field Missing>"
+    ],
+    "attributes": {
+      "MAIN:field:T_Main::c_Fallback": {"fieldtype": "Calculated", "unstored": "Yes"},
+      "MAIN:field:T_Main::f_ContInFile": {"containerStorage": "In file"},
+      "MAIN:customMenu:M_Custom": {"comment": "Some comment"},
+      "MAIN:customMenuSet:MS_Main": {"comment": "Some comment"},
+      "MAIN:customMenuItem:TO_Main::f_Text & TO_Child::<Field Missing>": {
+        "_note": "Item 8: its name is its title calculation, with the deleted field shown as <Field Missing>.",
+        "itemType": "Command",
+        "installCondition": "not IsEmpty ( TO_Main::f_Text ) and TO_Child::<Field Missing> ≠ \"\"",
+        "overrides": "Name, Shortcut",
+        "shortcut": {"present": true}
+      },
+      "MAIN:layoutObject:obj_PortalFilter": {"portalOccurrence": "TO_Child"},
+      "MAIN:layoutObject:obj_Label": {"label": "Save"}
+    },
+    "folders": {"MAIN:layout:L_Calcs": "Layouts"},
+    "details": {
+      "MAIN:field:T_Main::c_Fallback": {
+        "kind": "calculation",
+        "body": "/* TO_Main::f_Text */ \"TO_Main::f_ID\" & f_Text & CF_Used ( 1 ) & $$GLOBAL_A & $$two words & TO_Ext::e_Field & TO_Child::<Field Missing>"
+      },
+      "MAIN:valueList:VL_SecondOnly": {
+        "kind": "valueList",
+        "field": {"primaryField": "TO_Child::c_Name", "secondaryField": "TO_Child::c_ID", "showOnlySecondary": true}
+      },
+      "MAIN:script:S_Main": {
+        "steps": [
+          {"index": 33, "name": "Set Field", "params": "[ TO_Main::f_Text; TO_Main::f_Text & TO_Main::f_ID ]"},
+          {"index": 34, "name": "Set Variable", "params": {"contains": "Evaluate ( \"$$QUOTED\" )"}},
+          {"index": 35, "name": "Insert Text", "params": {"contains": "Line 1\nLine 2"}}
+        ]
+      }
+    },
+    "layoutObjects": [
+      {
+        "layout": "MAIN:layout:L_Calcs",
+        "match": {"objectName": "obj_TriggerParam"},
+        "expect": {"triggers": [{"action": "OnObjectEnter", "scriptName": "S_Trigger", "parameter": "TO_Main::f_Text & TO_Child::<Field Missing>"}]}
+      },
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonStep"}, "expect": {"actionStep": "Set Field"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ExtGTRR"}, "expect": {"actionStep": "Go to Related Record"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_Label"}, "expect": {"info": "\"Save\"", "scriptRef": "S_Sub"}}
+    ]
+  },
+  "sources": {
+    "MAIN:field:T_Main::c_Fallback": {
+      "_note": "DEL_Field5's deletion empties the chunk list, so everything here comes from the formula text. Not f_ID: it's only inside a string (see absentEdges).",
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:customFunction:CF_Used", "kind": "customFunction"},
+        {"to": "MAIN:globalVariable:$$GLOBAL_A", "kind": "globalVariable"},
+        {"to": "MAIN:globalVariable:$$two words", "kind": "globalVariable"},
+        {"to": "MAIN:tableOccurrence:TO_Ext", "kind": "tableOccurrence"},
+        {"to": "EXT:field:E_Table::e_Field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Ext"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:field:T_Main::f_ContInFile": {"exact": true, "edges": []},
+    "MAIN:valueList:VL_SecondOnly": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Child::c_Name", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Child::c_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"}
+      ]
+    },
+    "MAIN:layoutObject:obj_PortalFilter": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Child::c_Name", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:layoutObject:obj_ButtonParam": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:script:S_Sub", "kind": "script"},
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:layoutObject:obj_ButtonStep": {
+      "_note": "The step's target is set; its value only reads f_ID.",
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main", "step": 1},
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence", "step": 1},
+        {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main", "step": 1},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence", "step": 1},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:layoutObject:obj_TriggerParam": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:script:S_Trigger", "kind": "trigger"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:layoutObject:obj_Label": {"exact": true, "edges": [{"to": "MAIN:script:S_Sub", "kind": "script"}]},
+    "MAIN:layoutObject:obj_ExtGTRR": {
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Ext", "kind": "tableOccurrence", "step": 1},
+        {"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource", "step": 1},
+        {"to": "EXT:layout:EL_Layout", "kind": "layout", "step": 1}
+      ]
+    },
+    "MAIN:layout:L_Calcs": {
+      "_note": "The layout lists everything on it, too: its own occurrence and every object's edges — without the button step an edge came from, which only the button keeps.",
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Child::c_Name", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:script:S_Sub", "kind": "script"},
+        {"to": "MAIN:script:S_Trigger", "kind": "trigger"},
+        {"to": "MAIN:tableOccurrence:TO_Ext", "kind": "tableOccurrence"},
+        {"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"},
+        {"to": "EXT:layout:EL_Layout", "kind": "layout"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:customMenuItem:TO_Main::f_Text & TO_Child::<Field Missing>": {
+      "_note": "Item 8: its title and install condition read the same fields.",
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
+      ]
+    },
+    "MAIN:script:S_Main": {
+      "extends": true,
+      "edges": [
+        {"step": 33, "to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 33, "to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main", "_note": "the value reads the step's own target"},
+        {"step": 33, "to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 33, "to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"step": 34, "to": "MAIN:globalVariable:$$QUOTED", "kind": "globalVariable", "_note": "named only inside the string passed to Evaluate"},
+        {"step": 35, "to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
+        {"step": 35, "to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"}
+      ]
+    },
+    "MAIN:customMenu:M_Custom/**": {
+      "extends": true,
+      "edges": [
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main", "_note": "item 8"},
+        {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child", "_note": "item 8"}
+      ]
+    }
+  },
+  "absentEdges": [
+    {"from": "MAIN:field:T_Main::c_Fallback", "to": "MAIN:field:T_Main::f_ID", "why": "f_ID appears only inside the string literal \"TO_Main::f_ID\""}
+  ],
+  "unreferenced": {
+    "add": ["MAIN:field:T_Main::c_Fallback", "MAIN:field:T_Main::f_ContInFile", "MAIN:valueList:VL_SecondOnly", "MAIN:layout:L_Calcs"]
+  },
+  "brokenSources": {
+    "add": [
+      "MAIN:field:T_Main::c_Fallback",
+      "MAIN:layout:L_Calcs",
+      "MAIN:layoutObject:obj_PortalFilter",
+      "MAIN:layoutObject:obj_ButtonParam",
+      "MAIN:layoutObject:obj_ButtonStep",
+      "MAIN:layoutObject:obj_TriggerParam",
+      "MAIN:customMenuItem:TO_Main::f_Text & TO_Child::<Field Missing>"
+    ]
+  },
+  "globalVariables": {
+    "$$GLOBAL_A": ["MAIN:field:T_Main::c_Fallback"],
+    "$$two words": ["MAIN:field:T_Main::c_Fallback"],
+    "$$QUOTED": ["MAIN:script:S_Main"]
+  },
+  "reportCard": {
+    "unstoredCalculationCount": 6,
+    "globalVariableCount": 7,
+    "_notes": {
+      "unstoredCalculationCount": "expected.json's five, plus c_Fallback (it reads through relationships)",
+      "globalVariableCount": "plus $$two words and $$QUOTED"
+    }
+  }
+}

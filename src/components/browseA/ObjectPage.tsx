@@ -3,6 +3,7 @@ import { useStore } from "@/state/store";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type SolutionModel } from "@/types/ddr";
 import { buildDependencyView } from "@/core/analysis/dependencies";
 import { buildCallChain } from "@/core/analysis/callChain";
+import { isUnusedSource } from "@/core/analysis/unusedChains";
 import {
   CallTreeNode,
   Detail,
@@ -13,8 +14,9 @@ import {
   refIndexFor,
 } from "../ObjectColumn";
 import { TypePill } from "../TypePill";
-import { isUnreferenced } from "./filters";
+import { isInUnusedChain, isUnreferenced } from "./filters";
 import { factsFor } from "./facts";
+import { refStatsFor } from "./refStats";
 import { Glance } from "./Glance";
 import { PaneNavContext } from "../workbench/paneNav";
 
@@ -52,12 +54,14 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   // Menu->item containment edges show as the menu's children instead.
   const outbound = view.outbound.filter((e) => e.ref.kind !== "menuItem");
   const inbound = view.inbound;
-  const brokenCount = outbound.filter((e) => e.ref.broken).length;
+  const brokenCount = refStatsFor(model, uid).broken;
   const callCount = chain?.children.length ?? 0;
+  const isUnused = (u: string) => isUnusedSource(model, u);
 
   const facts = factsFor({
     brokenCount,
     unreferenced: isUnreferenced(model, obj),
+    unusedChain: isInUnusedChain(model, obj),
     selfBroken: isBrokenTableOccurrence(obj),
   });
 
@@ -107,7 +111,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
         )}
         {tab === "usedBy" && (
           <div className="op-tab-panel">
-            <GroupedRefList edges={inbound} side="from" onGo={go} byUid={model.byUid} previewLimit={TAB_PREVIEW_LIMIT} />
+            <GroupedRefList edges={inbound} side="from" onGo={go} byUid={model.byUid} previewLimit={TAB_PREVIEW_LIMIT} isUnused={isUnused} />
           </div>
         )}
         {tab === "uses" && (
@@ -119,7 +123,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
           <div className="op-tab-panel">
             {chain && callCount > 0 ? (
               <ul className="tree" style={{ paddingLeft: 0 }}>
-                <CallTreeNode node={chain} path="" onGo={go} isRoot />
+                <CallTreeNode node={chain} path="" onGo={go} isRoot isUnused={isUnused} />
               </ul>
             ) : (
               <div className="subtle indent">This script doesn't call any other scripts.</div>

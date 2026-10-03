@@ -1,10 +1,12 @@
 import type React from "react";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
-import { decodeEntities } from "@/core/parser/entities";
+import { chainTops } from "@/core/analysis/unusedChains";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders } from "../ObjectColumn";
+import { brokenSourcesFor } from "./refStats";
 import type { Fact } from "./facts";
+import { isInUnusedChain } from "./filters";
 
 type OnGo = (uid: string, rowKey: string) => void;
 
@@ -15,6 +17,8 @@ interface GlanceRow {
 
 const FIELD_KIND_LABEL: Record<string, string> = { Normal: "Normal", Calculated: "Calculation", Summary: "Summary" };
 const DATA_TYPE_LABEL: Record<string, string> = { Binary: "Container" };
+/** Objects named in the Used only by row before "and N more". */
+const USED_ONLY_BY_SHOWN = 3;
 
 /** An object in the same file by type + FileMaker id, if it's loaded. */
 function byId(model: SolutionModel, fileUid: string, type: ObjectType, id: string | undefined): FmObject | null {
@@ -56,14 +60,14 @@ function linkOrText(obj: FmObject | null, fallback: string | undefined, onGo: On
       </>
     );
   }
-  return fallback ? renderWithBrokenPlaceholders(decodeEntities(fallback)) : null;
+  return fallback ? renderWithBrokenPlaceholders(fallback) : null;
 }
 
 /** How a field keeps its value: global, unstored (unstored calcs and every
  * summary field), a container's location, or stored (with its index level). */
 function fieldStorage(a: Record<string, string>): string {
-  if (a.global === "true") return "Global";
-  if (a.unstored === "true" || a.fieldtype === "Summary") return "Unstored";
+  if (a.global === "Yes") return "Global";
+  if (a.unstored === "Yes" || a.fieldtype === "Summary") return "Unstored";
   if (a.containerStorage) return a.containerStorage;
   return a.indexing ? `Stored · ${a.indexing} index` : "Stored";
 }
@@ -78,7 +82,7 @@ function fieldThirdRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceR
   }
   if (d?.kind === "summary") return { label: "Summarizes", value: `${d.operation} ${d.fields.join(", ")}` };
   if (d?.kind === "lookup") {
-    return { label: "Looks up", value: <FieldRefLink qualified={d.source} model={model} fileUid={obj.fileUid} onGo={onGo} /> };
+    return { label: "Looks up", value: <FieldRefLink qualified={d.source} model={model} owner={obj.uid} onGo={onGo} /> };
   }
   return { label: "Auto-enter", value: a.autoEnter ?? "None" };
 }
@@ -117,7 +121,7 @@ function boundTo(obj: FmObject, model: SolutionModel, onGo: OnGo): React.ReactNo
   const lo = obj.detail?.kind === "layoutObject" ? obj.detail : undefined;
   const f = obj.fileUid;
   if (!lo) return null;
-  if (lo.fieldRef) return <FieldRefLink qualified={lo.fieldRef} model={model} fileUid={f} onGo={onGo} />;
+  if (lo.fieldRef) return <FieldRefLink qualified={lo.fieldRef} model={model} owner={obj.uid} onGo={onGo} />;
   if (lo.scriptRef) {
     const script = byId(model, f, "script", lo.scriptRef.id) ?? byName(model, f, "script", lo.scriptRef.name);
     return linkOrText(script, lo.scriptRef.name, onGo);
@@ -148,7 +152,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         fieldThirdRow(obj, model, onGo),
       ];
     case "layout": {
-      const to = byName(model, f, "tableOccurrence", decodeEntities(a.tableOccurrence ?? ""));
+      const to = byName(model, f, "tableOccurrence", a.tableOccurrence ?? "");
       return [
         { label: "Occurrence", value: linkOrText(to, a.tableOccurrence, onGo) },
         { label: "Base table", value: linkOrText(baseTableOf(model, to), to?.attributes.baseTable, onGo) },
@@ -162,7 +166,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         { label: "Position", value: a.position },
       ];
     case "tableOccurrence": {
-      const source = a.externalDataSource ? decodeEntities(a.externalDataSource) : undefined;
+      const source = a.externalDataSource || undefined;
       return [
         { label: "Base table", value: linkOrText(baseTableOf(model, obj), a.baseTable, onGo) },
         {
@@ -222,7 +226,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         {
           label: "Values",
           value: field ? (
-            <FieldRefLink qualified={field.primaryField} model={model} fileUid={f} onGo={onGo} />
+            <FieldRefLink qualified={field.primaryField} model={model} owner={obj.uid} onGo={onGo} />
           ) : (
             plural(custom, "custom value")
           ),
@@ -265,7 +269,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     case "externalDataSource": {
       const occurrences = countWhere(
         model,
-        (o) => o.fileUid === f && o.type === "tableOccurrence" && decodeEntities(o.attributes.externalDataSource ?? "") === obj.name,
+        (o) => o.fileUid === f && o.type === "tableOccurrence" && (o.attributes.externalDataSource ?? "") === obj.name,
       );
       // The file a path points at, e.g. "file:Invoices.fmp12" -> "Invoices".
       const target = (a.path ?? "").split(/[:/\n]/).filter(Boolean).pop()?.replace(/\.fmp12$/i, "");
@@ -279,7 +283,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     case "customMenuSet":
       return [
         { label: "Menus", value: a.menus },
-        { label: "Used by", value: plural(countWhere(model, (o) => o.fileUid === f && o.type === "layout" && decodeEntities(o.attributes.menuSet ?? "") === obj.name), "layout") },
+        { label: "Used by", value: plural(countWhere(model, (o) => o.fileUid === f && o.type === "layout" && (o.attributes.menuSet ?? "") === obj.name), "layout") },
         { label: "Comment", value: a.comment },
       ];
     case "customMenu":
@@ -335,7 +339,32 @@ function glanceRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
       </>
     ),
   };
-  return [typeRow, ...detailRows(obj, model, onGo)];
+  const chainRow = isInUnusedChain(model, obj) ? usedOnlyByRow(obj, model, onGo) : null;
+  return [typeRow, ...detailRows(obj, model, onGo), ...(chainRow ? [chainRow] : [])];
+}
+
+/** For an object in an unused chain: the unreferenced objects it hangs from —
+ * check those, and the rest follows — or the loop it's part of. */
+function usedOnlyByRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow | null {
+  const { tops, loop } = chainTops(model, obj.uid);
+  const users = tops.length > 0 ? tops : loop;
+  if (users.length === 0) return null;
+  const shown = users.slice(0, USED_ONLY_BY_SHOWN);
+  const more = users.length - shown.length;
+  return {
+    label: "Used only by",
+    value: (
+      <span className="op-glance-list">
+        {shown.map((u) => (
+          <span key={u.uid} className="op-glance-list-item">
+            {linkOrText(u, undefined, onGo)}
+          </span>
+        ))}
+        {more > 0 && <span>and {more.toLocaleString()} more</span>}
+        <span className="op-glance-note">{tops.length > 0 ? "(unreferenced)" : "(an unused loop)"}</span>
+      </span>
+    ),
+  };
 }
 
 /**
@@ -362,7 +391,7 @@ export function Glance({
     <section className="op-glance" aria-label="At a glance">
       <div className="op-glance-head">
         <h1 className="op-glance-name" title={objectLabel(obj)}>
-          {renderWithBrokenPlaceholders(objectLabel(obj))}
+          {renderWithBrokenPlaceholders(objectLabel(obj), brokenSourcesFor(model).has(obj.uid))}
         </h1>
         {actions}
       </div>

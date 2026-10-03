@@ -4,6 +4,8 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 
 **Rule for broken scenarios:** anything named `DEL_…` gets created, referenced where stated, then deleted **last**, after everything that references it is in place.
 
+**Appended items:** anything marked *(appended)* was added after the FM 26 / 22 / 21 exports were made. So far only `XML FM26/APPENDED TESTS/` contains them. Their expected output is [expected-appended.json](expected-appended.json), which the test adds on top of expected.json.
+
 ## Before you start (both files)
 
 - Turn off default fields (File ▸ Manage ▸ Default Fields) before creating tables, so tables get no auto-added fields.
@@ -55,7 +57,7 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 
 ## Fields
 
-**T_Child:** c_ID (Number), c_ParentID (Number), c_Name (Text), **DEL_Field2** (Text; used by VL_DelField and c_DelField), **DEL_Field3** (Text).
+**T_Child:** c_ID (Number), c_ParentID (Number), c_Name (Text), **DEL_Field2** (Text; used by VL_DelField and c_DelField), **DEL_Field3** (Text), **DEL_Field5** (Text; used by c_Fallback, the L_Calcs objects and M_Custom item 8) *(appended)*.
 **T_Grand:** g_ChildID (Number), g_Val (Number).
 
 **T_Main, general:**
@@ -84,9 +86,10 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 - **f_ValMsgOff** (Text): not empty, custom message calc `f_Const`, then untick the custom message
 - **f_ValDelVL** (Text): member of **DEL_VL_Val** (custom `1¶2`); delete the value list
 
-**T_Main, containers:** both store externally in the file's default base directory **TEST_MAIN/** (Manage ▸ Containers). Only open storage takes its own folder path.
+**T_Main, containers:** f_Cont and f_ContOpen store externally in the file's default base directory **TEST_MAIN/** (Manage ▸ Containers). Only open storage takes its own folder path.
 - **f_Cont**: max 500 KB, stored externally (secure)
 - **f_ContOpen**: stored externally (open), folder path calculation `"TestDir/"`
+- **f_ContInFile**: stored in the file *(appended)*
 
 **T_Main, auto-enter:**
 - **f_Serial** (Number): serial number, increment 2, on commit
@@ -108,6 +111,7 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 - **c_DelCF**: `DEL_CF ( 1 )`; delete the function → `<Function Missing>`
 - **c_DelField**: `TO_Child::DEL_Field2`; deleting DEL_Field2 → `TO_Child::<Field Missing>`. Note: FileMaker won't delete a field while a calculation in the same table uses it, so the deleted field has to be in another table (T_Child). Reading through a relationship makes c_DelField unstored.
 - **c_DelTO**: `DEL_TO::c_Name`; delete the occurrence → `<Table Missing>`
+- **c_Fallback** (Text) *(appended)*: `/* TO_Main::f_Text */ "TO_Main::f_ID" & f_Text & CF_Used ( 1 ) & $$GLOBAL_A & $$two words & TO_Ext::e_Field & TO_Child::DEL_Field5`. Deleting DEL_Field5 empties its chunk list, so its references can only be read from the formula text: a comment, a string literal, a bare same-table field, a custom function, globals (one with a space), an external field by name, and the deleted field. Reading through relationships makes it unstored.
 
 **T_Main, summaries:**
 - **s_Total**: running total of f_ValAll, restart for each sorted group, when sorted by f_ValAll
@@ -148,6 +152,7 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 - **VL_ExtDeleted**: EVL_List from DEL_DS
 - **VL_DelField**: TO_Child::DEL_Field2; delete the field
 - **VL_Unused**: custom `z`
+- **VL_SecondOnly** *(appended)*: TO_Child::c_Name, also display TO_Child::c_ID, show values only from the second field
 - **DEL_VL_Val**, **DEL_VL_Fmt**: custom `1¶2`; see f_ValDelVL / L_Start
 
 ## Custom functions
@@ -204,14 +209,19 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 29. Re-Login [ no dialog ]
 30. Install Menu Set [ MS_Main ]
 31. If [ `$local = 3` ]
-32. Else
-33. End If
+32. End If
+33. Set Field [ TO_Main::f_Text ; `TO_Main::f_Text & TO_Main::f_ID` ] *(appended)*: the value reads the step's own target
+34. Set Variable [ $x ; `Evaluate ( "$$QUOTED" )` ] *(appended)*: a global named only inside a string
+35. Insert Text [ select ; TO_Main::f_Text ; `Line 1¶Line 2` ] *(appended)*: two lines of text
+
+(Earlier versions of this list had an `Else` at 32; no export ever had one.)
 
 ## Layouts
 
 **Layout list:**
 - **L_Start** (TO_Main), at the top level
 - Folder **Layouts**:
+  - **L_Calcs** (TO_Main) *(appended)*: first in the folder; see L_Calcs objects
   - **L_Detail** (TO_Main): every T_Main field except f_Unused, f_TableViewOnly and the DEL_ fields
   - a separator
   - **L_Hidden** (TO_Main): not in the layout menu
@@ -262,10 +272,18 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
 - Web viewer: `"https://example.com/?q=" & TO_Main::f_Text`
 - Chart: x-axis TO_Main::f_Text, y-axis TO_Main::f_ValAll
 
+**L_Calcs objects** *(appended)*: each named in the Inspector (Position ▸ Name). Each formula pairs a valid reference with DEL_Field5, so FileMaker leaves an empty chunk list and a `<Field Missing>` on the object itself.
+- **obj_PortalFilter**: portal on TO_Child, filter `TO_Child::c_Name = TO_Main::f_Text and TO_Child::DEL_Field5 ≠ ""`
+- **obj_ButtonParam**: button → Perform Script S_Sub, parameter `TO_Main::f_ID & TO_Child::DEL_Field5`
+- **obj_ButtonStep**: button → single step Set Field [ TO_Main::f_Text ; `TO_Main::f_ID & TO_Child::DEL_Field5` ]
+- **obj_TriggerParam**: field TO_Main::f_ID, OnObjectEnter → S_Trigger, parameter `TO_Main::f_Text & TO_Child::DEL_Field5`
+- **obj_Label**: button labelled `Save` → Perform Script S_Sub
+- **obj_ExtGTRR**: button → single step Go to Related Record [ from TO_Ext ; use external table's layouts ; EL_Layout ] (for the FM 22 export with TEST_EXT closed, see To do)
+
 ## Custom menus
 
 - **M_Sub**: new menu, one item: command Paste
-- **M_Custom**: based on Edit, install condition `Get ( SystemPlatform ) ≠ 3`, with these items in order:
+- **M_Custom**: based on Edit, install condition `Get ( SystemPlatform ) ≠ 3`, comment `Some comment` *(appended)*, with these items in order:
   1. command Copy
   2. `Run S_Main` → Perform Script S_Main
   3. submenu M_Sub
@@ -273,7 +291,11 @@ Two files, **TEST_MAIN.fmp12** and **TEST_EXT.fmp12**, built in FileMaker 26. Th
   5. `Shortcut item` → command Select All, shortcut ⌘⇧K
   6. `Conditional item` → command Undo, install condition `Get ( WindowMode ) = 0`
   7. `Deleted script item` → Perform Script DEL_Script_Menu
-- **MS_Main**: contains M_Custom
+  8. *(appended)* command Copy, with:
+     - title as a calculation `TO_Main::f_Text & TO_Child::DEL_Field5`
+     - install condition `not IsEmpty ( TO_Main::f_Text ) and TO_Child::DEL_Field5 ≠ ""`
+     - shortcut ⌘C overridden
+- **MS_Main**: contains M_Custom; comment `Some comment` *(appended)*
 - **MS_Unused**: new menu set, unchanged
 
 ## Privilege sets, accounts & extended privileges
@@ -328,6 +350,12 @@ There are two snapshots of the same build:
 | `TEST_MAIN_layouts_only.xml` | final | `{"catalogs_included": ["LayoutCatalog"]}` |
 | `TEST_MAIN_binary.xml` | final | `{"standalone_binarydata": true}` |
 | `fm21/…` | both | The same files from FileMaker 21 or earlier, if you have it. |
+| `XML FM26/APPENDED TESTS/TEST_MAIN.xml`, `TEST_EXT.xml` | final, with the appended items | Details on. FM 26 only so far. TEST_MAIN in this export has minimum version **18.0**, not 22.0. |
+
+New objects pick up the privilege sets' defaults; nothing was set for them by hand:
+- PS_CustomRecords: every new T_Main field is view only.
+- PS_CustomLayouts: L_Calcs is modifiable, with no access to records.
+- PS_CustomVL: VL_SecondOnly has no access.
 
 Also: note what SampleB's File Options ▸ "Log in using" shows. That settles the `Login type="-1"` label.
 
@@ -345,8 +373,12 @@ Also: note what SampleB's File Options ▸ "Log in using" shows. That settles th
 | FM22 final: TEST_MAIN alone | `XML FM22/TEST_MAIN.xml` | expected.json |
 | FM21 final: TEST_MAIN + TEST_EXT | `XML FM21/TEST_MAIN.xml` (UTF-16), `XML FM21/TEST_EXT.xml` | expected.json, with FM21 differences |
 | FM21 final: TEST_MAIN alone | `XML FM21/TEST_MAIN.xml` | expected.json, with FM21 differences |
+| FM26 appended: TEST_MAIN + TEST_EXT | `XML FM26/APPENDED TESTS/TEST_MAIN.xml`, `XML FM26/APPENDED TESTS/TEST_EXT.xml` | expected.json + expected-appended.json, with minimum version 18.0 |
+| FM26 appended: TEST_MAIN alone | `XML FM26/APPENDED TESTS/TEST_MAIN.xml` | expected.json + expected-appended.json, with minimum version 18.0 |
 
 FM21 differences (`FM21` in the test file): minimum version 18.0, and no "Manage database" / "Manage custom menus" privileges, which FileMaker 21 doesn't have. `XML FM21/TEST_EXT.xml` is currently a copy of the FM 26 export, not a FileMaker 21 one.
+
+A layout object with an object name (Inspector ▸ Position ▸ Name) is referred to by it in the expected output, e.g. `MAIN:layoutObject:obj_PortalFilter`, so a single object's edges can be checked.
 
 A scenario whose exports are missing is skipped. Checks tied to a pinned to-do run as expected failures (listed in `PINNED` in the test file), so a fix shows up as a failure there.
 
@@ -354,5 +386,11 @@ A scenario whose exports are missing is skipped. Checks tied to a pinned to-do r
 
 - **Parser: auto-login label** (pinned): the parser decides the File Options auto-login label by whether an account name is present, not by `<Login type>` (1 = named account, 0 = Guest, -1 = off). TEST_EXT (Guest) shows `Account “[Guest]”` instead of "Guest account", and a file with no automatic login (SampleB, `type="-1"`) shows "Guest account". Until fixed, the `EXT:file:TEST_EXT autoLogin` check fails. Still to decide: whether `-1` shows nothing or "Off".
 - **Two broken edges for one deletion**: a deleted data source gives TO_DelDS two broken edges (data source and table), and VL_ExtDeleted two (value list and data source). The report card counts objects, so it's unaffected, but the object page and the browse list show "2 broken refs". Decide whether to keep both.
-- **FM 22 export with TEST_EXT closed**: would confirm the closed-file shape the parser relies on (TO_Ext without its base table, step 13 without a layout id). It could also become a test scenario.
+- **FM 22 export with TEST_EXT closed**: would confirm the closed-file shape the parser relies on (TO_Ext without its base table, step 13 without a layout id). It could also become a test scenario. With the appended build, obj_ExtGTRR also covers FM 22's deferred button targets.
+- **Appended items**:
+  - Export them from FM 22 and FM 21 too, and add those scenarios (same expected output; FM 21's install conditions and item titles use another XML shape).
+  - Set TEST_MAIN's minimum version back to 22.0 before the next export, then drop `APPENDED` in the test file.
+  - c_Fallback's comment can't be checked: `/* TO_Main::f_Text */` names a field the formula also reads bare. Change it to `/* TO_Main::f_Unused */` and add an absent edge to f_Unused.
+  - Still to make: a copy of TEST_MAIN with encryption at rest, and `TEST_MAIN_noddr.xml` (listed above, never made).
+- **Shortcut item** (pinned): no export has its command (Select All) or its shortcut (⌘⇧K); the item has only its title. Set both in TEST_MAIN and re-export. The pinned check `attributes: MAIN:customMenuItem:Shortcut item` then shows up as a failure; remove it from `PINNED`.
 - **Themes** (left out of the tests for now): rename each file's default theme (**TH_Used** in TEST_MAIN, **TH_Ext** in TEST_EXT), import a second theme into TEST_MAIN as **TH_Unused** and apply it to nothing, and have every layout use its file's one theme. Then remove `"theme"` from `ignoredTypes` in both expected files and add the theme expectations back (see `todo` there).
