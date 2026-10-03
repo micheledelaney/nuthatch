@@ -78,13 +78,17 @@ function buildLayout(
 }
 
 /** Copy every reference the layout's objects recorded (from `refStart` on)
- * onto the layout itself. */
+ * onto the layout itself — without the step it came from: that's a step of
+ * one button's action, which the object's own reference keeps, and on the
+ * layout it would keep a use apart from the same use by another object. */
 function addObjectRefsToLayout(fp: FileParse, layoutObjects: readonly FmObject[], layoutUid: string, refStart: number): void {
   const objectUids = new Set(layoutObjects.map((o) => o.uid));
   const end = fp.references.length;
   for (let i = refStart; i < end; i++) {
     const ref = fp.references[i]!;
-    if (objectUids.has(ref.fromUid)) fp.references.push({ ...ref, fromUid: layoutUid });
+    if (!objectUids.has(ref.fromUid)) continue;
+    const { fromStep: _fromStep, ...use } = ref;
+    fp.references.push({ ...use, fromUid: layoutUid });
   }
 }
 

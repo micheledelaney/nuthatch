@@ -675,6 +675,24 @@ describe("what a layout reports", () => {
     expect(toScript("F0:layout:10")).toEqual(["enabled"]);
   });
 
+  it("lists a button step's use on its layout once, without the step, beside another object's same use", () => {
+    const setField =
+      `<Step id="1" name="Set Field" enable="True"><ParameterValues><Parameter type="FieldReference">` +
+      `<FieldReference id="2" name="b"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter></ParameterValues></Step>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(
+          `<LayoutObject id="1" type="Button" name=""><Button><action>${setField}</action></Button></LayoutObject>` +
+            `<LayoutObject id="2" type="Edit Box" name=""><Field><FieldReference id="2" name="b"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Field></LayoutObject>`,
+        )}</AddAction>`,
+      ),
+    );
+    // The button keeps its step; on the layout, which button's step it was isn't known.
+    expect(refsFrom(result, "F0:layoutObject:10.1")).toEqual(["field:2 via 1 step 1 setField", "tableOccurrence:1 step 1 tableOccurrence"]);
+    expect(refsFrom(result, "F0:layout:10")).toEqual(["field:2 via 1 field", "field:2 via 1 setField", "tableOccurrence:1 tableOccurrence"]);
+  });
+
   it("labels a button whose calculated label is a literal, but not one whose label is computed", () => {
     const button = (id: string, formula: string): string =>
       `<LayoutObject id="${id}" type="Button" name=""><Button><Label><Calculation><Text><![CDATA[${formula}]]></Text></Calculation></Label></Button></LayoutObject>`;

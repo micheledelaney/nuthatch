@@ -145,20 +145,20 @@
       ]
     },
     "MAIN:layout:L_Calcs": {
-      "_note": "The layout lists everything on it, too: its own occurrence and every object's edges.",
+      "_note": "The layout lists everything on it, too: its own occurrence and every object's edges — without the button step an edge came from, which only the button keeps.",
       "exact": true,
       "edges": [
         {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
         {"to": "MAIN:tableOccurrence:TO_Child", "kind": "tableOccurrence"},
         {"to": "MAIN:field:T_Child::c_Name", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"},
         {"to": "MAIN:field:T_Main::f_Text", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
-        {"to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main", "step": 1},
+        {"to": "MAIN:field:T_Main::f_Text", "kind": "setField", "via": "MAIN:tableOccurrence:TO_Main"},
         {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"},
         {"to": "MAIN:script:S_Sub", "kind": "script"},
         {"to": "MAIN:script:S_Trigger", "kind": "trigger"},
-        {"to": "MAIN:tableOccurrence:TO_Ext", "kind": "tableOccurrence", "step": 1},
-        {"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource", "step": 1},
-        {"to": "EXT:layout:EL_Layout", "kind": "layout", "step": 1},
+        {"to": "MAIN:tableOccurrence:TO_Ext", "kind": "tableOccurrence"},
+        {"to": "MAIN:externalDataSource:DS_Ext", "kind": "externalDataSource"},
+        {"to": "EXT:layout:EL_Layout", "kind": "layout"},
         {"to": "broken:field", "kind": "field", "via": "MAIN:tableOccurrence:TO_Child"}
       ]
     },

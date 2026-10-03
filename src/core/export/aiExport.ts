@@ -226,16 +226,17 @@ Tab-separated, one reference per line, with a header row:
 | column | meaning |
 | --- | --- |
 | \`from_uid\`, \`from_type\`, \`from_name\` | the object holding the reference |
-| \`step\` | 1-based script step index, when the reference is in a script |
+| \`step\` | 1-based step index, when the reference is in a step: of a script, or of a button's or custom menu item's action |
 | \`kind\` | how it references, e.g. \`performScript\`, \`trigger\`, \`field\`, \`goToLayout\` |
 | \`status\` | \`ok\`, \`disabled\` (in a disabled script step), \`broken\` (target gone), or \`unresolved\` (target in a file that wasn't loaded) |
 | \`to_uid\`, \`to_type\`, \`to_name\` | the target (\`to_uid\` is empty when broken or unresolved) |
 | \`via_uid\` | for field references: the table occurrence the field is read through |
 
-References inside a layout object's tooltip, hide-object-when, or
-conditional-formatting calculation are credited to its **layout**
-(\`from_type\` = \`layout\`), not to the object; the calculation text itself is
-on the object's \`detail\` in \`objects.jsonl\`.
+A layout object's references (its field, button action, tooltip,
+hide-object-when, conditional formatting, …) are listed under the object, and
+again under its **layout** (\`from_type\` = \`layout\`), which lists everything on
+it — there without a \`step\`, and once per distinct use. The calculation text
+itself is on the object's \`detail\` in \`objects.jsonl\`.
 
 Reference kinds in this export: ${kindCounts}.
 
