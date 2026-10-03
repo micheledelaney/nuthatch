@@ -8,6 +8,7 @@ import { addMergeVariableRefs } from "../refs/globalVariables";
 import { addTextDerivedRefs } from "../refs/textRefs";
 import { makeObject, newObject, placeInCatalog } from "./catalogItems";
 import { stripOuterQuotes } from "./common";
+import { isCommentStep } from "../steps";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
 import { layoutDetail, type LayoutDetail, type LayoutNodes, type LayoutObjectNode } from "./layoutDetail";
 
@@ -66,14 +67,15 @@ function buildLayout(
   placed: FmObject,
   uidCounts: Map<string, number>,
 ): { layout: FmObject; scans: TextScan[] } {
-  if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout) }] };
+  if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout), source: layout }] };
   const annotated = annotateLayout(layout, placed);
   const extracted = layoutDetail(layout, fp.index);
   const listedElements = extracted ? listedElementsOf(extracted) : new Set<unknown>();
   const cx: LayoutObjectsContext = { fp, listedElements, uidOfElement: new Map(), uidCounts, scans: [] };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted, annotated) } : annotated;
   // Its own settings, triggers and parts, and any object not listed on its own.
-  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(layout, listedElements), obj) });
+  const own = ownElement(layout, listedElements);
+  cx.scans.push({ obj, text: scanOwnElement(fp, own, obj), source: own });
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return { layout: obj, scans: cx.scans };
 }
@@ -95,8 +97,9 @@ function addObjectRefsToLayout(lp: FileParse, layoutUid: string): void {
 
 /** Record what an element holds for `owner` — its references and the globals
  * merged into its text — and return the text the placeholder pass reads for
- * it: after `listedText`, the terms a layout object lists (a field binding
- * whose <FieldReference> is gone shows only there). */
+ * it: after `listedText`, the listed terms of a layout object that can show a
+ * placeholder its element doesn't (a field binding whose <FieldReference> is
+ * gone shows only there). */
 function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): string {
   scanRefs(fp, own, owner);
   const literal = cdataText(own);
@@ -180,10 +183,17 @@ function addLayoutObject(cx: LayoutObjectsContext, node: LayoutObjectNode, paren
   // triggers, and the calcs behind its label, tooltip, hide condition,
   // conditional formatting, web viewer, and button action — but not what
   // the listed objects inside it use: each of those reports its own. The
-  // placeholder pass reads the same element, after the listed terms (which
-  // miss the calcs only the element holds: a portal filter, a button step,
-  // a trigger parameter).
-  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text) });
+  // placeholder pass reads the same element, after the listed terms the
+  // element doesn't show a placeholder in (its field binding and portal
+  // occurrence, read from attributes) — then its button step's rendered text,
+  // where, as in a script's step, a target FileMaker blanked to
+  // `<FieldReference id="0">` still shows as a placeholder. Not its search
+  // text: what it's found by isn't what it uses.
+  const listed = [lo.fieldRef, lo.portalTable].filter(Boolean).join("\n");
+  const own = ownElement(element, cx.listedElements);
+  const text = scanOwnElement(fp, own, obj, listed);
+  const step = lo.actionStep && !isCommentStep(lo.actionStep.name) ? lo.actionStep.params : "";
+  cx.scans.push({ obj, text: step ? `${text}\n${step}` : text, source: own });
   return children.length ? { ...withUid, children: addLayoutObjectTree(cx, children, uid, chain ?? idChain) } : withUid;
 }
 

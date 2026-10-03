@@ -21,7 +21,7 @@ export function parseTablesAndFields(fp: FileParse, containerNode: Record<string
     const tableObj = makeObject(fp, table, "table");
     if (!tableObj) continue;
     fp.objects.push(tableObj);
-    scans.push({ obj: tableObj, text: cdataText(table) });
+    scans.push({ obj: tableObj, text: cdataText(table), source: table });
     tableUidById.set(tableObj.id, tableObj.uid);
   }
   let orphans = 0;
@@ -47,7 +47,7 @@ function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tab
     // Without its switched-off auto-enter / validation calcs, for the element
     // scan and the placeholder passes (which read text, not elements) alike.
     const active = activeFieldNode(field);
-    scans.push({ obj: fieldObj, text: cdataText(active) });
+    scans.push({ obj: fieldObj, text: cdataText(active), source: active });
     scanRefs(fp, active, fieldObj);
   }
 }

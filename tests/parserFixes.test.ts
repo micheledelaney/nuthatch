@@ -918,6 +918,349 @@ describe("rendered step text", () => {
   });
 });
 
+describe("a deleted target that only a step's rendered text shows", () => {
+  // As FileMaker writes a step whose target field was deleted: a blank
+  // <FieldReference id="0">, which the element scan skips (Import Records
+  // writes the same for every unmapped column), and the placeholder only in the
+  // step's rendered text — `T::<Field Missing>` while its occurrence is left,
+  // a bare `<Table Missing>` once that's gone too.
+  const sortStep = (pointer: string, to = `<TableOccurrenceReference id="1" name="T"></TableOccurrenceReference>`): string =>
+    `<Step id="154" name="Sort Records by Field" enable="True"><DDRREF kind="StepText" hash="H${pointer}">${pointer}</DDRREF>` +
+    `<ParameterValues><Parameter type="List"><List name="Ascending" value="1"></List></Parameter>` +
+    `<Parameter type="FieldReference"><FieldReference id="0" name="" UUID="">${to}</FieldReference></Parameter></ParameterValues></Step>`;
+  const exportStep = (pointer: string): string =>
+    `<Step id="132" name="Export Field Contents" enable="True"><DDRREF kind="StepText" hash="H${pointer}">${pointer}</DDRREF>` +
+    `<ParameterValues><Parameter type="FieldReference"><FieldReference id="0" name="" UUID=""></FieldReference></Parameter></ParameterValues></Step>`;
+  const stepText = (pointer: string, text: string): string => `<${pointer} hash="H${pointer}" datatype="StepText">${text}</${pointer}>`;
+  const sortText = (pointer: string, to = "T"): string => stepText(pointer, `Sort Records by Field [ Ascending; ${to}::&lt;Field Missing&gt; ]`);
+  const exportText = (pointer: string): string => stepText(pointer, "Export Field Contents [ &lt;Table Missing&gt;; Create folders:No ]");
+  const button = (id: string, step: string): string => `<LayoutObject id="${id}" type="Button" name=""><Button><action>${step}</action></Button></LayoutObject>`;
+
+  it("is flagged on a button and a menu item, as on a script's step", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${sortStep("_S1")}${exportStep("_S2")}</ObjectList></Script></StepsForScripts>
+          <CustomMenuCatalog><CustomMenu id="30" name="M"><MenuItemList>
+            <CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False"><action>${sortStep("_M1")}</action></CustomMenuItem>
+          </MenuItemList></CustomMenu></CustomMenuCatalog>
+          ${layout(button("1", sortStep("_B1")) + button("2", exportStep("_B2")))}
+        </AddAction>`,
+        `<Script><ObjectList>${sortText("_S1")}${exportText("_S2")}${sortText("_M1")}${sortText("_B1")}${exportText("_B2")}</ObjectList></Script>`,
+      ),
+    );
+    expect(forcedFrom(result, "F0:script:1")).toEqual(["field <Field Missing> via 1", "field <Table Missing>"]);
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Table Missing>"]);
+    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1", "field <Table Missing>"]);
+    expect(forcedFrom(result, "F0:customMenuItem:30.0")).toEqual(["field <Field Missing> via 1"]);
+  });
+
+  it("isn't flagged behind a file that was unavailable at export, on a button or in a script", () => {
+    const to = `<TableOccurrenceReference id="2" name="X"></TableOccurrenceReference>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE_AND_UNAVAILABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${sortStep("_S1", to)}</ObjectList></Script></StepsForScripts>
+          ${layout(button("1", sortStep("_B1", to)))}
+        </AddAction>`,
+        `<Script><ObjectList>${sortText("_S1", "X")}${sortText("_B1", "X")}</ObjectList></Script>`,
+      ),
+    );
+    expect(forcedFrom(result, "F0:script:1")).toEqual([]);
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual([]);
+  });
+
+  it("is flagged once on a button whose calc shows the same placeholder", () => {
+    const setField =
+      `<Step id="1" name="Set Field" enable="True"><DDRREF kind="StepText" hash="H_B1">_B1</DDRREF><ParameterValues>` +
+      `<Parameter type="FieldReference"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter>` +
+      `<Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation><DDRREF kind="ChunkList" hash="H6">_P6</DDRREF><Text><![CDATA[T::<Field Missing>]]></Text></Calculation></Calculation></Parameter>` +
+      `</ParameterValues></Step>`;
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(button("1", setField))}</AddAction>`,
+        `<Calcs><_P6 hash="H6"><ChunkList></ChunkList></_P6></Calcs><Script><ObjectList>${stepText("_B1", "Set Field [ T::a; T::&lt;Field Missing&gt; ]")}</ObjectList></Script>`,
+      ),
+    );
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing> via 1"]);
+  });
+});
+
+describe("calcs that share a chunk list", () => {
+  // As FM 22 writes calcs of objects without a UUID: the same unhashed pointer
+  // (`__0`) on each, and one block for it in DDR_INFO — the first calc's.
+  const SHARED = `<DDRREF kind="ChunkList" hash="">__0</DDRREF>`;
+  const hide = (formula: string): string => `<Conditions><Hide><Calculation>${SHARED}<Text><![CDATA[${formula}]]></Text></Calculation></Hide></Conditions>`;
+  const calcField = `<Field id="3" name="c" fieldtype="Calculated"><Calculation><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference>${SHARED}<Text><![CDATA[Right ( b ; 5 )]]></Text></Calculation></Field>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE.replace("</ObjectList>", `${calcField}</ObjectList>`)}
+        <CustomFunctionsCatalog><CustomFunction id="7" name="Fn"></CustomFunction></CustomFunctionsCatalog>
+        ${layout(
+          `<LayoutObject id="1" type="Edit Box" name="">${hide("T::a")}</LayoutObject>` +
+            `<LayoutObject id="2" type="Edit Box" name="">${hide(`T::b & "T::a" & Fn ( $$G )`)}</LayoutObject>` +
+            `<LayoutObject id="3" type="Text" name=""><Text><StyledText><Data><![CDATA[<<ƒ:T::a>>]]></Data></StyledText></Text>` +
+            `<DisplayCalculations membercount="1">${SHARED}</DisplayCalculations></LayoutObject>`,
+        )}
+      </AddAction>`,
+      `<Calcs><__0 hash="X" datatype="ChunkList"><ChunkList hash="X"><Chunk type="FieldRef">` +
+        `<FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Chunk></ChunkList></__0></Calcs>`,
+    ),
+  );
+
+  it("use the block for the calc whose text it spells out", () => {
+    expect(refsFrom(result, "F0:layoutObject:10.1")).toEqual(["field:1 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+  });
+
+  it("recover another calc's references from its own text, not from a string literal", () => {
+    expect(refsFrom(result, "F0:layoutObject:10.2")).toEqual([
+      "customFunction:7 customFunction",
+      "field:2 via 1 field",
+      "globalVariable:$$g globalVariable",
+      "tableOccurrence:1 tableOccurrence",
+    ]);
+    // A field's own calc names same-table fields bare.
+    expect(refsFrom(result, "F0:field:1.3")).toEqual(["field:2 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+  });
+
+  it("give a text object's merge calc, listed only by its pointer, the block that spells it out", () => {
+    // Its <DisplayCalculations> has no formula beside the pointer; the merge
+    // calc in its text (`<<ƒ:T::a>>`) is what the block is checked against.
+    expect(refsFrom(result, "F0:layoutObject:10.3")).toEqual(["field:1 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+  });
+});
+
+describe("layout objects copied without a new UUID", () => {
+  // FileMaker copies a layout object without regenerating its UUID, so the
+  // copies' calcs share pointers (`_<UUID>_Label`); DDR_INFO keeps one block
+  // per pointer, and the copy whose pointer has the hash owns it (as on
+  // SampleA's layout 982, buttons 3486 and 3953).
+  const SPELLS_A = `<ChunkList hash="X"><Chunk type="FieldRef"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Chunk></ChunkList>`;
+  const block = (pointer: string): string => `<${pointer} hash="X" datatype="ChunkList">${SPELLS_A}</${pointer}>`;
+  const pointer = (name: string, hash: string): string => `<DDRREF kind="ChunkList" hash="${hash}">${name}</DDRREF>`;
+  const label = (calc: string): string => `<Button><Label><Calculation>${calc}</Calculation></Label></Button>`;
+  const textObject = (id: string, merge: string, list: string): string =>
+    `<LayoutObject id="${id}" type="Text" name=""><Text><StyledText><Data><![CDATA[<<ƒ:${merge}>>]]></Data></StyledText></Text>` +
+    `<DisplayCalculations membercount="1">${list}</DisplayCalculations></LayoutObject>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE}${layout(
+        `<LayoutObject id="1" type="Button" name="">${label(`${pointer("_U1_Label", "X")}<Text><![CDATA[T::a]]></Text>`)}</LayoutObject>` +
+          `<LayoutObject id="2" type="Button" name="">${label(pointer("_U1_Label", ""))}</LayoutObject>` +
+          textObject("3", "T::a", pointer("_U2_DisplayCalculations_0", "X")) +
+          textObject("4", "T::b", pointer("_U2_DisplayCalculations_0", "")) +
+          textObject("5", "T::a", pointer("_U2_DisplayCalculations_0", "")),
+      )}</AddAction>`,
+      `<Calcs>${block("_U1_Label")}${block("_U2_DisplayCalculations_0")}</Calcs>`,
+    ),
+  );
+
+  it("give an empty calc none of the copy's references", () => {
+    expect(refsFrom(result, "F0:layoutObject:10.1")).toEqual(["field:1 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+    expect(refsFrom(result, "F0:layoutObject:10.2")).toEqual([]);
+  });
+
+  it("give a text object's merge calc the copy's references only when it's the same calc", () => {
+    expect(refsFrom(result, "F0:layoutObject:10.3")).toEqual(["field:1 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+    // Changed since: read from its own text.
+    expect(refsFrom(result, "F0:layoutObject:10.4")).toEqual(["field:2 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+    expect(refsFrom(result, "F0:layoutObject:10.5")).toEqual(["field:1 via 1 field", "tableOccurrence:1 tableOccurrence"]);
+  });
+});
+
+describe("a field read through another file's occurrence, recovered from a calc's text", () => {
+  // The calc's chunk list is empty (it names a deleted field), so its text is
+  // all there is; X's base table lives in EXT, which its UUID identifies.
+  const main = doc(
+    "MAIN",
+    `<AddAction>${TABLE.replace(
+      "</TableOccurrenceCatalog>",
+      `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference>
+        <DataSourceReference id="1" name="EXT"></DataSourceReference><BaseTableReference id="1" name="T" UUID="U-EXT-T"></BaseTableReference>
+      </BaseTableSourceReference></TableOccurrence></TableOccurrenceCatalog>
+      <ExternalDataSourceCatalog><ExternalDataSource id="1" name="EXT"></ExternalDataSource></ExternalDataSourceCatalog>`,
+    )}${layout(
+      `<LayoutObject id="1" type="Edit Box" name=""><Conditions><Hide><Calculation><DDRREF kind="ChunkList" hash="H1">_P1</DDRREF>` +
+        `<Text><![CDATA[X::Long Name & T::<Field Missing>]]></Text></Calculation></Hide></Conditions></LayoutObject>`,
+    )}</AddAction>`,
+    `<Calcs><_P1 hash="H1"><ChunkList></ChunkList></_P1></Calcs>`,
+  );
+  const ext = doc(
+    "EXT",
+    `<AddAction><BaseTableCatalog><BaseTable id="1" name="T"><UUID>U-EXT-T</UUID></BaseTable></BaseTableCatalog>
+      <FieldsForTables><FieldCatalog><BaseTableReference id="1" name="T"></BaseTableReference>
+        <ObjectList><Field id="5" name="Long"></Field><Field id="6" name="Long Name"></Field></ObjectList>
+      </FieldCatalog></FieldsForTables></AddAction>`,
+  );
+  const fieldUse = (result: ParseResult) =>
+    buildModel(result).references.find((r) => r.fromUid === "F0:layoutObject:10.1" && r.toType === "field" && !r.broken);
+
+  it("is recorded by the name its text gives, through that occurrence", () => {
+    const byName = parse(main, ext).references.filter((r) => r.byName);
+    // The layout gets its copy, like of any reference its objects record.
+    expect(byName.map((r) => `${r.fromUid} ${r.toName} via ${r.viaToId}`)).toEqual([
+      "F0:layoutObject:10.1 Long Name via 2",
+      "F0:layout:10 Long Name via 2",
+    ]);
+  });
+
+  it("resolves to that file's field with the longest name the text starts with", () => {
+    expect(fieldUse(parse(main, ext))).toMatchObject({ toUid: "F1:field:1.6", toName: "Long Name" });
+  });
+
+  it("stays unresolved, not broken, while that file isn't loaded", () => {
+    expect(fieldUse(parse(main))).toMatchObject({ toUid: null, broken: false });
+  });
+});
+
+describe("a layout object's search text", () => {
+  it("isn't read for placeholders: a name that reads like one is no broken use", () => {
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Edit Box" name="&lt;Field Missing&gt;"></LayoutObject>`)}</AddAction>`));
+    expect(object(result, "F0:layoutObject:10.1").text).toBe("<Field Missing>");
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual([]);
+  });
+});
+
+describe("a placeholder a developer typed", () => {
+  // FileMaker writes `<Field Missing>` (…) where a reference's target was
+  // deleted, but never inside a formula's string literals or comments: there
+  // it's typed text. Each object here has typed ones; some have a real one too.
+  const calcField = (id: string, formula: string): string =>
+    `<Field id="${id}" name="c${id}" fieldtype="Calculated"><Calculation><Text><![CDATA[${formula}]]></Text></Calculation></Field>`;
+  const calc = (formula: string): string =>
+    `<Parameter type="Calculation"><Calculation datatype="1" position="0"><Calculation><Text><![CDATA[${formula}]]></Text></Calculation></Calculation></Parameter>`;
+  const stepRef = (pointer: string): string => `<DDRREF kind="StepText" hash="H${pointer}">${pointer}</DDRREF>`;
+  const setVariable = (pointer: string, name: string, formula: string): string =>
+    `<Step id="1" name="Set Variable" enable="True">${stepRef(pointer)}<ParameterValues><Parameter type="Variable"><Name value="${name}"></Name></Parameter>${calc(formula)}</ParameterValues></Step>`;
+  const comment = (pointer: string): string =>
+    `<Step id="89" name="# (comment)" enable="True">${stepRef(pointer)}<ParameterValues><Parameter type="Comment"><Comment value="see &lt;Field Missing&gt;"></Comment></Parameter></ParameterValues></Step>`;
+  // Its target field was deleted: only the rendered text shows it.
+  const setField = (pointer: string, formula: string): string =>
+    `<Step id="76" name="Set Field" enable="True">${stepRef(pointer)}<ParameterValues><Parameter type="FieldReference">` +
+    `<FieldReference id="0" name="" UUID=""><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter>${calc(formula)}</ParameterValues></Step>`;
+  const stepText = (pointer: string, text: string): string => `<${pointer} hash="H${pointer}" datatype="StepText">${text}</${pointer}>`;
+  const cfCalc = (id: string, formula: string): string =>
+    `<CustomFunctionCalc><CustomFunctionReference id="${id}" name="Fn${id}"></CustomFunctionReference><Calculation><Text><![CDATA[${formula}]]></Text></Calculation></CustomFunctionCalc>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE.replace(
+        "</ObjectList>",
+        calcField("3", `If ( T::a = "<Field Missing>" ; 1 ; 0 ) /* <Table Missing> */ // <Function Missing>`) +
+          calcField("4", `"<Field Missing>" & T::<Field Missing>`) +
+          calcField("5", `/* T::<Field Missing> */ T::<Field Missing>`) +
+          "</ObjectList>",
+      )}
+        <CustomFunctionsCatalog><CustomFunction id="7" name="Fn7"></CustomFunction><CustomFunction id="8" name="Fn8"></CustomFunction></CustomFunctionsCatalog>
+        <CalcsForCustomFunctions>${cfCalc("7", "1 // <Function Missing> ( 1 )")}${cfCalc("8", "<Function Missing> ( 1 )")}</CalcsForCustomFunctions>
+        <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+        <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>
+          ${setVariable("_S1", "$x", `"<Field Missing>"`)}${comment("_S2")}${setField("_S3", `"<Field Missing>"`)}${setVariable("_S4", "$y", `"a\t<Table Missing>"`)}
+        </ObjectList></Script></StepsForScripts>
+        ${layout(
+          `<LayoutObject id="1" type="Button" name="b"><Button><action>${setVariable("_B1", "$x", `"<Field Missing>"`)}</action></Button></LayoutObject>` +
+            `<LayoutObject id="2" type="Text" name=""><Text><StyledText><Data><![CDATA["<<T::<Field Missing>>>"]]></Data></StyledText></Text></LayoutObject>`,
+        )}
+      </AddAction>`,
+      `<Script><ObjectList>` +
+        stepText("_S1", `Set Variable [ $x ; Value: "&lt;Field Missing&gt;" ]`) +
+        stepText("_S2", `# see &lt;Field Missing&gt;`) +
+        stepText("_S3", `Set Field [ T::&lt;Field Missing&gt; ; "&lt;Field Missing&gt;" ]`) +
+        // FileMaker renders the literal's tab as a character reference.
+        stepText("_S4", `Set Variable [ $y ; Value: "a&#9;&lt;Table Missing&gt;" ]`) +
+        stepText("_B1", `Set Variable [ $x ; Value: "&lt;Field Missing&gt;" ]`) +
+        `</ObjectList></Script>`,
+    ),
+  );
+
+  it("isn't flagged in a formula's string literal or comment", () => {
+    expect(forcedFrom(result, "F0:field:1.3")).toEqual([]);
+    expect(forcedFrom(result, "F0:customFunction:7")).toEqual([]);
+  });
+
+  it("leaves a real placeholder in the same formula flagged", () => {
+    expect(forcedFrom(result, "F0:field:1.4")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:field:1.5")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:customFunction:8")).toEqual(["customFunction <Function Missing>"]);
+  });
+
+  it("isn't flagged in a script step's literal or a comment step, but a deleted target is", () => {
+    const steps = result.references.filter((r) => r.fromUid === "F0:script:1" && r.forceBroken).map((r) => `${r.toName} step ${r.fromStep}`);
+    expect(steps).toEqual(["<Field Missing> step 3"]);
+  });
+
+  it("isn't flagged in a button step's literal", () => {
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual([]);
+  });
+
+  it("is still flagged in layout text, which isn't a formula, quotes or not", () => {
+    expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Field Missing> via 1"]);
+  });
+});
+
+describe("custom menu items with the same index", () => {
+  it("are objects of their own", () => {
+    const item = (name: string): string =>
+      `<CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False"><Command name="${name}" id="1"></Command></CustomMenuItem>`;
+    const result = parse(doc("MAIN", `<AddAction><CustomMenuCatalog><CustomMenu id="30" name="M"><MenuItemList>${item("Copy")}${item("Paste")}</MenuItemList></CustomMenu></CustomMenuCatalog></AddAction>`));
+    const items = result.objects.filter((o) => o.type === "customMenuItem").map((o) => `${o.uid} ${o.name}`);
+    expect(items).toEqual(["F0:customMenuItem:30.0 Copy", "F0:customMenuItem:30.0#1 Paste"]);
+    // The menu's containment edges reach both.
+    const model = buildModel(result);
+    expect(model.references.filter((r) => r.kind === "menuItem").map((r) => r.toUid)).toEqual(["F0:customMenuItem:30.0", "F0:customMenuItem:30.0#1"]);
+  });
+});
+
+describe("a label, tooltip or title written as a formula", () => {
+  const calc = (formula: string): string => `<Calculation><Text><![CDATA[${formula}]]></Text></Calculation>`;
+  // As in a Dev export: computed, though it starts and ends with a quote.
+  const COMPUTED = `"Feedbackinhalt ansehen" & ¶ & "gelb, wenn Feedback hinterlegt"`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE}
+        <CustomMenuCatalog><CustomMenu id="30" name="M"><MenuItemList>
+          <CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False"><Name>${calc(`"Save " & "all"`)}</Name><Command id="0"></Command></CustomMenuItem>
+          <CustomMenuItem index="1" isSubMenuItem="False" isSeparatorItem="False"><Name>${calc(`"Say \\"hi\\""`)}</Name><Command id="0"></Command></CustomMenuItem>
+        </MenuItemList></CustomMenu></CustomMenuCatalog>
+        ${layout(
+          `<LayoutObject id="1" type="Edit Box" name=""><Tooltip>${calc(COMPUTED)}</Tooltip></LayoutObject>` +
+            `<LayoutObject id="2" type="Edit Box" name=""><Tooltip>${calc(`"Click \\"Save\\""`)}</Tooltip></LayoutObject>` +
+            `<LayoutObject id="3" type="Tab Panel" name=""><TabPanel>${calc(`"Tab " & "1"`)}</TabPanel></LayoutObject>` +
+            `<LayoutObject id="4" type="Button" name=""><Button><Label>${calc(`"Say \\"hi\\""`)}</Label></Button></LayoutObject>` +
+            `<LayoutObject id="5" type="Button" name="b5"><Button><Label>${calc(`""`)}</Label></Button></LayoutObject>`,
+        )}
+      </AddAction>`,
+    ),
+  );
+
+  it("shows a computed one as its formula, not with its outer quotes cut off", () => {
+    expect(object(result, "F0:layoutObject:10.1").attributes.tooltip).toBe(COMPUTED);
+    expect(object(result, "F0:layoutObject:10.3").name).toBe(`"Tab " & "1"`);
+    expect(object(result, "F0:customMenuItem:30.0").name).toBe(`"Save " & "all"`);
+  });
+
+  it("shows a literal one as its text, with its escaped quotes undone", () => {
+    expect(object(result, "F0:layoutObject:10.2").attributes.tooltip).toBe(`Click "Save"`);
+    expect(object(result, "F0:layoutObject:10.4").attributes.label).toBe(`Say "hi"`);
+    expect(object(result, "F0:layoutObject:10.4").name).toBe(`Button (Say "hi")`);
+    expect(object(result, "F0:customMenuItem:30.1").name).toBe(`Say "hi"`);
+  });
+
+  it("gives an empty literal label no label", () => {
+    expect(object(result, "F0:layoutObject:10.5").attributes.label).toBeUndefined();
+    expect(object(result, "F0:layoutObject:10.5").name).toBe("b5");
+  });
+});
+
 describe("global variables", () => {
   const setVariable = (name: string): string =>
     `<Step id="1" name="Set Variable" enable="True"><ParameterValues><Parameter type="Variable"><Name value="${name}"></Name></Parameter></ParameterValues></Step>`;

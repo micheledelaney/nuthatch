@@ -94,29 +94,31 @@ function insertTextValue(step: Record<string, unknown>): string | undefined {
 /** Replace newlines (and surrounding whitespace) with a single space whenever
  * they sit at bracket depth 0 — i.e. between `]` and the next `[`, or before
  * the first `[`. Newlines inside `[ … ]` survive, so Import / Export Records'
- * per-mapping layout is preserved. */
+ * per-mapping layout is preserved. Joined once at the end: a string built a
+ * character at a time is a rope as long as nothing reads it, and the step
+ * list keeps it — several times the memory of the text. */
 function flattenNewlinesOutsideBrackets(text: string): string {
-  let out = "";
+  const out: string[] = [];
   let depth = 0;
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+    const c = text[i]!;
     if (c === "[") {
       depth++;
-      out += c;
+      out.push(c);
       continue;
     }
     if (c === "]") {
       depth = Math.max(0, depth - 1);
-      out += c;
+      out.push(c);
       continue;
     }
     if (depth === 0 && (c === "\n" || c === "\r")) {
       // Collapse a run of whitespace including the newline into one space.
       while (i + 1 < text.length && /\s/.test(text[i + 1]!)) i++;
-      if (out.length > 0 && out[out.length - 1] !== " ") out += " ";
+      if (out.length > 0 && out[out.length - 1] !== " ") out.push(" ");
       continue;
     }
-    out += c;
+    out.push(c);
   }
-  return out;
+  return out.join("");
 }

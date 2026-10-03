@@ -3,6 +3,8 @@ import { isBrokenTableOccurrence } from "@/types/ddr";
 import type { FileIndex, FileParse, TextScan } from "../context";
 import { missingFieldOccurrences } from "@/core/identifiers";
 import { MISSING_FIELD_TOKEN, MISSING_FUNCTION_TOKEN, MISSING_TABLE_TOKEN, UNKNOWN_TARGET } from "../sentinels";
+import { formulasUnder, inertSpansWith } from "../calcText";
+import { isCommentStep } from "../steps";
 import { brokenRef, pushRef, type ScanContext } from "./refBuilders";
 
 /** `<Table Missing>` not followed by `::` — a deleted target, not a field read
@@ -49,15 +51,47 @@ function forEachPlaceholderUse(
   token: string,
   emit: (obj: FmObject, text: string, site: ScanContext) => void,
 ): void {
-  for (const { obj, text } of batch) {
+  for (const scan of batch) {
+    const { obj, text } = scan;
     if (obj.detail?.kind === "script") {
       for (const step of obj.detail.steps) {
-        if (step.params.includes(token)) emit(obj, step.params, { stepIndex: step.index, disabled: !step.enabled });
+        if (isCommentStep(step.name) || !step.params.includes(token)) continue;
+        const live = liveText(step.params, scan);
+        if (live.includes(token)) emit(obj, live, { stepIndex: step.index, disabled: !step.enabled });
       }
       continue;
     }
-    if (text.includes(token)) emit(obj, text, {});
+    if (!text.includes(token)) continue;
+    const live = liveText(text, scan);
+    if (live.includes(token)) emit(obj, live, {});
   }
+}
+
+const PLACEHOLDER_TOKENS = [MISSING_FIELD_TOKEN, MISSING_TABLE_TOKEN, MISSING_FUNCTION_TOKEN];
+
+const inertSpansOf = new WeakMap<TextScan, string[]>();
+
+/**
+ * `text` with the placeholders a developer typed blanked out: those inside a
+ * string literal or comment of one of the object's formulas (inertSpansWith),
+ * which FileMaker never rewrites. Each such span is matched as written, so a
+ * placeholder FileMaker wrote — in a formula outside its literals, in layout
+ * text, in a step's rendered target — is never touched; one that's only
+ * typed text but can't be matched that way is still read, as before.
+ */
+function liveText(text: string, scan: TextScan): string {
+  let spans = inertSpansOf.get(scan);
+  if (!spans) {
+    spans = [...new Set(formulasUnder(scan.source).flatMap((formula) => inertSpansWith(formula, PLACEHOLDER_TOKENS)))];
+    inertSpansOf.set(scan, spans);
+  }
+  let live = text;
+  for (const span of spans) {
+    // A step's rendered text shows a formula's tabs (and other control
+    // characters) as spaces.
+    for (const form of new Set([span, span.replace(/[\0-\t\v-\x1f]/g, " ")])) live = live.split(form).join(" ".repeat(form.length));
+  }
+  return live;
 }
 
 /** The sites of every reference that `matches` — e.g. the sites already

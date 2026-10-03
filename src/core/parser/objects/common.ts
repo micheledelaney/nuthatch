@@ -33,9 +33,9 @@ export function fieldRefName(ref: unknown, index: FileIndex): string {
   return unverifiable ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
 }
 
-/** Strip a single layer of surrounding double-quotes (FileMaker wraps static
- * labels like `"Tab Name"` in quotes in the Calculation text, and a button's
- * label is shown quoted). */
+/** A button's label without the quotes it's shown in (see behaviorLine). A
+ * formula's static text is literalText's to read: a computed formula can start
+ * and end with a quote too. */
 export function stripOuterQuotes(s: string): string {
   return s.startsWith('"') && s.endsWith('"') && s.length > 2 ? s.slice(1, -1) : s;
 }

@@ -16,6 +16,11 @@ export function isPerformScriptStep(name: string): boolean {
   return PERFORM_SCRIPT_STEP_RE.test(name);
 }
 
+/** A comment step (`# (comment)`): typed text, never a reference. */
+export function isCommentStep(name: string): boolean {
+  return name.startsWith("#");
+}
+
 /** The <Step> elements of a step list (a script's <ObjectList>, a button's
  * <action>), in order. A step's 1-based position here is its number
  * everywhere: the script's step list, a reference's `fromStep`, an FM 22

@@ -35,12 +35,16 @@ export interface FileParse {
  * with the text they read for it: the CDATA of what its element scan read — a
  * field without its switched-off auto-enter / validation calcs, a catalog
  * item's scanned part, a layout's or layout object's own element (what each
- * shows and uses itself) after a layout object's listed terms. Not its search
- * `text`, which can be empty (an unlabeled button) or hold decoded attribute
- * values. */
+ * shows and uses itself) after a layout object's field binding and portal
+ * occurrence — plus, for a button or a custom menu item, its step's rendered
+ * text, as a script's steps are read. Not its search `text`, which can be
+ * empty (an unlabeled button) or hold decoded attribute values. */
 export interface TextScan {
   obj: FmObject;
   text: string;
+  /** The XML the text was read from (a script's: its steps), whose formulas'
+   * string literals and comments the placeholder passes leave out. */
+  source?: unknown;
 }
 
 /** The lookups a file's reference scan resolves against. The name indexes come

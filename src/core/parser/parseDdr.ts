@@ -174,7 +174,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   };
   // The catalog objects, each with the text the text-based passes read for it
   // — the file's own first: its triggers' parameters are calcs too.
-  const scans: TextScan[] = [{ obj: fileObject, text: cdataText(container.metadata) }];
+  const scans: TextScan[] = [{ obj: fileObject, text: cdataText(container.metadata), source: container.metadata }];
   addFileRefs(fp, node, container.metadata);
   parseTablesAndFields(fp, node, scans);
   parseScripts(fp, node, scans);
@@ -232,7 +232,9 @@ const IS_IDENTITY_FIELD: Readonly<Record<keyof RawReference, boolean>> = {
   byName: false,
   // Of a disabled and an enabled duplicate, the enabled one is kept.
   disabled: false,
-  // A forced-broken reference has a toId of its own (MISSING_REF_ID).
+  // A forced-broken reference never shares the identity fields with one that
+  // isn't: a placeholder's toId is MISSING_REF_ID, and an external value list
+  // (or its data source) whose data source is gone is only recorded broken.
   forceBroken: false,
 };
 

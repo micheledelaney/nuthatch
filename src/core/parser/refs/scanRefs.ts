@@ -1,11 +1,11 @@
 import type { ObjectType, RawReference, RefKind } from "@/types/ddr";
 import type { FileParse } from "../context";
-import { asArray, attr, child, children, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
+import { asArray, attr, cdataText, child, children, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
 import { ownValue } from "../ownValue";
 import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
-import { calculationText, chunkListMatchesText, quotedGlobalVariables } from "../calcText";
+import { calculationText, chunkListMatchesText, mergeFormulas, quotedGlobalVariables } from "../calcText";
 import { stepNodes } from "../steps";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
@@ -57,6 +57,11 @@ function scanSpecialElements(
       return true;
     case "Chunk":
       scanChunks(fp, value, owner, ctx);
+      return true;
+    case "DisplayCalculations":
+      if (!ctx.inChunkList) {
+        for (const list of asArray(value)) if (isRecord(list)) followDisplayCalculations(fp, node, list, owner, ctx);
+      }
       return true;
     case "Map":
       // Import Records lists every field of the target table as a <Map>: kind 0
@@ -265,6 +270,43 @@ function chunkBlockBelongsTo(block: unknown, pointerHash: string | undefined, ca
     return hasChunks || !calcText?.trim();
   }
   // An unhashed pointer may be anyone's: use the block only if it spells out
-  // this calc's own text (with no text to compare, trust it).
-  return calcText == null || chunkListMatchesText(list, calcText);
+  // this calc's own text. One with no text is an empty formula — a hashed one
+  // always has an empty block — and its block is a clone's: FileMaker copies
+  // an object without a new UUID, and the copy whose pointer has the hash owns
+  // it. (The one list of pointers without text, <DisplayCalculations>, is
+  // followed on its own: followDisplayCalculations.)
+  return calcText != null && chunkListMatchesText(list, calcText);
+}
+
+/**
+ * The merge calcs (`<<ƒ:…>>`) in a layout object's text, which its
+ * <DisplayCalculations> lists by pointer only: no formula sits beside a
+ * pointer to check its block against. A hashed pointer owns its block. An
+ * unhashed one can be a clone's (see chunkBlockBelongsTo), so its block is
+ * used only if it spells out one of the object's own merge calcs; if one
+ * doesn't, the merge calcs' references are read from their text instead.
+ */
+function followDisplayCalculations(
+  fp: FileParse,
+  object: Record<string, unknown>,
+  list: Record<string, unknown>,
+  owner: RefOwner,
+  ctx: ScanContext,
+): void {
+  const formulas = mergeFormulas(cdataText(object));
+  let unverified = false;
+  for (const el of asArray(list["DDRREF"])) {
+    if (!isRecord(el) || attr(el, "kind") !== "ChunkList") continue;
+    const ptr = el["#text"];
+    const block = typeof ptr === "string" ? fp.index.lists.get(ptr) : undefined;
+    if (!block) continue;
+    const hash = attr(el, "hash");
+    // With no merge calc to compare, as before: trust it.
+    const own = hash
+      ? chunkBlockBelongsTo(block, hash, undefined)
+      : formulas.length === 0 || formulas.some((formula) => chunkListMatchesText(child(block, "ChunkList"), formula));
+    if (own) scanRefs(fp, block, owner, { ...ctx, inChunkList: true });
+    else if (!hash) unverified = true;
+  }
+  if (unverified) for (const formula of formulas) scanCalcTextRefs(fp, formula, list, owner, ctx);
 }

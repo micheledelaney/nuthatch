@@ -2,8 +2,8 @@ import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
 import type { FileIndex, StepTexts } from "../context";
 import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
-import { calculationText } from "../calcText";
-import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
+import { calculationText, literalText } from "../calcText";
+import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers } from "./common";
 import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
@@ -119,6 +119,8 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
   const kids = childObjects(obj, index);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
   const tooltip = calcOf(child(obj, "Tooltip"));
+  // A computed tooltip shows as its formula.
+  const shownTooltip = literalText(tooltip) ?? tooltip;
   const shown: LayoutObjectInfo = {
     type,
     name: panelLabel(obj) ?? textAttr(obj, "name") ?? "",
@@ -138,7 +140,7 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
     ...buttonAction(obj, index.stepTexts),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
-    ...(tooltip ? { tooltip: stripOuterQuotes(tooltip) } : {}),
+    ...(shownTooltip ? { tooltip: shownTooltip } : {}),
     ...conditions(obj),
   };
   return { info: shown, element: obj, children: kids ?? [] };
@@ -149,7 +151,8 @@ function panelLabel(obj: Record<string, unknown>): string | undefined {
   let label: string | undefined;
   for (const tag of ["TabPanel", "SlidePanel"]) {
     const text = calcOf(child(obj, tag));
-    if (text) label = stripOuterQuotes(text);
+    const shown = literalText(text) ?? text;
+    if (shown) label = shown;
   }
   return label;
 }
@@ -281,16 +284,13 @@ function behaviorLine(obj: Record<string, unknown>): string | undefined {
     const label = firstTextValue(button["Label"]);
     if (label) return `"${label}"`;
     // A calculated label (<Label><Calculation>) that is one string literal is a
-    // static label, already quoted. One that computes its text is left out: as
+    // static label, quoted like one. One that computes its text is left out: as
     // the object's name it would read as code.
-    const formula = calcOf(button["Label"]).trim();
-    return STRING_LITERAL_RE.test(formula) ? formula : undefined;
+    const literal = literalText(calcOf(button["Label"]));
+    return literal ? `"${literal}"` : undefined;
   }
   return undefined;
 }
-
-/** A formula that is nothing but one string literal (`"Save"`, with `\"` escapes). */
-const STRING_LITERAL_RE = /^"(?:[^"\\]|\\[\s\S])*"$/;
 
 /** Script reference navigation target: id, name, UUID from an <action> element. */
 function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {

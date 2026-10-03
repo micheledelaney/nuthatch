@@ -22,7 +22,7 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
     const placed = placeInCatalog(base, order++, folder);
     if (placed.isSeparator) {
       fp.objects.push(placed);
-      scans.push({ obj: placed, text: cdataText(node) });
+      scans.push({ obj: placed, text: cdataText(node), source: node });
       continue;
     }
     const block = stepBlocks.get(placed.id);
@@ -34,8 +34,9 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
     if (block) scanRefs(fp, block["ObjectList"], script);
     const obj = block ? withSteps(script, block["ObjectList"], fp.index.stepTexts) : script;
     fp.objects.push(obj);
-    // A script with steps is read per step (its rendered text), not by this text.
-    scans.push({ obj, text: cdataText(node) });
+    // A script with steps is read per step (its rendered text), not by this
+    // text — the steps hold its formulas.
+    scans.push({ obj, text: cdataText(node), source: block ? block["ObjectList"] : node });
   }
   const orphans = stepBlocks.size - scriptsWithSteps.size;
   if (orphans > 0) {

@@ -40,6 +40,8 @@ interface CatalogSpec {
    * of what `scan` reads (of the whole item, for "none"): a formula stored
    * apart from the item. */
   text?: (item: Item, obj: FmObject) => string;
+  /** The XML `text` reads, when it reaches outside the item. */
+  textSource?: (item: Item, obj: FmObject) => unknown;
   /** `annotate` sets the object's searchable text itself, so the item's full
    * text isn't built only to be replaced. */
   annotateSetsText?: true;
@@ -90,6 +92,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       annotate: (item, obj) => annotateCustomFunction(item, obj, cfCalcs),
       addRefs: (_item, obj) => addCustomFunctionCalcRefs(fp, obj, cfCalcs),
       text: (item, obj) => customFunctionScanText(item, obj, cfCalcs),
+      textSource: (item, obj) => [item, cfCalcs.get(obj.id)],
     },
     {
       catalogKey: "ExtendedPrivilegesCatalog",
@@ -140,7 +143,7 @@ export function parseCatalogs(fp: FileParse, containerNode: Record<string, unkno
       // The text passes read what the element scan reads, so a placeholder
       // in a part the scan leaves out flags nothing.
       const scanned = typeof spec.scan === "function" ? spec.scan(item) : item;
-      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(scanned) });
+      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(scanned), source: spec.textSource ? spec.textSource(item, obj) : item });
       if (spec.scan !== "none") scanRefs(fp, scanned, obj);
       spec.addRefs?.(item, obj);
     }
