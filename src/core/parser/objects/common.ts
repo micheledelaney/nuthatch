@@ -1,18 +1,8 @@
 import type { LayoutTriggerInfo } from "@/types/ddr";
 import type { FileIndex } from "../context";
-import { asArray, attr, child, children, displayText, enabledLabels, isRecord, ownText, textAttr } from "../xmlUtils";
+import { asArray, attr, child, children, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
-
-/** Calculation text from a <Calculation> node. The formula lives in its <Text>,
- * or in a nested <Calculation> (a step parameter's `<Calculation datatype…>`
- * wraps the calc itself); FM 21 sometimes writes it as the node's own CDATA.
- * Not entity-decoded: see decodeEntities' policy. */
-export function calculationText(calc: unknown): string {
-  if (!isRecord(calc)) return ownText(calc).trim();
-  if (calc["Text"] != null) return displayText(calc["Text"]);
-  if (calc["Calculation"] != null) return calculationText(child(calc, "Calculation"));
-  return ownText(calc).trim();
-}
+import { calculationText } from "../calcText";
 
 /** The formula of a node's <Calculation> child, "" when it has none. */
 export function calcOf(node: unknown): string {

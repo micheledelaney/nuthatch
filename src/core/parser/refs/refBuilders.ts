@@ -38,9 +38,11 @@ export function brokenRef(fromUid: string, toType: ObjectType, toName: string, k
 }
 
 /** A use of a `$$global` variable (they have no catalog: each name becomes an
- * object of its own, see globalVariableObjects). */
+ * object of its own, see globalVariableObjects). FileMaker reads variable
+ * names regardless of case, so `$$x` and `$$X` are one variable: the id is
+ * the name in lower case, the name the use's own spelling. */
 export function globalVariableRef(fromUid: string, name: string): RawReference {
-  return { fromUid, toType: "globalVariable", toId: name, toName: name, kind: "globalVariable" };
+  return { fromUid, toType: "globalVariable", toId: name.toLowerCase(), toName: name, kind: "globalVariable" };
 }
 
 /** A call of this file's custom function `name` (id `id`). */

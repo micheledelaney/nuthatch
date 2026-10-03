@@ -86,7 +86,7 @@ describe("a layout without its closing tag", () => {
   it("is reported when it's the last one", () => {
     const result = parseDocuments([file(`<Layout id="1" name="L1"></Layout><Layout id="2" name="L2">`)]);
     expect(result.errors).toEqual([
-      "OPEN: layout “L2” has no closing </Layout>, so it and everything after it in the layout catalog were left out.",
+      "OPEN.xml: layout “L2” has no closing </Layout>, so it and everything after it in the layout catalog were left out.",
     ]);
     expect(layoutNames(result)).toEqual(["L1"]);
   });
@@ -95,7 +95,7 @@ describe("a layout without its closing tag", () => {
     const result = parseDocuments([
       file(`<Layout id="1" name="L1"><Layout id="2" name="L2"></Layout><Layout id="3" name="L3"></Layout>`),
     ]);
-    expect(result.errors).toEqual(["OPEN: layout “L1” has no closing </Layout>, so it and the layouts read into it were left out."]);
+    expect(result.errors).toEqual(["OPEN.xml: layout “L1” has no closing </Layout>, so it and the layouts read into it were left out."]);
     expect(layoutNames(result)).toEqual(["L3"]);
   });
 });
@@ -113,13 +113,13 @@ describe("a layout that fails to parse", () => {
   it("is reported and left out with everything it added, and the rest of the file is kept", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = parseDocuments([{ name: "MAIN.xml", content }]);
-    expect(result.errors).toEqual(["MAIN: layout “BAD” could not be read and was skipped — boom"]);
+    expect(result.errors).toEqual(["MAIN.xml: layout “BAD” could not be read and was skipped — boom"]);
     expect(result.objects.filter((o) => o.type === "layout").map((o) => `${o.name} ${o.order}`)).toEqual(["GOOD 0"]);
     expect(result.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid)).toEqual(["F0:layoutObject:2.1"]);
     expect(result.references.filter((r) => r.fromUid.includes(":layout")).map((r) => r.fromUid)).toEqual(["F0:layoutObject:2.1", "F0:layout:2"]);
     expect(result.objects.some((o) => o.type === "script")).toBe(true);
     // The error itself, stack trace and all, goes to the console.
-    expect(logged).toHaveBeenCalledWith("MAIN: layout “BAD” could not be read", expect.objectContaining({ message: "boom" }));
+    expect(logged).toHaveBeenCalledWith("MAIN.xml: layout “BAD” could not be read", expect.objectContaining({ message: "boom" }));
     logged.mockRestore();
   });
 

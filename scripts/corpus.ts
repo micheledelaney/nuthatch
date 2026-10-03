@@ -200,7 +200,9 @@ function compare(beforeDir: string, afterDir: string): void {
     const a = JSON.parse(readFileSync(sa, "utf8"));
     const b = JSON.parse(readFileSync(sb, "utf8"));
     const perf = `parse ${a.parseMs} → ${b.parseMs} ms, retained ${a.retainedMB} → ${b.retainedMB} MB (fresh ${b.freshMB}), peak RSS ${a.parseRssMB} → ${b.parseRssMB} MB`;
-    if (a.sha256 === b.sha256) {
+    // The hash covers the parse result; the model built from it (report card)
+    // can change on its own.
+    if (a.sha256 === b.sha256 && JSON.stringify(a.model) === JSON.stringify(b.model)) {
       console.log(`${group}: identical · ${perf}`);
       continue;
     }

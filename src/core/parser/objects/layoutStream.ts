@@ -108,7 +108,7 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): number
     if (!openTag.endsWith("/>")) {
       const closePos = indexOutsideCdata(catalogXml, closeTag, gt + 1);
       if (closePos === -1) {
-        fp.errors.push(`${fp.file.name}: layout ${layoutLabel(openTag)}has no closing </Layout>, so it and everything after it in the layout catalog were left out.`);
+        fp.errors.push(`${fp.file.source}: layout ${layoutLabel(openTag)}has no closing </Layout>, so it and everything after it in the layout catalog were left out.`);
         break;
       }
       endPos = closePos + closeTag.length;
@@ -131,28 +131,23 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): number
 }
 
 /** processOneLayout, or — when reading the layout throws — nothing but an
- * error for the user: what it had already added is taken back out, so the rest
- * of the file still loads. (processOneLayout adds its uid counts only once it
- * has read the layout.) */
+ * error for the user, so the rest of the file still loads. (processOneLayout
+ * adds nothing to the file until it has read the whole layout.) */
 function readLayout(fp: FileParse, node: unknown, folder: string, order: number): boolean {
   const name = textAttr(node, "name");
   const label = name != null ? `“${name}” ` : "";
   // FileMaker never nests <Layout>: one inside another means the outer one has
   // no closing tag, and the XML parser read the layouts after it into it.
   if (isRecord(node) && node["Layout"] != null) {
-    fp.errors.push(`${fp.file.name}: layout ${label}has no closing </Layout>, so it and the layouts read into it were left out.`);
+    fp.errors.push(`${fp.file.source}: layout ${label}has no closing </Layout>, so it and the layouts read into it were left out.`);
     return false;
   }
-  const objStart = fp.objects.length;
-  const refStart = fp.references.length;
   try {
     return processOneLayout(fp, node, folder, order);
   } catch (err) {
-    fp.objects.length = objStart;
-    fp.references.length = refStart;
-    fp.errors.push(`${fp.file.name}: layout ${label}could not be read and was skipped — ${(err as Error).message}`);
+    fp.errors.push(`${fp.file.source}: layout ${label}could not be read and was skipped — ${(err as Error).message}`);
     // The message alone doesn't say where it failed.
-    console.error(`${fp.file.name}: layout ${label}could not be read`, err);
+    console.error(`${fp.file.source}: layout ${label}could not be read`, err);
     return false;
   }
 }
@@ -177,7 +172,7 @@ function parseLayoutElement(fp: FileParse, layoutXml: string, openTag: string): 
     const wrapper = (xmlParser.parse(`<_L>${layoutXml}</_L>`) as Record<string, unknown>)["_L"];
     return isRecord(wrapper) ? wrapper["Layout"] : undefined;
   } catch (err) {
-    fp.errors.push(`${fp.file.name}: layout ${layoutLabel(openTag)}could not be parsed and was skipped — ${(err as Error).message}`);
+    fp.errors.push(`${fp.file.source}: layout ${layoutLabel(openTag)}could not be parsed and was skipped — ${(err as Error).message}`);
     return null;
   }
 }

@@ -1,3 +1,4 @@
+import type { StepTexts } from "./context";
 import { asArray, attr, children, isRecord } from "./xmlUtils";
 
 /** Script step names the parser treats specially, as FileMaker writes them in
@@ -23,13 +24,17 @@ export function stepNodes(container: unknown): Record<string, unknown>[] {
   return children(container, "Step").filter(isRecord);
 }
 
-/** FileMaker's rendered text for a step, looked up by the hash on its
- * `<DDRREF kind="StepText">` pointer (entities intact). */
-export function renderedStepText(stepTextByHash: ReadonlyMap<string, string>, step: Record<string, unknown>): string | undefined {
+/** FileMaker's rendered text for a step (entities intact): the entry its
+ * `<DDRREF kind="StepText">` pointer names — of several sharing the pointer,
+ * the one with the pointer's hash (see stepTextIndex). */
+export function renderedStepText(stepTexts: StepTexts, step: Record<string, unknown>): string | undefined {
   for (const ref of asArray(step["DDRREF"])) {
     if (!isRecord(ref) || attr(ref, "kind") !== "StepText") continue;
-    const hash = attr(ref, "hash");
-    if (hash != null) return stepTextByHash.get(hash);
+    const hash = attr(ref, "hash") ?? "";
+    const pointer = ref["#text"];
+    const entries = typeof pointer === "string" ? stepTexts.byPointer.get(pointer) : undefined;
+    const own = entries?.length === 1 ? entries[0] : entries?.find((entry) => entry.hash === hash);
+    return own?.text ?? stepTexts.byHash.get(hash);
   }
   return undefined;
 }

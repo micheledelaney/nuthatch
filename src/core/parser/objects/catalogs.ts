@@ -36,8 +36,13 @@ interface CatalogSpec {
   /** References recorded after the scan, from outside the item's own element
    * scan (a separately stored formula, the sets granting a privilege, …). */
   addRefs?: (item: Item, obj: FmObject) => void;
-  /** The text the text-based passes read for the item: its CDATA unless given. */
+  /** The text the text-based passes read for the item, when it isn't the CDATA
+   * of what `scan` reads (of the whole item, for "none"): a formula stored
+   * apart from the item. */
   text?: (item: Item, obj: FmObject) => string;
+  /** `annotate` sets the object's searchable text itself, so the item's full
+   * text isn't built only to be replaced. */
+  annotateSetsText?: true;
 }
 
 /** The catalogs, in the order their objects are emitted. Missing catalogs are
@@ -55,7 +60,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       // behind its "Limited" record access are: they call fields and functions.
       scan: recordAccessCalcs,
     },
-    { catalogKey: "AccountsCatalog", itemTag: "Account", type: "account", annotate: annotateAccount },
+    { catalogKey: "AccountsCatalog", itemTag: "Account", type: "account", annotate: annotateAccount, annotateSetsText: true },
     {
       catalogKey: "TableOccurrenceCatalog",
       itemTag: "TableOccurrence",
@@ -94,7 +99,14 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       scan: "none",
       addRefs: (item, obj) => addExtendedPrivilegeGrants(fp, item, obj),
     },
-    { catalogKey: "FileAccessCatalog", itemTag: "Authorization", type: "fileAccess", annotate: annotateFileAccess, scan: "none" },
+    {
+      catalogKey: "FileAccessCatalog",
+      itemTag: "Authorization",
+      type: "fileAccess",
+      annotate: annotateFileAccess,
+      scan: "none",
+      annotateSetsText: true,
+    },
     {
       catalogKey: "ExternalDataSourceCatalog",
       itemTag: "ExternalDataSource",
@@ -112,9 +124,8 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       // its install condition is the menu's own calc — for the text passes too,
       // or a placeholder in an item's calc would flag the menu as well.
       scan: (item) => item["Conditions"],
-      text: (item) => cdataText(item["Conditions"]),
     },
-    { catalogKey: "ThemeCatalog", itemTag: "Theme", type: "theme", annotate: annotateTheme, scan: "none" },
+    { catalogKey: "ThemeCatalog", itemTag: "Theme", type: "theme", annotate: annotateTheme, scan: "none", annotateSetsText: true },
   ];
 }
 
@@ -122,12 +133,15 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
 export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   for (const spec of catalogSpecs(fp, containerNode)) {
     for (const item of collectCatalogItems(containerNode[spec.catalogKey], spec.itemTag)) {
-      const base = makeObject(fp, item, spec.type);
+      const base = makeObject(fp, item, spec.type, undefined, undefined, spec.annotateSetsText ? "" : undefined);
       if (!base || !isRecord(item)) continue;
       const obj = spec.annotate ? spec.annotate(item, base) : base;
       fp.objects.push(obj);
-      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(item) });
-      if (spec.scan !== "none") scanRefs(fp, spec.scan ? spec.scan(item) : item, obj);
+      // The text passes read what the element scan reads, so a placeholder
+      // in a part the scan leaves out flags nothing.
+      const scanned = typeof spec.scan === "function" ? spec.scan(item) : item;
+      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(scanned) });
+      if (spec.scan !== "none") scanRefs(fp, scanned, obj);
       spec.addRefs?.(item, obj);
     }
   }

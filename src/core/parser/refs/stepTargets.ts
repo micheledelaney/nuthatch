@@ -41,7 +41,7 @@ export function addStepTargetRefs(fp: FileParse, step: Record<string, unknown>, 
   const name = attr(step, "name") ?? "";
   const isPerform = isPerformScriptStep(name);
   if (!isPerform && name !== GO_TO_LAYOUT_STEP && name !== GO_TO_RELATED_RECORD_STEP) return;
-  const rendered = renderedStepText(fp.index.stepTextByHash, step);
+  const rendered = renderedStepText(fp.index.stepTexts, step);
   if (rendered == null) return;
   const text = decodeEntities(rendered);
   const params = step["ParameterValues"];

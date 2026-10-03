@@ -1,19 +1,29 @@
 import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
-import type { FileIndex } from "../context";
+import type { FileIndex, StepTexts } from "../context";
 import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
-import { BUTTON_ACTION_TAGS, calcOf, calculationText, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
+import { calculationText } from "../calcText";
+import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers, stripOuterQuotes } from "./common";
 import { stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
 
-/** Each extracted layout object's own XML element. */
-export type LayoutObjectSources = Map<LayoutObjectInfo, Record<string, unknown>>;
-
-interface DetailContext {
-  index: FileIndex;
-  sources: LayoutObjectSources;
+/** A layout object as read: what it shows, the XML element it was read from,
+ * and the objects nested in it (`info.children` holds their infos). */
+export interface LayoutObjectNode {
+  info: LayoutObjectInfo;
+  element: Record<string, unknown>;
+  children: LayoutObjectNode[];
 }
+
+/** A layout part with its objects as nodes. */
+interface PartNodes extends Omit<LayoutPart, "objects"> {
+  objects: LayoutObjectNode[];
+}
+
+/** A layout's detail with its objects as nodes, before they become objects of
+ * their own (addLayoutObjects). */
+export type LayoutNodes = Omit<LayoutDetail, "parts" | "offLayout"> & { parts: PartNodes[]; offLayout: LayoutObjectNode[] };
 
 /**
  * Extract a layout's visible structure: its parts (Body/Header/…) and the
@@ -22,24 +32,20 @@ interface DetailContext {
  * out so the inspector shows what the layout actually contains, not just which
  * table occurrence it is anchored to.
  */
-export function layoutDetail(node: unknown, index: FileIndex): { detail: LayoutDetail; sources: LayoutObjectSources } | undefined {
+export function layoutDetail(node: unknown, index: FileIndex): LayoutNodes | undefined {
   const partsList = child(node, "PartsList");
   if (!isRecord(node) || !isRecord(partsList)) return undefined;
-  const cx: DetailContext = { index, sources: new Map() };
-  const rawParts = layoutParts(partsList, cx);
+  const rawParts = layoutParts(partsList, index);
   if (rawParts.length === 0) return undefined;
   const declaredWidth = num(attr(node, "width"));
   const { parts, offLayout } = splitOffLayout(rawParts, declaredWidth);
   const { width, height } = canvasSize(parts, declaredWidth);
-  return {
-    detail: { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout },
-    sources: cx.sources,
-  };
+  return { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout };
 }
 
 /** The layout's parts, each with the objects placed on it. */
-function layoutParts(partsList: Record<string, unknown>, cx: DetailContext): LayoutPart[] {
-  const parts: LayoutPart[] = [];
+function layoutParts(partsList: Record<string, unknown>, index: FileIndex): PartNodes[] {
+  const parts: PartNodes[] = [];
   for (const part of children(partsList, "Part")) {
     if (!isRecord(part)) continue;
     // The part's top offset (absolute) and height (size) live on its <Definition>.
@@ -48,7 +54,7 @@ function layoutParts(partsList: Record<string, unknown>, cx: DetailContext): Lay
       type: attr(part, "type") ?? "Part",
       top: num(attr(def, "absolute")),
       height: num(attr(def, "size")),
-      objects: layoutObjects(part["ObjectList"], cx),
+      objects: layoutObjects(part["ObjectList"], index),
     });
   }
   return parts;
@@ -56,13 +62,13 @@ function layoutParts(partsList: Record<string, unknown>, cx: DetailContext): Lay
 
 /** Objects sitting entirely to the right of the layout's real right edge (a
  * common "scratch area" habit), split out so they don't stretch the canvas. */
-function splitOffLayout(rawParts: LayoutPart[], declaredWidth: number): { parts: LayoutPart[]; offLayout: LayoutObjectInfo[] } {
-  const offLayout: LayoutObjectInfo[] = [];
+function splitOffLayout(rawParts: PartNodes[], declaredWidth: number): { parts: PartNodes[]; offLayout: LayoutObjectNode[] } {
+  const offLayout: LayoutObjectNode[] = [];
   const parts = rawParts.map((part) => {
     if (declaredWidth <= 0) return part;
-    const onLayout: LayoutObjectInfo[] = [];
+    const onLayout: LayoutObjectNode[] = [];
     for (const obj of part.objects) {
-      if (obj.bounds && obj.bounds.left >= declaredWidth) offLayout.push(obj);
+      if (obj.info.bounds && obj.info.bounds.left >= declaredWidth) offLayout.push(obj);
       else onLayout.push(obj);
     }
     return { ...part, objects: onLayout };
@@ -72,15 +78,15 @@ function splitOffLayout(rawParts: LayoutPart[], declaredWidth: number): { parts:
 
 /** Canvas = the declared layout box; fall back to the on-layout object extent
  * when the width attribute is missing. */
-function canvasSize(parts: LayoutPart[], declaredWidth: number): { width: number; height: number } {
+function canvasSize(parts: PartNodes[], declaredWidth: number): { width: number; height: number } {
   let width = declaredWidth;
   let height = parts.reduce((h, p) => Math.max(h, p.top + p.height), 0);
   if (width <= 0 || height <= 0) {
     for (const part of parts) {
-      for (const obj of part.objects) {
-        if (!obj.bounds) continue;
-        width = Math.max(width, obj.bounds.right);
-        height = Math.max(height, obj.bounds.bottom);
+      for (const { info } of part.objects) {
+        if (!info.bounds) continue;
+        width = Math.max(width, info.bounds.right);
+        height = Math.max(height, info.bounds.bottom);
       }
     }
   }
@@ -88,17 +94,13 @@ function canvasSize(parts: LayoutPart[], declaredWidth: number): { width: number
 }
 
 /** The objects on one layout part (or inside a portal / tab panel / group …). */
-function layoutObjects(container: unknown, cx: DetailContext): LayoutObjectInfo[] {
+function layoutObjects(container: unknown, index: FileIndex): LayoutObjectNode[] {
   return children(container, "LayoutObject")
     .filter(isRecord)
-    .map((obj) => {
-      const info = layoutObjectInfo(obj, cx);
-      cx.sources.set(info, obj);
-      return info;
-    });
+    .map((obj) => layoutObjectNode(obj, index));
 }
 
-function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo {
+function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): LayoutObjectNode {
   const id = attr(obj, "id");
   const uuid = uuidText(obj);
   const hash = attr(obj, "hash");
@@ -114,10 +116,10 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
   const portal = child(obj, "Portal");
   const portalTo = child(portal, "TableOccurrenceReference");
   const portalOptions = child(portal, "Options");
-  const kids = childObjects(obj, cx);
+  const kids = childObjects(obj, index);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
   const tooltip = calcOf(child(obj, "Tooltip"));
-  return {
+  const shown: LayoutObjectInfo = {
     type,
     name: panelLabel(obj) ?? textAttr(obj, "name") ?? "",
     ...(id ? { id } : {}),
@@ -131,14 +133,15 @@ function layoutObjectInfo(obj: Record<string, unknown>, cx: DetailContext): Layo
     // Portal: the table occurrence it shows and its visible row count.
     ...(isRecord(portalTo) ? { portalTable: textAttr(portalTo, "name") ?? "" } : {}),
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
-    ...(kids ? { children: kids } : {}),
-    ...fieldBinding(obj, cx.index),
-    ...buttonAction(obj, cx.index.stepTextByHash),
+    ...(kids ? { children: kids.map((kid) => kid.info) } : {}),
+    ...fieldBinding(obj, index),
+    ...buttonAction(obj, index.stepTexts),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(tooltip ? { tooltip: stripOuterQuotes(tooltip) } : {}),
     ...conditions(obj),
   };
+  return { info: shown, element: obj, children: kids ?? [] };
 }
 
 /** A Tab Panel / Slide Panel's label, from its <Calculation>. */
@@ -159,23 +162,23 @@ function panelLabel(obj: Record<string, unknown>): string | undefined {
  * element); either way the panel itself is skipped and its objects hang off the
  * button. Popovers, button bars and groups only count when they hold something.
  */
-function childObjects(obj: Record<string, unknown>, cx: DetailContext): LayoutObjectInfo[] | undefined {
+function childObjects(obj: Record<string, unknown>, index: FileIndex): LayoutObjectNode[] | undefined {
   const popover = child(obj, "PopoverButton");
   if (isRecord(popover)) {
     const panels = [
       ...asArray(popover["PopoverPanel"]),
       ...asArray(popover["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
     ];
-    const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], cx) : []));
+    const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], index) : []));
     if (contents.length > 0) return contents;
   }
   for (const tag of ["ButtonBar", "GroupedButton"]) {
     const holder = child(obj, tag);
-    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], cx) : [];
+    const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], index) : [];
     if (members.length > 0) return members;
   }
   const holder = ["SlidePanel", "TabPanel", "SlideControl", "TabControl", "Portal"].map((tag) => child(obj, tag)).find(isRecord);
-  return holder ? layoutObjects(holder["ObjectList"], cx) : undefined;
+  return holder ? layoutObjects(holder["ObjectList"], index) : undefined;
 }
 
 /**
@@ -202,13 +205,13 @@ function fieldBinding(obj: Record<string, unknown>, index: FileIndex): Partial<L
  * action step. */
 function buttonAction(
   obj: Record<string, unknown>,
-  stepTextByHash: ReadonlyMap<string, string>,
+  stepTexts: StepTexts,
 ): Pick<LayoutObjectInfo, "scriptRef" | "actionStep"> {
   const button = BUTTON_ACTION_TAGS.map((tag) => child(obj, tag)).find(isRecord);
   if (!button) return {};
   const scriptRef = extractScriptRef(button["action"]);
   if (scriptRef) return { scriptRef };
-  const actionStep = actionStepOf(button["action"], stepTextByHash);
+  const actionStep = actionStepOf(button["action"], stepTexts);
   return actionStep ? { actionStep } : {};
 }
 
@@ -299,11 +302,11 @@ function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {
 
 /** A button's single action step (<action><Step name="...">), which single-step
  * buttons use instead of a <ScriptReference>. */
-function actionStepOf(action: unknown, stepTextByHash: ReadonlyMap<string, string>): LayoutObjectInfo["actionStep"] {
+function actionStepOf(action: unknown, stepTexts: StepTexts): LayoutObjectInfo["actionStep"] {
   const step = child(asArray(action)[0], "Step");
   if (!isRecord(step)) return undefined;
   const name = textAttr(step, "name") ?? "";
-  return name ? { name, params: stepParams(step, name, stepTextByHash) } : undefined;
+  return name ? { name, params: stepParams(step, name, stepTexts) } : undefined;
 }
 
 /** A styled label's text: the first non-empty <StyledText><Data> under `node`,

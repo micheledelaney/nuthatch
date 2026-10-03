@@ -11,17 +11,17 @@ const BARE_MISSING_TABLE_RE = /<Table Missing>(?!::)/;
 
 /**
  * Broken references that only show in rendered text, for a batch of objects
- * whose structural references are already recorded (in `fp.references`, from
- * `refStart` on): the `<Field Missing>`, bare `<Table Missing>` and
- * `<Function Missing>` placeholders FileMaker leaves where a reference's target
- * was deleted, plus a local occurrence's deleted base table. The batch is a
- * file's catalog objects, or one layout and its objects — so a layout's full
- * text can be compacted as soon as its batch is done.
+ * whose structural references are already recorded (they're `fp.references`):
+ * the `<Field Missing>`, bare `<Table Missing>` and `<Function Missing>`
+ * placeholders FileMaker leaves where a reference's target was deleted, plus a
+ * local occurrence's deleted base table. The batch is a file's catalog objects,
+ * or one layout and its objects — so a layout's full text can be compacted as
+ * soon as its batch is done.
  */
-export function addPlaceholderRefs(fp: FileParse, batch: readonly TextScan[], refStart: number): void {
-  addMissingFieldRefs(fp, batch, refStart);
+export function addPlaceholderRefs(fp: FileParse, batch: readonly TextScan[]): void {
+  addMissingFieldRefs(fp, batch);
   // After addMissingFieldRefs: a step it already flagged isn't flagged again.
-  addMissingTargetTableRefs(fp, batch, refStart);
+  addMissingTargetTableRefs(fp, batch);
   forEachPlaceholderUse(batch, MISSING_FUNCTION_TOKEN, (obj, _text, site) => {
     pushRef(fp.references, brokenRef(obj.uid, "customFunction", MISSING_FUNCTION_TOKEN), site);
   });
@@ -60,15 +60,14 @@ function forEachPlaceholderUse(
   }
 }
 
-/** The sites of every reference from `refStart` on that `matches` — e.g. the
- * sites already carrying a broken field edge. A reference counts for its step
- * (a script's placeholders are checked per step) and for its object as a whole
- * (every other object's are checked once, whatever step inside it — a
- * button's action — the reference came from). */
-function sitesWith(refs: readonly RawReference[], refStart: number, matches: (r: RawReference) => boolean): Set<string> {
+/** The sites of every reference that `matches` — e.g. the sites already
+ * carrying a broken field edge. A reference counts for its step (a script's
+ * placeholders are checked per step) and for its object as a whole (every
+ * other object's are checked once, whatever step inside it — a button's
+ * action — the reference came from). */
+function sitesWith(refs: readonly RawReference[], matches: (r: RawReference) => boolean): Set<string> {
   const sites = new Set<string>();
-  for (let i = refStart; i < refs.length; i++) {
-    const r = refs[i]!;
+  for (const r of refs) {
     if (!matches(r)) continue;
     sites.add(siteKey(r.fromUid, r.fromStep));
     sites.add(siteKey(r.fromUid, undefined));
@@ -106,14 +105,14 @@ function isBlankedDeletedField(r: RawReference, index: FileIndex): boolean {
  * behind an occurrence that was unresolved at export proves nothing and is not
  * counted.
  */
-function addMissingFieldRefs(fp: FileParse, batch: readonly TextScan[], refStart: number): void {
+function addMissingFieldRefs(fp: FileParse, batch: readonly TextScan[]): void {
   // Sometimes FileMaker leaves the `<FieldReference>` element in place with a
   // blank name/UUID instead of omitting it outright — already scanned
   // structurally (blank toName) — while its rendered text *also* carries the
   // "<Field Missing>" placeholder. Without this check, that single dangling
   // field would be counted and displayed twice. A blank name behind an
   // unavailable file is no such field: it doesn't hide a placeholder.
-  const alreadyBroken = sitesWith(fp.references, refStart, (r) => isBlankedDeletedField(r, fp.index));
+  const alreadyBroken = sitesWith(fp.references, (r) => isBlankedDeletedField(r, fp.index));
   forEachPlaceholderUse(batch, MISSING_FIELD_TOKEN, (obj, text, site) => {
     if (alreadyBroken.has(siteKey(obj.uid, site.stepIndex))) return;
     const deleted = deletedFieldVia(text, fp.index);
@@ -154,13 +153,9 @@ function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } |
  * a portal, to a field otherwise. Skips steps already carrying a broken field
  * edge, and a portal whose own scan recorded its dead occurrence (id -1).
  */
-function addMissingTargetTableRefs(fp: FileParse, batch: readonly TextScan[], refStart: number): void {
-  const alreadyBroken = sitesWith(
-    fp.references,
-    refStart,
-    (r) => (r.toType === "field" && r.forceBroken === true) || isBlankedDeletedField(r, fp.index),
-  );
-  const deadOccurrence = sitesWith(fp.references, refStart, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
+function addMissingTargetTableRefs(fp: FileParse, batch: readonly TextScan[]): void {
+  const alreadyBroken = sitesWith(fp.references, (r) => (r.toType === "field" && r.forceBroken === true) || isBlankedDeletedField(r, fp.index));
+  const deadOccurrence = sitesWith(fp.references, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
   forEachPlaceholderUse(batch, MISSING_TABLE_TOKEN, (obj, text, site) => {
     const key = siteKey(obj.uid, site.stepIndex);
     if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(key)) return;

@@ -7,7 +7,8 @@ import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { activeFieldNode, isAutoEnterOptionActive, isValidationOptionActive } from "../refs/activeOptions";
 import { makeObject } from "./catalogItems";
-import { calcOf, calculationText, qualifiedField } from "./common";
+import { calculationText } from "../calcText";
+import { calcOf, qualifiedField } from "./common";
 
 /**
  * Tables come from BaseTableCatalog; their fields live under a top-level
@@ -23,9 +24,15 @@ export function parseTablesAndFields(fp: FileParse, containerNode: Record<string
     scans.push({ obj: tableObj, text: cdataText(table) });
     tableUidById.set(tableObj.id, tableObj.uid);
   }
+  let orphans = 0;
   for (const catalog of fieldCatalogs(containerNode)) {
     const tableUid = tableUidById.get(catalog.tableId);
     if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId, scans);
+    else orphans += collectCatalogItems(catalog.node, "Field").length;
+  }
+  if (orphans > 0) {
+    const what = orphans === 1 ? "1 field of a table that isn't in its table catalog was" : `${orphans} fields of tables that aren't in its table catalog were`;
+    fp.errors.push(`${fp.file.source}: ${what} left out.`);
   }
 }
 
@@ -37,10 +44,11 @@ function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tab
     if (!base || !isRecord(field)) continue;
     const fieldObj = annotateField(field, base, fp.index);
     fp.objects.push(fieldObj);
-    // The element scan skips disabled auto-enter / validation calcs; the
-    // placeholder passes (which read text, not elements) must skip them too.
-    scans.push({ obj: fieldObj, text: cdataText(activeFieldNode(field)) });
-    scanRefs(fp, field, fieldObj);
+    // Without its switched-off auto-enter / validation calcs, for the element
+    // scan and the placeholder passes (which read text, not elements) alike.
+    const active = activeFieldNode(field);
+    scans.push({ obj: fieldObj, text: cdataText(active) });
+    scanRefs(fp, active, fieldObj);
   }
 }
 

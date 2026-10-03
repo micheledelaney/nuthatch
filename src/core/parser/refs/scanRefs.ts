@@ -5,10 +5,8 @@ import { decodeEntities } from "../entities";
 import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
 import { ownValue } from "../ownValue";
 import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
-import { chunkListMatchesText, quotedGlobalVariables } from "../calcText";
-import { calculationText } from "../objects/common";
+import { calculationText, chunkListMatchesText, quotedGlobalVariables } from "../calcText";
 import { stepNodes } from "../steps";
-import { activeAutoEnter, activeValidation } from "./activeOptions";
 import { scanCalcTextRefs } from "./calcTextRefs";
 import { addStepTargetRefs } from "./stepTargets";
 import { brokenRef, customFunctionRef, globalVariableRef, pushRef, type RefOwner, type ScanContext } from "./refBuilders";
@@ -56,12 +54,6 @@ function scanSpecialElements(
       // (and a script step's index carries through `ctx`). Guard against
       // nested pointers.
       if (!ctx.inChunkList) followChunkLists(fp, node, value, owner, ctx);
-      return true;
-    case "AutoEnter":
-      for (const el of asArray(value)) scanRefs(fp, activeAutoEnter(el), owner, ctx);
-      return true;
-    case "Validation":
-      for (const el of asArray(value)) scanRefs(fp, activeValidation(el), owner, ctx);
       return true;
     case "Chunk":
       scanChunks(fp, value, owner, ctx);

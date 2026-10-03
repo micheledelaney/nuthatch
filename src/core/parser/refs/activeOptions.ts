@@ -26,7 +26,7 @@ export function isValidationOptionActive(option: unknown): boolean {
 
 /** An <AutoEnter> without its switched-off calc / lookup (the same node when
  * nothing is dropped). */
-export function activeAutoEnter(node: unknown): unknown {
+function activeAutoEnter(node: unknown): unknown {
   if (!isRecord(node)) return node;
   const dropCalc = node["Calculated"] != null && !isAutoEnterOptionActive(node, "Calculated");
   const dropLookup = node["Looked_up"] != null && !isAutoEnterOptionActive(node, "Looked_up");
@@ -37,7 +37,7 @@ export function activeAutoEnter(node: unknown): unknown {
 
 /** A <Validation> without a validation-by-calculation or custom-message
  * calculation that's switched off (the same node when neither is). */
-export function activeValidation(node: unknown): unknown {
+function activeValidation(node: unknown): unknown {
   if (!isRecord(node)) return node;
   return ["Calculated", "MessageCalc"].reduce(
     (active, key) => (active[key] != null && !isValidationOptionActive(asArray(active[key])[0]) ? withoutKey(active, key) : active),

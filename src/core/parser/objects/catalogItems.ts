@@ -9,7 +9,8 @@ import { objectUid } from "../uid";
  * `idNamespace` prefixes the id where ids only repeat per parent (a field's
  * table), keeping uids globally unique. `text`, when given, stands in for the
  * searchable text — for an object whose text is set once it's complete, so
- * the item's full text isn't built only to be replaced (a layout's).
+ * the item's full text isn't built only to be replaced (a layout's). An item
+ * without an id is counted in `fp.withoutId`, for the user to hear of.
  */
 export function makeObject(
   fp: FileParse,
@@ -20,7 +21,10 @@ export function makeObject(
   text?: string,
 ): FmObject | null {
   const id = attr(node, "id");
-  if (id == null) return null;
+  if (id == null) {
+    fp.withoutId.set(type, (fp.withoutId.get(type) ?? 0) + 1);
+    return null;
+  }
   const uid = objectUid(fp.file.uid, type, idNamespace ? `${idNamespace}.${id}` : id);
   return newObject(fp.file, {
     uid,

@@ -1,4 +1,4 @@
-import type { FmFile, FmObject, RawReference } from "@/types/ddr";
+import type { FmFile, FmObject, ObjectType, RawReference } from "@/types/ddr";
 import { asArray, attr, child, isElementKey, isRecord, textAttr } from "./xmlUtils";
 import { makeNameIndex, type NameIndex } from "./calcText";
 import { collectCatalogItems, fieldCatalogs } from "./catalogWalk";
@@ -22,6 +22,9 @@ export interface FileParse {
    * occurrence keeps its clean uid and every later one gets a stable `#N`
    * suffix, so distinct exported objects never collapse onto one uid. */
   readonly layoutObjectUidCounts: Map<string, number>;
+  /** How many catalog items of each type had no `id`, so became no object
+   * (see makeObject); reported once the file is read. */
+  readonly withoutId: Map<ObjectType, number>;
   readonly objects: FmObject[];
   readonly references: RawReference[];
   /** Shared with the whole parse: problems worth telling the user about. */
@@ -30,10 +33,11 @@ export interface FileParse {
 
 /** An object of a batch the text-based passes read (see addTextDerivedRefs),
  * with the text they read for it: the CDATA of what its element scan read — a
- * field's in-effect calcs only (the element scan skips disabled auto-enter /
- * validation calcs), a layout's or layout object's own element (what each shows
- * and uses itself) after a layout object's listed terms. Not its search `text`,
- * which can be empty (an unlabeled button) or hold decoded attribute values. */
+ * field without its switched-off auto-enter / validation calcs, a catalog
+ * item's scanned part, a layout's or layout object's own element (what each
+ * shows and uses itself) after a layout object's listed terms. Not its search
+ * `text`, which can be empty (an unlabeled button) or hold decoded attribute
+ * values. */
 export interface TextScan {
   obj: FmObject;
   text: string;
@@ -50,9 +54,9 @@ export interface FileIndex {
   cfByName: Map<string, string>;
   /** Longest-match index over the custom-function names (text fallback). */
   cfIndex: NameIndex;
-  /** StepText hash → FileMaker's rendered step text, for steps whose target is
-   * only identifiable from that text (a deleted script shows as `<unknown>`). */
-  stepTextByHash: Map<string, string>;
+  /** FileMaker's rendered step texts, for steps whose target is only
+   * identifiable from that text (a deleted script shows as `<unknown>`). */
+  stepTexts: StepTexts;
   /** Table occurrences by name (text fallback resolves `TO::Field` through it). */
   toByName: Map<string, OccurrenceInfo>;
   /** Table occurrences by id (a calc's context occurrence → its base table). */
@@ -71,6 +75,15 @@ export interface OccurrenceInfo extends OccurrenceSource {
   id: string;
 }
 
+/** FileMaker's rendered text for each script step (see stepTextIndex). */
+export interface StepTexts {
+  /** pointer → the entries it names, in document order: one per step, or
+   * several for steps that share a pointer (steps without a UUID, FM 22). */
+  byPointer: ReadonlyMap<string, readonly { hash: string; text: string }[]>;
+  /** hash → the text of the last entry with it, for a pointer with no entry. */
+  byHash: ReadonlyMap<string, string>;
+}
+
 /** Build the reference-resolution lookups for a file: every chunk-list pointer's
  * block (the blocks live in the sibling <DDR_INFO>, not in the catalogs), the
  * rendered step texts, and the custom-function, occurrence, field, and data
@@ -87,7 +100,7 @@ export function buildFileIndex(containerNode: Record<string, unknown>, ddrInfo: 
     lists: chunkListBlocks(ddrInfo),
     cfByName,
     cfIndex: makeNameIndex(cfByName.keys()),
-    stepTextByHash: stepTextByHash(ddrInfo),
+    stepTexts: stepTextIndex(ddrInfo),
     toByName,
     toById,
     toNames: [...toByName.keys()],
@@ -129,25 +142,31 @@ function chunkListBlocks(ddrInfo: unknown): Map<string, unknown> {
 
 /**
  * Harvest the pre-rendered script-step text FileMaker writes into
- * <DDR_INFO><Script><ObjectList>: each entry carries `datatype="StepText"` and
- * a `hash` attribute that is the lookup key. All entries use `_` as their tag
- * name, so the hash attribute is the only unique identifier.
+ * <DDR_INFO><Script><ObjectList>: one `<_<pointer> hash datatype="StepText">`
+ * entry per step, named by the pointer its `<DDRREF kind="StepText">` holds.
+ * The hash isn't the step's own: steps whose XML is identical share it though
+ * their text differs (a Perform Script into one file or another that wasn't
+ * open), so it only tells apart the steps that share a pointer.
  */
-function stepTextByHash(ddrInfo: unknown): Map<string, string> {
-  const out = new Map<string, string>();
+function stepTextIndex(ddrInfo: unknown): StepTexts {
+  const byPointer = new Map<string, { hash: string; text: string }[]>();
+  const byHash = new Map<string, string>();
   const list = child(child(ddrInfo, "Script"), "ObjectList");
-  if (!isRecord(list)) return out;
+  if (!isRecord(list)) return { byPointer, byHash };
   for (const [key, value] of Object.entries(list)) {
     if (!isElementKey(key)) continue;
     for (const el of asArray(value)) {
-      if (!isRecord(el)) continue;
-      if (attr(el, "datatype") !== "StepText") continue;
-      const hash = attr(el, "hash");
+      if (!isRecord(el) || attr(el, "datatype") !== "StepText") continue;
+      const hash = attr(el, "hash") ?? "";
       const raw = el["#text"];
-      if (hash) out.set(hash, typeof raw === "string" ? raw : "");
+      const entry = { hash, text: typeof raw === "string" ? raw : "" };
+      const entries = byPointer.get(key);
+      if (entries) entries.push(entry);
+      else byPointer.set(key, [entry]);
+      if (hash) byHash.set(hash, entry.text);
     }
   }
-  return out;
+  return { byPointer, byHash };
 }
 
 /** custom-function name → id (first wins). */

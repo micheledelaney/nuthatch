@@ -99,7 +99,7 @@ describe("layout objects record what they use", () => {
   });
 
   it("counts each merge-variable use once, not again for its layout object", () => {
-    expect(object(result, "F0:globalVariable:$$X").attributes.occurrences).toBe("2");
+    expect(object(result, "F0:globalVariable:$$x").attributes.occurrences).toBe("2");
   });
 
   it("flags a deleted field in a portal's filter on the portal, not only on its layout", () => {
@@ -497,6 +497,30 @@ describe("what gets parsed", () => {
     );
     expect(object(result, "F0:script:2").order).toBe(1);
     expect(object(result, "F0:layout:2").order).toBe(1);
+    expect(result.errors).toEqual(["MAIN.xml: 1 script without an id was left out.", "MAIN.xml: 1 layout without an id was left out."]);
+  });
+
+  it("reports fields and steps left out because their table or script isn't in its catalog", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>
+          <BaseTableCatalog><BaseTable id="1" name="T"></BaseTable></BaseTableCatalog>
+          <FieldsForTables>
+            <FieldCatalog><BaseTableReference id="1" name="T"></BaseTableReference><ObjectList><Field id="1" name="a"></Field></ObjectList></FieldCatalog>
+            <FieldCatalog><BaseTableReference id="9" name="Gone"></BaseTableReference>
+              <ObjectList><Field id="1" name="a"></Field><Field id="2" name="b"></Field></ObjectList>
+            </FieldCatalog>
+          </FieldsForTables>
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="7" name="Gone"></ScriptReference><ObjectList><Step id="1" name="Beep"></Step></ObjectList></Script></StepsForScripts>
+        </AddAction>`,
+      ),
+    );
+    expect(result.errors).toEqual([
+      "MAIN.xml: 2 fields of tables that aren't in its table catalog were left out.",
+      "MAIN.xml: the steps of 1 script that isn't in its script catalog were left out.",
+    ]);
   });
 
   it("decodes an object's search text, without reading a placeholder name as a broken use", () => {
@@ -862,5 +886,83 @@ describe("the file's own triggers", () => {
         `<DDR_INFO></DDR_INFO></FMSaveAsXML>`,
     });
     expect(forcedFrom(result, "F0:file:F0")).toEqual(["field <Field Missing> via 1"]);
+  });
+});
+
+describe("rendered step text", () => {
+  // Steps whose XML is identical share a hash, though their text differs —
+  // here, calls into two files that weren't open at export. In FM 22, steps
+  // without a UUID also share a pointer; their hash tells them apart.
+  const step = (pointer: string, hash: string): string =>
+    `<Step id="1" name="Perform Script" enable="True"><DDRREF kind="StepText" hash="${hash}">${pointer}</DDRREF>` +
+    `<ParameterValues membercount="1"><Parameter type="List"><List name="From list" value="1"></List></Parameter></ParameterValues></Step>`;
+  const stepText = (pointer: string, hash: string, file: string): string =>
+    `<${pointer} hash="${hash}" datatype="StepText">Perform Script [ &lt;unknown&gt; from file: “${file}” (file not open) ]</${pointer}>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction><ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+        <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference>
+          <ObjectList>${step("_P1", "H")}${step("_P2", "H")}${step("__0", "H3")}${step("__0", "H4")}</ObjectList>
+        </Script></StepsForScripts></AddAction>`,
+      `<Script><ObjectList>${stepText("_P1", "H", "A")}${stepText("_P2", "H", "B")}${stepText("__0", "H3", "C")}${stepText("__0", "H4", "D")}</ObjectList></Script>`,
+    ),
+  );
+
+  it("is each step's own, though steps share a hash or a pointer", () => {
+    const calls = result.references.filter((r) => r.fromUid === "F0:script:1").map((r) => `step ${r.fromStep} → ${r.toFileName}`);
+    expect(calls).toEqual(["step 1 → A", "step 2 → B", "step 3 → C", "step 4 → D"]);
+    const detail = object(result, "F0:script:1").detail;
+    const params = detail?.kind === "script" ? detail.steps.map((s) => s.params) : [];
+    expect(params).toEqual(["A", "B", "C", "D"].map((file) => `[ <unknown> from file: “${file}” (file not open) ]`));
+  });
+});
+
+describe("global variables", () => {
+  const setVariable = (name: string): string =>
+    `<Step id="1" name="Set Variable" enable="True"><ParameterValues><Parameter type="Variable"><Name value="${name}"></Name></Parameter></ParameterValues></Step>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction><ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+        <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference>
+          <ObjectList>${setVariable("$$Count")}${setVariable("$$count")}${setVariable("$$count")}</ObjectList>
+        </Script></StepsForScripts></AddAction>`,
+    ),
+  );
+
+  it("are one variable whatever the case of their name, named by its most used spelling", () => {
+    const globals = result.objects.filter((o) => o.type === "globalVariable");
+    expect(globals.map((o) => `${o.uid} ${o.name} ${o.attributes.occurrences}`)).toEqual(["F0:globalVariable:$$count $$count 3"]);
+    expect(globals[0]!.text).toBe("$$Count $$count");
+    // Each use keeps its own spelling.
+    expect(result.references.filter((r) => r.toType === "globalVariable").map((r) => `${r.toId} ${r.toName}`)).toEqual([
+      "$$count $$Count",
+      "$$count $$count",
+      "$$count $$count",
+    ]);
+  });
+});
+
+describe("script step text in another language", () => {
+  const exportWith = (render: (i: number) => string): { name: string; content: string } => {
+    const indexes = [...Array(10).keys()];
+    return doc(
+      "MAIN",
+      `<AddAction><ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+        <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${indexes
+          .map((i) => `<Step id="1" name="Go to Layout" enable="True"><DDRREF kind="StepText" hash="H${i}">_S${i}</DDRREF></Step>`)
+          .join("")}</ObjectList></Script></StepsForScripts></AddAction>`,
+      `<Script><ObjectList>${indexes.map((i) => `<_S${i} hash="H${i}" datatype="StepText">${render(i)}</_S${i}>`).join("")}</ObjectList></Script>`,
+    );
+  };
+
+  it("is reported: what only that text shows can't be read", () => {
+    const result = parse(exportWith((i) => `Gehe zu Layout [ “L${i}” ]`));
+    expect(result.errors).toEqual([expect.stringContaining("MAIN.xml: its script steps are written in a language other than English")]);
+  });
+
+  it("isn't reported in English", () => {
+    expect(parse(exportWith((i) => `Go to Layout [ “L${i}” ]`)).errors).toEqual([]);
   });
 });

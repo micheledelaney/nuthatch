@@ -70,8 +70,7 @@ interface ExportOptions {
 }
 
 function exportAi(paths: string[], options: ExportOptions): void {
-  const docs = paths.map((path) => ({ name: basename(path), content: decodeFile(readBuffer(path)) }));
-  const result = parseDocuments(docs);
+  const result = parseDocuments(readEach(paths));
   for (const error of result.errors) console.error(`warning: ${error}`);
 
   const now = Date.now();
@@ -88,6 +87,12 @@ function exportAi(paths: string[], options: ExportOptions): void {
 
   console.log(`Exported ${result.objects.length} objects and ${result.references.length} references to ${target}`);
   console.log(`Add "FileMaker analysis data is in ${AI_EXPORT_FOLDER}/ — read ${AI_EXPORT_FOLDER}/README.md first." to the project's CLAUDE.md or AGENTS.md so AI assistants find it.`);
+}
+
+/** Each file decoded only when the parser reaches it, so the decoded texts
+ * aren't all held at once (nor kept while the export is built). */
+function* readEach(paths: string[]): Generator<{ name: string; content: string }> {
+  for (const path of paths) yield { name: basename(path), content: decodeFile(readBuffer(path)) };
 }
 
 /** Read a file as a standalone ArrayBuffer (a Node Buffer may be a view into a shared pool). */

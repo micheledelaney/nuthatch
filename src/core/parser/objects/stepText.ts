@@ -1,17 +1,18 @@
 import type { ScriptStep } from "@/types/ddr";
+import type { StepTexts } from "../context";
 import { INSERT_TEXT_STEP, renderedStepText, stepNodes } from "../steps";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 import { charForCode, decodeEntities } from "../entities";
 
 /** Build the ordered step list shown in a script's inspector. */
-export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap<string, string>): ScriptStep[] {
+export function scriptSteps(stepsContainer: unknown, stepTexts: StepTexts): ScriptStep[] {
   return stepNodes(stepsContainer).map((step, i) => {
     const name = textAttr(step, "name") ?? "(step)";
     return {
       index: i + 1,
       name,
       enabled: (attr(step, "enable") ?? "True") !== "False",
-      params: stepParams(step, name, stepTextByHash),
+      params: stepParams(step, name, stepTexts),
     };
   });
 }
@@ -25,8 +26,8 @@ export function scriptSteps(stepsContainer: unknown, stepTextByHash: ReadonlyMap
  * field mappings, or between a multi-bracket step's bracket groups) are kept
  * as newlines so the rendered step preserves FileMaker's layout.
  */
-export function stepParams(step: Record<string, unknown>, name: string, stepTextByHash: ReadonlyMap<string, string>): string {
-  const raw = renderedStepText(stepTextByHash, step);
+export function stepParams(step: Record<string, unknown>, name: string, stepTexts: StepTexts): string {
+  const raw = renderedStepText(stepTexts, step);
   if (raw == null) return "";
   // Normalise the raw StepText into just the bracketed parameters:
   //   1. CR/LF entities → real newlines (decodeEntities would otherwise collapse
@@ -42,8 +43,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
   //      `Go to Related Record [ … ]\n[ Show only related records ]` render
   //      on one line. Newlines INSIDE brackets (Import/Export's per-mapping
   //      layout) survive — the depth tracker only flattens at depth 0.
-  const decoded = decodeEntities(raw, true).trim();
-  const undisabled = decoded.replace(/^\/\/\s*/, "");
+  const undisabled = renderedStepBody(raw);
   const stripped = name.startsWith("#")
     ? undisabled.replace(/^#\s*/, "")
     : undisabled.startsWith(name)
@@ -57,6 +57,21 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
     if (text) return base ? `${base} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
   }
   return base;
+}
+
+/** Whether a step's rendered text starts with its name (`#`, for a comment),
+ * as an English FileMaker writes it; undefined when it has none (an empty
+ * comment line renders as nothing at all). */
+export function stepTextNamesStep(step: Record<string, unknown>, name: string, stepTexts: StepTexts): boolean | undefined {
+  const raw = renderedStepText(stepTexts, step);
+  const body = raw == null ? "" : renderedStepBody(raw);
+  return body ? body.startsWith(name.startsWith("#") ? "#" : name) : undefined;
+}
+
+/** Rendered step text decoded, with CR/LF as newlines, and without the `// `
+ * FileMaker puts before a disabled step's (steps 1–3 of stepParams). */
+function renderedStepBody(raw: string): string {
+  return decodeEntities(raw, true).trim().replace(/^\/\/\s*/, "");
 }
 
 /** Decode FileMaker's {{charN}} attribute encoding to the actual character. */

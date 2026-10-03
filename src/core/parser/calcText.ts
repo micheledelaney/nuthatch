@@ -1,6 +1,17 @@
-import { child, children, isRecord, textAttr } from "./xmlUtils";
+import { child, children, displayText, isRecord, ownText, textAttr } from "./xmlUtils";
 import { decodeEntities } from "./entities";
 import { isNameChar } from "@/core/identifiers";
+
+/** Calculation text from a <Calculation> node. The formula lives in its <Text>,
+ * or in a nested <Calculation> (a step parameter's `<Calculation datatype…>`
+ * wraps the calc itself); FM 21 sometimes writes it as the node's own CDATA.
+ * Not entity-decoded: see decodeEntities' policy. */
+export function calculationText(calc: unknown): string {
+  if (!isRecord(calc)) return ownText(calc).trim();
+  if (calc["Text"] != null) return displayText(calc["Text"]);
+  if (calc["Calculation"] != null) return calculationText(child(calc, "Calculation"));
+  return ownText(calc).trim();
+}
 
 /**
  * Helpers for a calculation's own text, used when its DDR_INFO chunk list can't

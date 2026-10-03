@@ -8,8 +8,6 @@ import type {
 } from "@/types/ddr";
 import { OBJECT_TYPE_META } from "@/types/ddr";
 
-const GLOBAL_VAR_RE = /\$\$[A-Za-z0-9_]+/g;
-
 /** Compute the report-card metrics for the solution. */
 export function buildReportCard(
   parsed: ParseResult,
@@ -32,7 +30,8 @@ export function buildReportCard(
     (o) => o.type === "field" && o.attributes.unstored === "Yes" && (o.relationshipDepth ?? 0) >= 2,
   ).length;
 
-  const globalVariableCount = countGlobalVariables(parsed.objects);
+  // The parser's global-variable objects: one per name per file, whatever its case.
+  const globalVariableCount = countsByType.globalVariable;
 
   const globalFieldCount = parsed.objects.filter(
     (o) => o.type === "field" && o.attributes.global === "Yes",
@@ -59,15 +58,6 @@ export function buildReportCard(
   };
   reportCard.riskFlags = deriveRiskFlags(reportCard);
   return reportCard;
-}
-
-function countGlobalVariables(objects: FmObject[]): number {
-  const names = new Set<string>();
-  for (const obj of objects) {
-    const matches = obj.text.match(GLOBAL_VAR_RE);
-    if (matches) for (const m of matches) names.add(m);
-  }
-  return names.size;
 }
 
 function deriveRiskFlags(card: ReportCard): RiskFlag[] {

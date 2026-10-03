@@ -9,16 +9,15 @@ import { addTextDerivedRefs } from "../refs/textRefs";
 import { makeObject, newObject, placeInCatalog } from "./catalogItems";
 import { stripOuterQuotes } from "./common";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
-import { layoutDetail, type LayoutDetail, type LayoutObjectSources } from "./layoutDetail";
+import { layoutDetail, type LayoutDetail, type LayoutNodes, type LayoutObjectNode } from "./layoutDetail";
 
-/** What emitting one layout's objects needs: each object's own XML element (to
- * scan it), the elements of the objects that are listed on their own (which
- * every other element's own scan leaves out), and the uid each element ends up
- * with (for the FM 22 deferred button targets, which name the element) — and
- * collects the objects' text for the text-based passes, in emission order. */
+/** What emitting one layout's objects needs: the elements of the objects that
+ * are listed on their own (which every other element's own scan leaves out),
+ * and the uid each element ends up with (for the FM 22 deferred button
+ * targets, which name the element) — and collects the objects' text for the
+ * text-based passes, in emission order. */
 interface LayoutObjectsContext {
   fp: FileParse;
-  sources: LayoutObjectSources;
   listedElements: ReadonlySet<unknown>;
   uidOfElement: Map<Record<string, unknown>, string>;
   /** The layout's own uid counts (see FileParse.layoutObjectUidCounts), added
@@ -36,22 +35,25 @@ interface LayoutObjectsContext {
  * the rest of its element does — and, since a layout lists everything on it,
  * a copy of every one of its objects' references, made once they're complete.
  * The layout is stored with a compact term list as its text
- * (compactLayoutText), not the full text of every object on it.
+ * (compactLayoutText), not the full text of every object on it. Nothing is
+ * added to the file until the whole layout is read, so one that fails to read
+ * leaves the file as it was.
  */
 export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): boolean {
   // Its text is set at the end: the full text of a layout with parts would
   // only be replaced by its compact text.
   const base = makeObject(fp, layout, "layout", undefined, undefined, "");
   if (!base) return false;
-  const objStart = fp.objects.length;
-  const refStart = fp.references.length;
+  // The layout's own objects and references, added to the file's at the end.
+  const lp: FileParse = { ...fp, objects: [], references: [] };
   const uidCounts = new Map<string, number>();
-  const { layout: full, scans } = buildLayout(fp, layout, placeInCatalog(base, order, folder), uidCounts);
-  const layoutObjects = fp.objects.slice(objStart);
-  addTextDerivedRefs(fp, scans, refStart);
+  const { layout: full, scans } = buildLayout(lp, layout, placeInCatalog(base, order, folder), uidCounts);
+  addTextDerivedRefs(lp, scans);
   // After the text passes, so the layout's placeholder check weighs only its own references.
-  addObjectRefsToLayout(fp, layoutObjects, full.uid, refStart);
-  fp.objects.push({ ...full, text: full.detail?.kind === "layout" ? compactLayoutText(full, full.detail) : displayText(layout) });
+  addObjectRefsToLayout(lp, full.uid);
+  lp.objects.push({ ...full, text: full.detail?.kind === "layout" ? compactLayoutText(full, full.detail) : displayText(layout) });
+  for (const obj of lp.objects) fp.objects.push(obj);
+  for (const ref of lp.references) fp.references.push(ref);
   for (const [uid, count] of uidCounts) fp.layoutObjectUidCounts.set(uid, count);
   return true;
 }
@@ -67,28 +69,27 @@ function buildLayout(
   if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout) }] };
   const annotated = annotateLayout(layout, placed);
   const extracted = layoutDetail(layout, fp.index);
-  const sources = extracted?.sources ?? new Map();
-  const listedElements = new Set([...sources].filter(([lo]) => isListed(lo)).map(([, element]) => element));
-  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map(), uidCounts, scans: [] };
-  const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
+  const listedElements = extracted ? listedElementsOf(extracted) : new Set<unknown>();
+  const cx: LayoutObjectsContext = { fp, listedElements, uidOfElement: new Map(), uidCounts, scans: [] };
+  const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted, annotated) } : annotated;
   // Its own settings, triggers and parts, and any object not listed on its own.
   cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(layout, listedElements), obj) });
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return { layout: obj, scans: cx.scans };
 }
 
-/** Copy every reference the layout's objects recorded (from `refStart` on)
+/** Copy every reference the layout's objects (`lp.objects`, so far) recorded
  * onto the layout itself — without the step it came from: that's a step of
  * one button's action, which the object's own reference keeps, and on the
  * layout it would keep a use apart from the same use by another object. */
-function addObjectRefsToLayout(fp: FileParse, layoutObjects: readonly FmObject[], layoutUid: string, refStart: number): void {
-  const objectUids = new Set(layoutObjects.map((o) => o.uid));
-  const end = fp.references.length;
-  for (let i = refStart; i < end; i++) {
-    const ref = fp.references[i]!;
+function addObjectRefsToLayout(lp: FileParse, layoutUid: string): void {
+  const objectUids = new Set(lp.objects.map((o) => o.uid));
+  const end = lp.references.length;
+  for (let i = 0; i < end; i++) {
+    const ref = lp.references[i]!;
     if (!objectUids.has(ref.fromUid)) continue;
     const { fromStep: _fromStep, ...use } = ref;
-    fp.references.push({ ...use, fromUid: layoutUid });
+    lp.references.push({ ...use, fromUid: layoutUid });
   }
 }
 
@@ -123,50 +124,67 @@ function annotateLayout(node: unknown, obj: FmObject): FmObject {
 /** Emit the layout's objects (and their references), returning its detail with
  * each object's uid filled in. Every part's objects come first, then the
  * off-layout ones — the order the duplicate-uid suffixes are counted in. */
-function addLayoutObjects(cx: LayoutObjectsContext, detail: LayoutDetail, layout: FmObject): LayoutDetail {
+function addLayoutObjects(cx: LayoutObjectsContext, detail: LayoutNodes, layout: FmObject): LayoutDetail {
   const parts = detail.parts.map((part) => ({ ...part, objects: addLayoutObjectTree(cx, part.objects, layout.uid, layout.id) }));
   const offLayout = addLayoutObjectTree(cx, detail.offLayout, layout.uid, layout.id);
   return { ...detail, parts, offLayout };
 }
 
-/** Emit layout objects as FmObjects, recursively. `idChain` is the dot-joined
- * `id` of every ancestor from the owning layout down to (but not including)
- * these objects — e.g. `"120.2970"` for objects nested one level inside layout
- * 120's object with id 2970. */
-function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[], parentUid: string, idChain: string): LayoutObjectInfo[] {
+/** The elements of a layout's objects that are listed on their own (see
+ * isListed), at any depth. */
+function listedElementsOf(detail: LayoutNodes): Set<unknown> {
+  const listed = new Set<unknown>();
+  const walk = (nodes: readonly LayoutObjectNode[]): void => {
+    for (const node of nodes) {
+      if (isListed(node.info)) listed.add(node.element);
+      walk(node.children);
+    }
+  };
+  for (const part of detail.parts) walk(part.objects);
+  walk(detail.offLayout);
+  return listed;
+}
+
+/** Emit layout objects as FmObjects, recursively (see addLayoutObject),
+ * returning their detail with each uid filled in. */
+function addLayoutObjectTree(cx: LayoutObjectsContext, nodes: readonly LayoutObjectNode[], parentUid: string, idChain: string): LayoutObjectInfo[] {
+  return nodes.map((node) => addLayoutObject(cx, node, parentUid, idChain));
+}
+
+/** Emit a layout object — and the objects inside it — as FmObjects with their
+ * references, returning its detail with its uid filled in. `idChain` is the
+ * dot-joined `id` of every ancestor from the owning layout down to (but not
+ * including) this object — e.g. `"120.2970"` for an object nested one level
+ * inside layout 120's object with id 2970. */
+function addLayoutObject(cx: LayoutObjectsContext, node: LayoutObjectNode, parentUid: string, idChain: string): LayoutObjectInfo {
   const { fp } = cx;
-  return infos.map((lo) => {
-    if (!isListed(lo)) {
-      // Nothing to list it by — but the objects inside it are still objects.
-      return lo.children?.length ? { ...lo, children: addLayoutObjectTree(cx, lo.children, parentUid, idChain) } : lo;
-    }
-    // FileMaker's numeric `id` is unique among siblings under the same parent — like
-    // a field's id is unique within its table — so namespace by the full ancestor
-    // chain the same way fields are namespaced by table. A single level (layout + own
-    // id) isn't enough: two different parents on the same layout (e.g. two Grouped
-    // Buttons) can each wrap a child that reuses the same id. `UUID` looks globally
-    // unique but isn't reliably so either — duplicating a compound object can leave a
-    // child's UUID identical to its sibling's.
-    const chain = lo.id ? `${idChain}.${lo.id}` : undefined;
-    const withUid: LayoutObjectInfo = { ...lo, uid: uniqueLayoutObjectUid(cx, chain ?? lo.uuid!) };
-    const uid = withUid.uid!;
-    const obj = layoutObjectFmObject(fp, withUid, uid, parentUid);
-    fp.objects.push(obj);
-    const element = cx.sources.get(lo);
-    if (element) {
-      cx.uidOfElement.set(element, uid);
-      // Everything the object itself uses — its field, script, value list,
-      // triggers, and the calcs behind its label, tooltip, hide condition,
-      // conditional formatting, web viewer, and button action — but not what
-      // the listed objects inside it use: each of those reports its own. The
-      // placeholder pass reads the same element, after the listed terms (which
-      // miss the calcs only the element holds: a portal filter, a button step,
-      // a trigger parameter).
-      cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text) });
-    }
-    if (!lo.children || lo.children.length === 0) return withUid;
-    return { ...withUid, children: addLayoutObjectTree(cx, lo.children, uid, chain ?? idChain) };
-  });
+  const { info: lo, element, children } = node;
+  if (!isListed(lo)) {
+    // Nothing to list it by — but the objects inside it are still objects.
+    return children.length ? { ...lo, children: addLayoutObjectTree(cx, children, parentUid, idChain) } : lo;
+  }
+  // FileMaker's numeric `id` is unique among siblings under the same parent — like
+  // a field's id is unique within its table — so namespace by the full ancestor
+  // chain the same way fields are namespaced by table. A single level (layout + own
+  // id) isn't enough: two different parents on the same layout (e.g. two Grouped
+  // Buttons) can each wrap a child that reuses the same id. `UUID` looks globally
+  // unique but isn't reliably so either — duplicating a compound object can leave a
+  // child's UUID identical to its sibling's.
+  const chain = lo.id ? `${idChain}.${lo.id}` : undefined;
+  const withUid: LayoutObjectInfo = { ...lo, uid: uniqueLayoutObjectUid(cx, chain ?? lo.uuid!) };
+  const uid = withUid.uid!;
+  const obj = layoutObjectFmObject(fp, withUid, uid, parentUid);
+  fp.objects.push(obj);
+  cx.uidOfElement.set(element, uid);
+  // Everything the object itself uses — its field, script, value list,
+  // triggers, and the calcs behind its label, tooltip, hide condition,
+  // conditional formatting, web viewer, and button action — but not what
+  // the listed objects inside it use: each of those reports its own. The
+  // placeholder pass reads the same element, after the listed terms (which
+  // miss the calcs only the element holds: a portal filter, a button step,
+  // a trigger parameter).
+  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text) });
+  return children.length ? { ...withUid, children: addLayoutObjectTree(cx, children, uid, chain ?? idChain) } : withUid;
 }
 
 /** Whether a layout object is listed as an object of its own. `uuid` is only
@@ -291,7 +309,8 @@ function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
  * the layout — tens of MB for a dense data-entry layout. The diff never reads it
  * (layouts diff via their structured detail) and per-object search is already
  * served by each layout object's own text, so the only thing lost is free-text
- * search over the raw styled text inside a layout.
+ * search over the raw styled text inside a layout. A text object's content is
+ * left to the object, too: it can run to hundreds of KB.
  */
 function compactLayoutText(layout: FmObject, detail: LayoutDetail): string {
   const terms = new Set<string>();
@@ -299,7 +318,8 @@ function compactLayoutText(layout: FmObject, detail: LayoutDetail): string {
   if (layout.attributes.tableOccurrence) terms.add(layout.attributes.tableOccurrence);
   const walk = (infos: LayoutObjectInfo[]): void => {
     for (const lo of infos) {
-      for (const term of layoutObjectTerms(lo)) terms.add(term);
+      const content = lo.type === "Text" ? lo.info : undefined;
+      for (const term of layoutObjectTerms(lo)) if (term !== content) terms.add(term);
       if (lo.children) walk(lo.children);
     }
   };

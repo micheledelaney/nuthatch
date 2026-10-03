@@ -1,4 +1,5 @@
 import type { FmFile, FmObject, ParseResult, RawReference } from "@/types/ddr";
+import { OBJECT_TYPE_META } from "@/types/ddr";
 import { buildFileIndex, type FileParse, type TextScan } from "./context";
 import { xmlParser } from "./xmlParser";
 import { attr, cdataText, isRecord, textAttr } from "./xmlUtils";
@@ -21,9 +22,10 @@ interface SourceDoc {
 /**
  * Parse one or more FileMaker "Save a Copy as XML" (<FMSaveAsXML>) documents
  * into a flat, serializable model. References are emitted unresolved; buildModel
- * resolves and indexes them.
+ * resolves and indexes them. Each document is read once, in order, so `docs`
+ * can decode it only then (and nothing here keeps it after it's parsed).
  */
-export function parseDocuments(docs: SourceDoc[]): ParseResult {
+export function parseDocuments(docs: Iterable<SourceDoc>): ParseResult {
   const files: FmFile[] = [];
   const objects: FmObject[] = [];
   const references: RawReference[] = [];
@@ -155,7 +157,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   const node = container.node;
   if (!isRecord(node)) {
     // e.g. a <Structure> with several <AddAction> blocks: a shape no sample has.
-    errors.push(`${container.name}: unrecognized <Structure> layout (expected one <AddAction>) — none of its catalogs could be read.`);
+    errors.push(`${container.source}: unrecognized <Structure> layout (expected one <AddAction>) — none of its catalogs could be read.`);
     return { file, objects: [fileObject], references: [], globals: [] };
   }
 
@@ -165,6 +167,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     index: buildFileIndex(node, container.ddrInfo),
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
     layoutObjectUidCounts: new Map(),
+    withoutId: new Map(),
     objects: [fileObject],
     references: [],
     errors,
@@ -179,9 +182,14 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   parseCustomMenuItems(fp, node, scans);
   // Text-derived references for everything so far; each layout gets its own
   // pass (processOneLayout), so its full text can be dropped right after.
-  addTextDerivedRefs(fp, scans, 0);
+  addTextDerivedRefs(fp, scans);
   const nextOrder = layoutCatalog ? parseLayoutsStreaming(fp, layoutCatalog) : 0;
   parseLayoutsInTree(fp, node["LayoutCatalog"], nextOrder);
+  for (const [type, count] of fp.withoutId) {
+    const { label, plural } = OBJECT_TYPE_META[type];
+    const what = count === 1 ? `1 ${label.toLowerCase()} without an id was` : `${count} ${plural.toLowerCase()} without an id were`;
+    errors.push(`${container.source}: ${what} left out.`);
+  }
   return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
 }
 
@@ -196,8 +204,7 @@ function dedupeRefs(refs: RawReference[]): RawReference[] {
   const seen = new Map<string, number>();
   const out: RawReference[] = [];
   for (const r of refs) {
-    // Name-based references share an empty toId, so their name is the identity.
-    const key = `${r.fromUid}|${r.toType}|${r.toId}|${r.kind}|${r.byName ? r.toName : ""}|${r.viaToId ?? ""}|${r.viaBaseTableId ?? ""}|${r.fromStep ?? ""}|${r.toFileName ?? ""}`;
+    const key = refKey(r);
     const at = seen.get(key);
     if (at == null) {
       seen.set(key, out.length);
@@ -207,4 +214,32 @@ function dedupeRefs(refs: RawReference[]): RawReference[] {
     }
   }
   return out;
+}
+
+/** Whether each reference field tells two references apart in dedupeRefs.
+ * Every field is listed, so a new one has to be placed here. */
+const IS_IDENTITY_FIELD: Readonly<Record<keyof RawReference, boolean>> = {
+  fromUid: true,
+  toType: true,
+  toId: true,
+  kind: true,
+  viaToId: true,
+  viaBaseTableId: true,
+  fromStep: true,
+  toFileName: true,
+  // Only a name-based reference's name: its toId is empty (see refKey).
+  toName: false,
+  byName: false,
+  // Of a disabled and an enabled duplicate, the enabled one is kept.
+  disabled: false,
+  // A forced-broken reference has a toId of its own (MISSING_REF_ID).
+  forceBroken: false,
+};
+
+const IDENTITY_FIELDS = (Object.keys(IS_IDENTITY_FIELD) as (keyof RawReference)[]).filter((field) => IS_IDENTITY_FIELD[field]);
+
+/** What makes a reference the same use as another (see dedupeRefs). */
+function refKey(r: RawReference): string {
+  // Name-based references share an empty toId, so their name is the identity.
+  return [...IDENTITY_FIELDS.map((field) => r[field] ?? ""), r.byName ? r.toName : ""].join("|");
 }
