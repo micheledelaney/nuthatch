@@ -711,3 +711,138 @@ describe("name boundaries", () => {
     expect([...occurrencesBeforeMissingField("x + Lager::<Field Missing>", ["Lager"])]).toEqual(["Lager"]);
   });
 });
+
+describe("what a custom menu reports", () => {
+  const install = (calc: string): string => `<Conditions><Install><Calculation><Text><![CDATA[${calc}]]></Text></Calculation></Install></Conditions>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>${TABLE}<CustomMenuCatalog>
+        <CustomMenu id="30" name="M_Item">${install("1")}<MenuItemList>
+          <CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False">${install(`T::<Field Missing> ≠ ""`)}<Command name="Undo" id="49320"></Command></CustomMenuItem>
+        </MenuItemList></CustomMenu>
+        <CustomMenu id="31" name="M_Own">${install(`T::<Field Missing> ≠ ""`)}<MenuItemList></MenuItemList></CustomMenu>
+        <CustomMenu id="32" name="M_Positions"><MenuItemList>
+          <CustomMenuItem isSubMenuItem="False" isSeparatorItem="False"><Command name="Copy" id="57634"></Command></CustomMenuItem>
+          <CustomMenuItem index="0" isSubMenuItem="False" isSeparatorItem="False"><Command name="Paste" id="57637"></Command></CustomMenuItem>
+        </MenuItemList></CustomMenu>
+      </CustomMenuCatalog></AddAction>`,
+    ),
+  );
+
+  it("flags a deleted field in an item's calc on the item, not on its menu", () => {
+    expect(forcedFrom(result, "F0:customMenuItem:30.0")).toEqual(["field <Field Missing> via 1"]);
+    expect(forcedFrom(result, "F0:customMenu:30")).toEqual([]);
+  });
+
+  it("flags a deleted field in the menu's own install condition on the menu", () => {
+    expect(forcedFrom(result, "F0:customMenu:31")).toEqual(["field <Field Missing> via 1"]);
+  });
+
+  it("keeps an item without an index apart from the item whose index is its position", () => {
+    const uids = result.objects.filter((o) => o.parentUid === "F0:customMenu:32").map((o) => `${o.uid} ${o.name}`);
+    expect(uids).toEqual(["F0:customMenuItem:32.pos0 Copy", "F0:customMenuItem:32.0 Paste"]);
+  });
+});
+
+describe("deleted objects in what a field or privilege set lists", () => {
+  const fieldRef = (id: string, name: string): string =>
+    `<FieldReference id="${id}" name="${name}" UUID=""><BaseTableReference id="1" name="T"></BaseTableReference></FieldReference>`;
+  const grants = `<View access="ReadWrite"></View><Edit access="ReadWrite"></Edit><Create access="ReadWrite"></Create><Delete access="ReadWrite"></Delete>`;
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>
+        <BaseTableCatalog><BaseTable id="1" name="T"></BaseTable></BaseTableCatalog>
+        <FieldsForTables><FieldCatalog><BaseTableReference id="1" name="T"></BaseTableReference><ObjectList>
+          <Field id="1" name="a"></Field>
+          <Field id="2" name="s" fieldType="Summary"><SummaryInfo operation="Total">
+            <SummaryField>${fieldRef("1", "a")}</SummaryField><SummaryField>${fieldRef("9", "")}</SummaryField>
+          </SummaryInfo></Field>
+        </ObjectList></FieldCatalog></FieldsForTables>
+        <PrivilegeSetsCatalog><PrivilegeSet id="5" name="PS"><access>
+          <Records Custom="True"><Custom><ObjectList>
+            <Table type="existing"><BaseTableReference id="1" name="T"></BaseTableReference>${grants}<Fields access="Custom">
+              <Field type="existing" access="ReadOnly">${fieldRef("1", "a")}</Field>
+              <Field type="existing" access="ReadOnly">${fieldRef("9", "")}</Field>
+              <Field type="New" access="ReadWrite"></Field>
+            </Fields></Table>
+            <Table type="existing"><BaseTableReference id="7" name="" UUID=""></BaseTableReference>${grants}<Fields access="ReadWrite"></Fields></Table>
+            <Table type="New">${grants}<Fields access="ReadWrite"></Fields></Table>
+          </ObjectList></Custom></Records>
+          <Layouts Custom="True"><Custom><ObjectList>
+            <Layout type="existing" access="ReadWrite" records="ReadWrite"><LayoutReference id="3" name="" UUID=""></LayoutReference></Layout>
+            <Layout type="New" access="ReadOnly" records="ReadOnly"></Layout>
+          </ObjectList></Custom></Layouts>
+        </access></PrivilegeSet></PrivilegeSetsCatalog>
+      </AddAction>`,
+    ),
+  );
+
+  it("reads a privilege set's grant on a deleted object as deleted, not as the new-objects default", () => {
+    const detail = object(result, "F0:privilegeSet:5").detail;
+    if (detail?.kind !== "privilegeSet") throw new Error("no privilege-set detail");
+    expect(detail.tables.map((t) => t.table)).toEqual(["T", "<unknown>", "(new tables)"]);
+    expect(detail.tables[0]!.fields?.map((f) => f.field)).toEqual(["a", "<Field Missing>", "(new fields)"]);
+    expect(detail.layouts?.map((l) => l.name)).toEqual(["<unknown>", "(new layouts)"]);
+  });
+
+  it("lists a summary field's deleted field as missing instead of dropping it", () => {
+    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "summary", operation: "Total of", fields: ["a", "<Field Missing>"] });
+  });
+});
+
+describe("XML names that are also members of every object", () => {
+  // FileMaker never writes these; a crafted export can.
+  const result = parse(
+    doc(
+      "MAIN",
+      `<AddAction>
+        <BaseTableCatalog><BaseTable id="1" name="T &constructor;"></BaseTable></BaseTableCatalog>
+        <TableOccurrenceCatalog>
+          <TableOccurrence id="1" name="T"><BaseTableSourceReference><BaseTableReference id="1" name="T"></BaseTableReference></BaseTableSourceReference></TableOccurrence>
+          <TableOccurrence id="2" name="U"><BaseTableSourceReference><BaseTableReference id="1" name="T"></BaseTableReference></BaseTableSourceReference></TableOccurrence>
+        </TableOccurrenceCatalog>
+        <RelationshipCatalog><Relationship id="1">
+          <LeftTable><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></LeftTable>
+          <RightTable><TableOccurrenceReference id="2" name="U"></TableOccurrenceReference></RightTable>
+          <JoinPredicateList><JoinPredicate type="toString">
+            <LeftField><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></LeftField>
+            <RightField><FieldReference id="1" name="a"><TableOccurrenceReference id="2" name="U"></TableOccurrenceReference></FieldReference></RightField>
+          </JoinPredicate></JoinPredicateList>
+        </Relationship></RelationshipCatalog>
+        <FieldsForTables><FieldCatalog><BaseTableReference id="1" name="T"></BaseTableReference><ObjectList>
+          <Field id="1" name="a"><AutoEnter type="constructor"></AutoEnter><Validation><Strict>toString</Strict></Validation><toString id="1" name="x"></toString></Field>
+          <Field id="2" name="s" fieldType="Summary"><SummaryInfo operation="valueOf">
+            <SummaryField><FieldReference id="1" name="a"><BaseTableReference id="1" name="T"></BaseTableReference></FieldReference></SummaryField>
+          </SummaryInfo></Field>
+        </ObjectList></FieldCatalog></FieldsForTables>
+      </AddAction>`,
+    ),
+  );
+
+  it("reads them as plain names, so the result can still be sent from the parse worker", () => {
+    expect(object(result, "F0:table:1").name).toBe("T &constructor;");
+    expect(object(result, "F0:field:1.1").attributes.autoEnter).toBe("constructor");
+    expect(object(result, "F0:field:1.1").attributes.validation).toContain("Strict data type: toString");
+    expect(object(result, "F0:field:1.2").detail).toMatchObject({ kind: "summary", operation: "Summary of" });
+    expect(object(result, "F0:relationship:1").detail).toMatchObject({ predicates: [{ operator: "toString" }] });
+    expect(result.references.filter((r) => typeof r.toType !== "string")).toEqual([]);
+    expect(() => structuredClone(result)).not.toThrow();
+  });
+});
+
+describe("the file's own triggers", () => {
+  it("flags a deleted field in a trigger's parameter on the file", () => {
+    const result = parse({
+      name: "MAIN.xml",
+      content:
+        `<?xml version="1.0" encoding="UTF-8"?><FMSaveAsXML version="2.2.3.0" Source="22.0.1" File="MAIN.fmp12">` +
+        `<Structure membercount="1"><AddAction>${TABLE}<ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog></AddAction></Structure>` +
+        `<Metadata><AddAction><ScriptTriggers><ScriptTrigger action="OnFirstWindowOpen" id="1"><ScriptReference id="1" name="S">` +
+        `<Calculation><Text><![CDATA[T::<Field Missing>]]></Text></Calculation></ScriptReference></ScriptTrigger></ScriptTriggers></AddAction></Metadata>` +
+        `<DDR_INFO></DDR_INFO></FMSaveAsXML>`,
+    });
+    expect(forcedFrom(result, "F0:file:F0")).toEqual(["field <Field Missing> via 1"]);
+  });
+});

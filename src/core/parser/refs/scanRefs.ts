@@ -3,6 +3,7 @@ import type { FileParse } from "../context";
 import { asArray, attr, child, children, isElementKey, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { FMSAVEAS_REF_TAGS, edgeKind } from "../refTags";
+import { ownValue } from "../ownValue";
 import { PSEUDO_MENU_SETS, UNKNOWN_TARGET, namesCurrentFile } from "../sentinels";
 import { chunkListMatchesText, quotedGlobalVariables } from "../calcText";
 import { calculationText } from "../objects/common";
@@ -134,7 +135,7 @@ function scanElements(
   ctx: ScanContext,
   externalFileName: string | undefined,
 ): void {
-  const targetType = FMSAVEAS_REF_TAGS[key];
+  const targetType = ownValue(FMSAVEAS_REF_TAGS, key);
   for (const el of asArray(value)) {
     if (targetType && isRecord(el)) {
       const ref = elementRef(el, targetType, owner.uid, ctx, externalFileName);

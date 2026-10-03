@@ -1,6 +1,6 @@
 import type { FileParse } from "../context";
 import { xmlParser } from "../xmlParser";
-import { asArray, isRecord, textAttr } from "../xmlUtils";
+import { asArray, detach, isRecord, textAttr } from "../xmlUtils";
 import { decodeEntities } from "../entities";
 import { applyFolderMarker, collectOrderedWithFolders, folderPath } from "../catalogWalk";
 import { processOneLayout } from "./layouts";
@@ -48,8 +48,8 @@ function findLayoutCatalogBounds(xml: string): { start: number; end: number } | 
   const structure = indexOutsideCdata(xml, "<Structure", 0);
   const start = structure === -1 ? -1 : indexOutsideCdata(xml, "<LayoutCatalog", structure);
   if (start === -1) return null;
-  const modifyAction = indexOutsideCdata(xml, "<ModifyAction", structure);
-  if (modifyAction !== -1 && modifyAction < start) return null;
+  // Only a <ModifyAction> before the catalog matters, so the search stops there.
+  if (indexOutsideCdata(xml.slice(0, start), "<ModifyAction", structure) !== -1) return null;
   const openEnd = xml.indexOf(">", start);
   if (openEnd === -1 || xml[openEnd - 1] === "/") return null; // <LayoutCatalog/>: no layouts
   const close = "</LayoutCatalog>";
@@ -99,13 +99,18 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): number
     if (lt === -1) break;
     const gt = catalogXml.indexOf(">", lt);
     if (gt === -1) break;
-    const openTag = catalogXml.slice(lt, gt + 1);
+    // A copy, so the tag and the folder names read from it don't keep the
+    // decoded file alive (see detach).
+    const openTag = detach(catalogXml.slice(lt, gt + 1));
     // A self-closing <Layout …/> is an element too — a folder's closing marker
     // can be one — read as the tree walk reads it (collectOrderedWithFolders).
     let endPos = gt + 1;
     if (!openTag.endsWith("/>")) {
       const closePos = indexOutsideCdata(catalogXml, closeTag, gt + 1);
-      if (closePos === -1) break;
+      if (closePos === -1) {
+        fp.errors.push(`${fp.file.name}: layout ${layoutLabel(openTag)}has no closing </Layout>, so it and everything after it in the layout catalog were left out.`);
+        break;
+      }
       endPos = closePos + closeTag.length;
     }
     pos = endPos;
@@ -127,8 +132,17 @@ export function parseLayoutsStreaming(fp: FileParse, catalogXml: string): number
 
 /** processOneLayout, or — when reading the layout throws — nothing but an
  * error for the user: what it had already added is taken back out, so the rest
- * of the file still loads. */
+ * of the file still loads. (processOneLayout adds its uid counts only once it
+ * has read the layout.) */
 function readLayout(fp: FileParse, node: unknown, folder: string, order: number): boolean {
+  const name = textAttr(node, "name");
+  const label = name != null ? `“${name}” ` : "";
+  // FileMaker never nests <Layout>: one inside another means the outer one has
+  // no closing tag, and the XML parser read the layouts after it into it.
+  if (isRecord(node) && node["Layout"] != null) {
+    fp.errors.push(`${fp.file.name}: layout ${label}has no closing </Layout>, so it and the layouts read into it were left out.`);
+    return false;
+  }
   const objStart = fp.objects.length;
   const refStart = fp.references.length;
   try {
@@ -136,8 +150,9 @@ function readLayout(fp: FileParse, node: unknown, folder: string, order: number)
   } catch (err) {
     fp.objects.length = objStart;
     fp.references.length = refStart;
-    const name = textAttr(node, "name");
-    fp.errors.push(`${fp.file.name}: layout ${name != null ? `“${name}” ` : ""}could not be read and was skipped — ${(err as Error).message}`);
+    fp.errors.push(`${fp.file.name}: layout ${label}could not be read and was skipped — ${(err as Error).message}`);
+    // The message alone doesn't say where it failed.
+    console.error(`${fp.file.name}: layout ${label}could not be read`, err);
     return false;
   }
 }
@@ -162,10 +177,14 @@ function parseLayoutElement(fp: FileParse, layoutXml: string, openTag: string): 
     const wrapper = (xmlParser.parse(`<_L>${layoutXml}</_L>`) as Record<string, unknown>)["_L"];
     return isRecord(wrapper) ? wrapper["Layout"] : undefined;
   } catch (err) {
-    const layoutName = / name="([^"]*)"/.exec(openTag)?.[1];
-    fp.errors.push(
-      `${fp.file.name}: layout ${layoutName != null ? `“${decodeEntities(layoutName)}” ` : ""}could not be parsed and was skipped — ${(err as Error).message}`,
-    );
+    fp.errors.push(`${fp.file.name}: layout ${layoutLabel(openTag)}could not be parsed and was skipped — ${(err as Error).message}`);
     return null;
   }
+}
+
+/** A streamed layout's name, quoted and followed by a space, for a message —
+ * "" when its open tag has none. */
+function layoutLabel(openTag: string): string {
+  const name = / name="([^"]*)"/.exec(openTag)?.[1];
+  return name != null ? `“${decodeEntities(name)}” ` : "";
 }

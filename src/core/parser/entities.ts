@@ -1,3 +1,5 @@
+import { ownValue } from "./ownValue";
+
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   amp: "&",
   lt: "<",
@@ -43,7 +45,7 @@ export function decodeEntities(input: string, keepLineBreaks = false): string {
       if (!Number.isFinite(code)) return whole;
       return charForCode(code, keepLineBreaks) ?? whole;
     }
-    return NAMED_ENTITIES[body.toLowerCase()] ?? whole;
+    return ownValue(NAMED_ENTITIES, body.toLowerCase()) ?? whole;
   });
 }
 

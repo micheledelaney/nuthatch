@@ -1,7 +1,7 @@
 import type { FmFile, FmObject, ParseResult, RawReference } from "@/types/ddr";
 import { buildFileIndex, type FileParse, type TextScan } from "./context";
 import { xmlParser } from "./xmlParser";
-import { attr, isRecord, textAttr } from "./xmlUtils";
+import { attr, cdataText, isRecord, textAttr } from "./xmlUtils";
 import { fileUidAt } from "./uid";
 import { globalVariableObjects } from "./refs/globalVariables";
 import { addTextDerivedRefs } from "./refs/textRefs";
@@ -84,6 +84,8 @@ function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): Par
   } catch (err) {
     // Each file parses into its own lists, so nothing of this one is left half-added.
     errors.push(`${doc.name}: parsing stopped and this file was left out — ${(err as Error).message}`);
+    // The message alone doesn't say where it failed.
+    console.error(`${doc.name}: parsing stopped`, err);
     return null;
   }
 }
@@ -91,15 +93,20 @@ function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): Par
 const ROOT_TAG = "FMSaveAsXML";
 const ROOT_CLOSE = `</${ROOT_TAG}>`;
 
+/** What XML allows after the root element (comments and processing
+ * instructions), removed before checking that only whitespace is left. */
+const AFTER_ROOT_MARKUP_RE = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>/g;
+
 /** Whether a "Save a Copy as XML" document stops before its closing root tag:
  * an interrupted export or copy. The XML parser reads such a document without
  * complaint when the cut lands in the right place, and the layout catalog then
- * can't be cut out, so whole catalogs would go missing without a word. Any
- * other document is left to the checks below. */
+ * can't be cut out, so whole catalogs would go missing without a word. After
+ * the closing tag, whitespace, comments and the NUL padding a copy can leave
+ * are fine. Any other document is left to the checks below. */
 function isTruncated(xml: string): boolean {
   if (/<([A-Za-z_][\w.:-]*)/.exec(xml)?.[1] !== ROOT_TAG) return false;
   const end = xml.lastIndexOf(ROOT_CLOSE);
-  return end === -1 || xml.slice(end + ROOT_CLOSE.length).trim() !== "";
+  return end === -1 || !/^[\s\0]*$/.test(xml.slice(end + ROOT_CLOSE.length).replace(AFTER_ROOT_MARKUP_RE, ""));
 }
 
 interface Container {
@@ -162,8 +169,9 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     references: [],
     errors,
   };
-  // The catalog objects, each with the text the text-based passes read for it.
-  const scans: TextScan[] = [];
+  // The catalog objects, each with the text the text-based passes read for it
+  // — the file's own first: its triggers' parameters are calcs too.
+  const scans: TextScan[] = [{ obj: fileObject, text: cdataText(container.metadata) }];
   addFileRefs(fp, node, container.metadata);
   parseTablesAndFields(fp, node, scans);
   parseScripts(fp, node, scans);

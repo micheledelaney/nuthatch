@@ -53,12 +53,28 @@ export function isElementKey(key: string): boolean {
   return !key.startsWith(ATTR_PREFIX) && key !== "#text" && key !== CDATA_KEY;
 }
 
+/** V8 shares storage for substrings at least this long. */
+const SHARED_SUBSTRING_MIN_LENGTH = 13;
+
+/**
+ * A copy of `s` that shares no storage with the string it was cut from.
+ * Engines keep a substring as a view into its parent, so one model string cut
+ * from a parse-time string — a CDATA value, which fast-xml-parser hands back as
+ * a `substring` of the document or layout it parsed (its text and attribute
+ * values are built fresh), or a name sliced from the decoded file — keeps that
+ * whole string alive, undoing the worker's release of the source.
+ * Concatenating forces a fresh flat string.
+ */
+export function detach(s: string): string {
+  return s.length < SHARED_SUBSTRING_MIN_LENGTH ? s : (" " + s).slice(1);
+}
+
 /** A node's own text — its CDATA and character data, not its children's —
  * verbatim, "" when it has none. */
 export function ownText(node: unknown): string {
   if (typeof node === "string") return node;
   if (!isRecord(node)) return "";
-  return [cdataValue(node[CDATA_KEY]), node["#text"] == null ? "" : String(node["#text"])].join("");
+  return detach([cdataValue(node[CDATA_KEY]), node["#text"] == null ? "" : String(node["#text"])].join(""));
 }
 
 /** The content of a CDATA value: a node with several CDATA sections gets them
@@ -148,7 +164,10 @@ export function enabledLabels(node: unknown, pairs: ReadonlyArray<readonly [stri
 export function displayText(node: unknown): string {
   const out: string[] = [];
   gatherText(node, out, "display");
-  return out.join(" ").trim();
+  const text = out.join(" ").trim();
+  // A join of several fragments is a fresh string already; a lone one is the
+  // parser's own (see detach).
+  return out.length === 1 ? detach(text) : text;
 }
 
 /**

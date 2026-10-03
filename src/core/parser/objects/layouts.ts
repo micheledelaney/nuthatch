@@ -21,6 +21,10 @@ interface LayoutObjectsContext {
   sources: LayoutObjectSources;
   listedElements: ReadonlySet<unknown>;
   uidOfElement: Map<Record<string, unknown>, string>;
+  /** The layout's own uid counts (see FileParse.layoutObjectUidCounts), added
+   * to the file's once the layout is read, so a layout that fails to read
+   * leaves the file's counts as they were. */
+  uidCounts: Map<string, number>;
   scans: TextScan[];
 }
 
@@ -35,28 +39,37 @@ interface LayoutObjectsContext {
  * (compactLayoutText), not the full text of every object on it.
  */
 export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): boolean {
-  const base = makeObject(fp, layout, "layout");
+  // Its text is set at the end: the full text of a layout with parts would
+  // only be replaced by its compact text.
+  const base = makeObject(fp, layout, "layout", undefined, undefined, "");
   if (!base) return false;
   const objStart = fp.objects.length;
   const refStart = fp.references.length;
-  const { layout: full, scans } = buildLayout(fp, layout, placeInCatalog(base, order, folder));
+  const uidCounts = new Map<string, number>();
+  const { layout: full, scans } = buildLayout(fp, layout, placeInCatalog(base, order, folder), uidCounts);
   const layoutObjects = fp.objects.slice(objStart);
   addTextDerivedRefs(fp, scans, refStart);
   // After the text passes, so the layout's placeholder check weighs only its own references.
   addObjectRefsToLayout(fp, layoutObjects, full.uid, refStart);
-  fp.objects.push(full.detail?.kind === "layout" ? { ...full, text: compactLayoutText(full, full.detail) } : full);
+  fp.objects.push({ ...full, text: full.detail?.kind === "layout" ? compactLayoutText(full, full.detail) : displayText(layout) });
+  for (const [uid, count] of uidCounts) fp.layoutObjectUidCounts.set(uid, count);
   return true;
 }
 
 /** The layout object, after its layout objects and its own references, with
  * the batch the text-based passes read: its objects, then itself. */
-function buildLayout(fp: FileParse, layout: unknown, placed: FmObject): { layout: FmObject; scans: TextScan[] } {
+function buildLayout(
+  fp: FileParse,
+  layout: unknown,
+  placed: FmObject,
+  uidCounts: Map<string, number>,
+): { layout: FmObject; scans: TextScan[] } {
   if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout) }] };
   const annotated = annotateLayout(layout, placed);
   const extracted = layoutDetail(layout, fp.index);
   const sources = extracted?.sources ?? new Map();
   const listedElements = new Set([...sources].filter(([lo]) => isListed(lo)).map(([, element]) => element));
-  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map(), scans: [] };
+  const cx: LayoutObjectsContext = { fp, sources, listedElements, uidOfElement: new Map(), uidCounts, scans: [] };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted.detail, annotated) } : annotated;
   // Its own settings, triggers and parts, and any object not listed on its own.
   cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(layout, listedElements), obj) });
@@ -131,7 +144,7 @@ function addLayoutObjectTree(cx: LayoutObjectsContext, infos: LayoutObjectInfo[]
     // unique but isn't reliably so either — duplicating a compound object can leave a
     // child's UUID identical to its sibling's.
     const chain = lo.id ? `${idChain}.${lo.id}` : undefined;
-    const withUid: LayoutObjectInfo = { ...lo, uid: uniqueLayoutObjectUid(fp, chain ?? lo.uuid!) };
+    const withUid: LayoutObjectInfo = { ...lo, uid: uniqueLayoutObjectUid(cx, chain ?? lo.uuid!) };
     const uid = withUid.uid!;
     const obj = layoutObjectFmObject(fp, withUid, uid, parentUid);
     fp.objects.push(obj);
@@ -163,10 +176,10 @@ function isListed(lo: LayoutObjectInfo): boolean {
 
 /** The object's uid, with a stable `#N` suffix on every repeat (see
  * FileParse.layoutObjectUidCounts). */
-function uniqueLayoutObjectUid(fp: FileParse, idPart: string): string {
-  const uid = objectUid(fp.file.uid, "layoutObject", idPart);
-  const seen = fp.layoutObjectUidCounts.get(uid) ?? 0;
-  fp.layoutObjectUidCounts.set(uid, seen + 1);
+function uniqueLayoutObjectUid(cx: LayoutObjectsContext, idPart: string): string {
+  const uid = objectUid(cx.fp.file.uid, "layoutObject", idPart);
+  const seen = cx.uidCounts.get(uid) ?? cx.fp.layoutObjectUidCounts.get(uid) ?? 0;
+  cx.uidCounts.set(uid, seen + 1);
   return seen > 0 ? `${uid}#${seen}` : uid;
 }
 

@@ -77,7 +77,9 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
     let order = 0;
     for (const item of children(list, "CustomMenuItem")) {
       if (!isRecord(item)) continue;
-      const index = attr(item, "index") ?? String(order);
+      // FileMaker writes an `index` on every item. One without goes by its
+      // position, kept apart from the indexes so it can't take another item's.
+      const index = attr(item, "index") ?? `pos${order}`;
       const isSeparator = attr(item, "isSeparatorItem") === "True";
       const uid = objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`);
       const obj = newObject(fp.file, {

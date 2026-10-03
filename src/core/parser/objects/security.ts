@@ -8,6 +8,8 @@ import type {
 import type { FileParse } from "../context";
 import { attr, child, children, displayText, enabledLabels, isRecord, textAttr, withoutKey } from "../xmlUtils";
 import { objectUid } from "../uid";
+import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
+import { ownValue } from "../ownValue";
 import { calcOf } from "./common";
 
 // ---- accounts -----------------------------------------------------------------
@@ -179,6 +181,14 @@ function privilegeSetDetail(accessNode: Record<string, unknown>): ObjectDetail |
   };
 }
 
+/** Whether a grant row is the default for objects created later — `type="New"`,
+ * with no reference — rather than one for an object that exists, or did: a
+ * row whose object was deleted keeps its reference with the name blank (FM 21;
+ * FM 26 drops the row). */
+function isNewObjectsGrant(row: unknown): boolean {
+  return attr(row, "type") === "New";
+}
+
 /** How one Custom category (<Layouts>, <Scripts>, <ValueLists>) lists its
  * per-object grants: `<Custom><ObjectList><Layout access records type>
  * <LayoutReference/>…`, with `type="New"` for the new-objects default. */
@@ -220,7 +230,7 @@ function customObjectAccess(categoryNode: unknown, spec: ObjectGrantSpec): Privi
     .map((item) => {
       const records = attr(item, "records");
       return {
-        name: attr(item, "type") === "New" ? spec.newLabel : (textAttr(child(item, spec.refTag), "name") ?? ""),
+        name: isNewObjectsGrant(item) ? spec.newLabel : textAttr(child(item, spec.refTag), "name") || UNKNOWN_TARGET,
         access: grantLabel({ ...OBJECT_GRANT_LABELS, ReadOnly: spec.readOnlyLabel }, attr(item, "access"), "No access"),
         ...(records != null ? { records: grantLabel(OBJECT_GRANT_LABELS, records, "No access") } : {}),
       };
@@ -240,7 +250,7 @@ function customTableAccess(recordsNode: unknown): PrivilegeSetTableAccess[] {
     const editCondition = recordGrantCondition(edit);
     const deleteCondition = recordGrantCondition(del);
     return {
-      table: baseTableName || "(new tables)",
+      table: isNewObjectsGrant(table) ? "(new tables)" : baseTableName || UNKNOWN_TARGET,
       view: grantLabel(RECORD_GRANT_LABELS, attr(view, "access"), "No"),
       edit: grantLabel(RECORD_GRANT_LABELS, attr(edit, "access"), "No"),
       create: grantLabel(RECORD_GRANT_LABELS, attr(child(table, "Create"), "access"), "No"),
@@ -265,7 +275,7 @@ const FIELDS_SUMMARY_LABELS: Readonly<Record<string, string>> = { ReadWrite: "Al
 const FIELD_GRANT_LABELS: Readonly<Record<string, string>> = { ReadWrite: "Edit", ReadOnly: "View only" };
 
 function grantLabel(labels: Readonly<Record<string, string>>, raw: string | undefined, fallback: string): string {
-  return raw != null && Object.prototype.hasOwnProperty.call(labels, raw) ? labels[raw]! : fallback;
+  return ownValue(labels, raw) ?? fallback;
 }
 
 /** The formula behind a "Limited" (Calculation) grant on a View/Edit/Delete
@@ -284,7 +294,7 @@ function tableFieldsAccess(node: unknown): { fieldsAccess: string; fields?: Priv
   const fieldNodes = children(node, "Field");
   if (raw !== "Custom" && fieldNodes.length === 0) return { fieldsAccess: grantLabel(FIELDS_SUMMARY_LABELS, raw, "None") };
   const fields = fieldNodes.filter(isRecord).map((field) => ({
-    field: textAttr(child(field, "FieldReference"), "name") || "(new fields)",
+    field: isNewObjectsGrant(field) ? "(new fields)" : textAttr(child(field, "FieldReference"), "name") || MISSING_FIELD_TOKEN,
     access: grantLabel(FIELD_GRANT_LABELS, attr(field, "access"), "None"),
   }));
   return { fieldsAccess: "Custom", fields };

@@ -7,7 +7,9 @@ import { objectUid } from "../uid";
  * The generic object for a catalog item: its attributes, its searchable text,
  * and the <UUID> modification metadata. Null when the item has no `id`.
  * `idNamespace` prefixes the id where ids only repeat per parent (a field's
- * table), keeping uids globally unique.
+ * table), keeping uids globally unique. `text`, when given, stands in for the
+ * searchable text — for an object whose text is set once it's complete, so
+ * the item's full text isn't built only to be replaced (a layout's).
  */
 export function makeObject(
   fp: FileParse,
@@ -15,6 +17,7 @@ export function makeObject(
   type: ObjectType,
   parentUid?: string,
   idNamespace?: string,
+  text?: string,
 ): FmObject | null {
   const id = attr(node, "id");
   if (id == null) return null;
@@ -25,7 +28,7 @@ export function makeObject(
     id,
     name: textAttr(node, "name") ?? `(${type} ${id})`,
     attributes: { ...attributes(node), ...uuidMeta(node) },
-    text: displayText(node),
+    text: text ?? displayText(node),
     ...(parentUid ? { parentUid } : {}),
   });
 }

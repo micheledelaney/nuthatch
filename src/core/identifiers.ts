@@ -48,8 +48,10 @@ export function isWordChar(c: string | undefined): boolean {
 
 /** FileMaker writes literal placeholder tokens like `<Table Missing>`,
  * `<Field Missing>`, or `<unknown>` wherever something was deleted out from
- * under a reference. Use the `g` flag in callers (`new RegExp(BROKEN_PLACEHOLDER_RE.source, "g")`)
- * for global scans, or use the `.test()` form on the source-shared regex. */
+ * under a reference. The regex has the `g` flag, so it keeps `lastIndex`
+ * between calls: scan with a copy of your own
+ * (`new RegExp(BROKEN_PLACEHOLDER_RE.source, "g")`), and don't call `.test()`
+ * or `.exec()` on the shared one. */
 export const BROKEN_PLACEHOLDER_RE: RegExp = new RegExp(String.raw`<[^<>]*\bMissing\b[^<>]*>|${UNKNOWN_TARGET}`, "g");
 
 /** The longest name in `names` that ends exactly at `end` (e.g. the occurrence

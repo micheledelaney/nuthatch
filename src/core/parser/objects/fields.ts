@@ -1,7 +1,8 @@
 import type { FmObject, ObjectDetail } from "@/types/ddr";
 import type { FileIndex, FileParse, TextScan } from "../context";
 import { attr, cdataText, child, children, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
-import { UNKNOWN_TARGET } from "../sentinels";
+import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
+import { ownValue } from "../ownValue";
 import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { activeFieldNode, isAutoEnterOptionActive, isValidationOptionActive } from "../refs/activeOptions";
@@ -189,11 +190,12 @@ function fieldFormula(
 function summaryDetail(fieldNode: Record<string, unknown>): ObjectDetail | undefined {
   const summaryInfo = child(fieldNode, "SummaryInfo");
   if (!isRecord(summaryInfo)) return undefined;
-  const operation = SUMMARY_OPERATION_LABELS[attr(summaryInfo, "operation") ?? ""] ?? "Summary of";
+  const operation = ownValue(SUMMARY_OPERATION_LABELS, attr(summaryInfo, "operation")) ?? "Summary of";
   const fields: string[] = [];
   for (const sf of children(summaryInfo, "SummaryField")) {
-    const name = textAttr(child(sf, "FieldReference"), "name");
-    if (name) fields.push(name);
+    const ref = child(sf, "FieldReference");
+    // A deleted field's reference stays, with its name blank.
+    if (ref != null) fields.push(textAttr(ref, "name") || MISSING_FIELD_TOKEN);
   }
   return { kind: "summary", operation, fields };
 }
@@ -219,7 +221,7 @@ function autoEnterAttributes(autoEnter: unknown): Record<string, string> {
     const value = displayText(autoEnter["ConstantData"]);
     a.autoEnter = value ? `Data: ${value}` : "Data";
   } else if (type && type !== "Calculated") {
-    a.autoEnter = AUTO_ENTER_LABELS[type] ?? type;
+    a.autoEnter = ownValue(AUTO_ENTER_LABELS, type) ?? type;
   }
   // Behavior flags apply to any auto-enter, calculated or not.
   const flags = enabledLabels(autoEnter, AUTO_ENTER_FLAGS);
@@ -255,7 +257,7 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
 
   const requirements: string[] = [];
   const strict = displayText(validation["Strict"]);
-  if (strict) requirements.push(STRICT_TYPE_LABELS[strict] ?? `Strict data type: ${strict}`);
+  if (strict) requirements.push(ownValue(STRICT_TYPE_LABELS, strict) ?? `Strict data type: ${strict}`);
   if (attr(validation, "notEmpty") === "True") requirements.push("Not empty");
   if (attr(validation, "unique") === "True") requirements.push("Unique");
   if (attr(validation, "existing") === "True") requirements.push("Existing value");

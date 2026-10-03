@@ -2,7 +2,7 @@
  * Walking FileMaker's catalog lists: their leaf items, the folder markers that
  * organize them, and the blocks stored apart from the items they belong to.
  */
-import { asArray, attr, child, children, isRecord } from "./xmlUtils";
+import { asArray, attr, child, children, detach, isRecord } from "./xmlUtils";
 import { decodeEntities } from "./entities";
 
 /** What a catalog entry's `isFolder` flag makes it: "True" opens a folder and
@@ -21,7 +21,8 @@ function folderMarker(flag: string | undefined): "open" | "close" | undefined {
  */
 export function applyFolderMarker(stack: string[], flag: string | undefined, rawName: string): boolean {
   const marker = folderMarker(flag);
-  if (marker === "open") stack.push(decodeEntities(rawName.trim()));
+  // A copy: a streamed layout folder's name is cut from the decoded file.
+  if (marker === "open") stack.push(detach(decodeEntities(rawName.trim())));
   else if (marker === "close") stack.pop();
   return marker != null;
 }

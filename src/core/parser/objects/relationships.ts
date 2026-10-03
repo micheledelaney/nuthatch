@@ -1,6 +1,7 @@
 import type { FmObject, JoinPredicate, RelationshipSide } from "@/types/ddr";
 import type { FileIndex } from "../context";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
+import { ownValue } from "../ownValue";
 import { fieldRefName } from "./common";
 
 // Keys match the `type` attribute FileMaker writes on <JoinPredicate>.
@@ -31,7 +32,7 @@ export function annotateRelationship(node: Record<string, unknown>, obj: FmObjec
       const type = attr(predicate, "type");
       return {
         leftField: fieldName(predicate["LeftField"], index),
-        operator: type == null ? "=" : (JOIN_OPERATORS[type] ?? type),
+        operator: type == null ? "=" : (ownValue(JOIN_OPERATORS, type) ?? type),
         rightField: fieldName(predicate["RightField"], index),
       };
     });

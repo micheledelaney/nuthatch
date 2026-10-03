@@ -34,6 +34,8 @@ self.onmessage = (event: MessageEvent<ParseRequest>) => {
       const response: ParseResponse = { ok: true, result };
       self.postMessage(response);
     } catch (err) {
+      // The message alone doesn't say where it failed.
+      console.error("Parse worker error", err);
       const error =
         err instanceof Error
           ? err.message || "Parse worker error (no message)"

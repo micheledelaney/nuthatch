@@ -6,7 +6,6 @@
  * expected.json), check by check. The build with BUILD.md's appended items adds
  * expected-appended.json on top of expected.json.
  */
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildChecks, loadOracle, type AttributeOverrides } from "./support/checks";
@@ -79,7 +78,9 @@ const PINNED: Record<string, string> = {
 for (const scenario of SCENARIOS) {
   const paths = scenario.files.map((f) => DIR + f);
 
-  describe.skipIf(!paths.every((p) => existsSync(p)))(scenario.name, () => {
+  // A missing export fails the scenario (the snapshot can't load) rather than
+  // skipping it, so a lost fixture can't pass unnoticed.
+  describe(scenario.name, () => {
     const oracle = loadOracle(DIR + scenario.oracle, scenario.overrides, scenario.addendum && DIR + scenario.addendum);
     let snapshot: Snapshot | undefined;
     beforeAll(() => {

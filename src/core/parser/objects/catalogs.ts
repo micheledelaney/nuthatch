@@ -109,8 +109,10 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       type: "customMenu",
       annotate: annotateCustomMenu,
       // A custom menu's items are scanned on their own (parseCustomMenuItems);
-      // its install condition is the menu's own calc.
+      // its install condition is the menu's own calc — for the text passes too,
+      // or a placeholder in an item's calc would flag the menu as well.
       scan: (item) => item["Conditions"],
+      text: (item) => cdataText(item["Conditions"]),
     },
     { catalogKey: "ThemeCatalog", itemTag: "Theme", type: "theme", annotate: annotateTheme, scan: "none" },
   ];

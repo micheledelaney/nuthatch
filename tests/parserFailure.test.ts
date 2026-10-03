@@ -60,6 +60,44 @@ describe("a truncated file", () => {
     expect(result.errors).toEqual([]);
     expect(result.objects.filter((o) => o.type === "layout").map((o) => o.name)).toEqual(["L1", "L2"]);
   });
+
+  it("reads a complete file with a comment and NUL padding after its closing tag", () => {
+    const result = parseDocuments([{ name: "CUT.xml", content: `${full}<!-- copied -->\n<?done?>\0\0\0` }]);
+    expect(result.errors).toEqual([]);
+    expect(result.objects.filter((o) => o.type === "layout").map((o) => o.name)).toEqual(["L1", "L2"]);
+  });
+
+  it("is still reported as incomplete when other text follows its closing tag", () => {
+    const result = parseDocuments([{ name: "CUT.xml", content: `${full}<!-- copied --> stray` }]);
+    expect(result.errors).toEqual([incomplete]);
+  });
+});
+
+describe("a layout without its closing tag", () => {
+  const file = (layouts: string): { name: string; content: string } => ({
+    name: "OPEN.xml",
+    content:
+      `<FMSaveAsXML File="OPEN.fmp12"><Structure><AddAction><LayoutCatalog>${layouts}</LayoutCatalog>` +
+      `</AddAction></Structure><DDR_INFO></DDR_INFO></FMSaveAsXML>`,
+  });
+  const layoutNames = (result: ReturnType<typeof parseDocuments>): string[] =>
+    result.objects.filter((o) => o.type === "layout").map((o) => o.name);
+
+  it("is reported when it's the last one", () => {
+    const result = parseDocuments([file(`<Layout id="1" name="L1"></Layout><Layout id="2" name="L2">`)]);
+    expect(result.errors).toEqual([
+      "OPEN: layout “L2” has no closing </Layout>, so it and everything after it in the layout catalog were left out.",
+    ]);
+    expect(layoutNames(result)).toEqual(["L1"]);
+  });
+
+  it("is reported with the layout read into it, and the layouts after them are kept", () => {
+    const result = parseDocuments([
+      file(`<Layout id="1" name="L1"><Layout id="2" name="L2"></Layout><Layout id="3" name="L3"></Layout>`),
+    ]);
+    expect(result.errors).toEqual(["OPEN: layout “L1” has no closing </Layout>, so it and the layouts read into it were left out."]);
+    expect(layoutNames(result)).toEqual(["L3"]);
+  });
 });
 
 describe("a layout that fails to parse", () => {
@@ -73,20 +111,44 @@ describe("a layout that fails to parse", () => {
     `<LayoutCatalog>${layout("1", "BAD")}${layout("2", "GOOD")}</LayoutCatalog></AddAction></Structure><DDR_INFO></DDR_INFO></FMSaveAsXML>`;
 
   it("is reported and left out with everything it added, and the rest of the file is kept", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = parseDocuments([{ name: "MAIN.xml", content }]);
     expect(result.errors).toEqual(["MAIN: layout “BAD” could not be read and was skipped — boom"]);
     expect(result.objects.filter((o) => o.type === "layout").map((o) => `${o.name} ${o.order}`)).toEqual(["GOOD 0"]);
     expect(result.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid)).toEqual(["F0:layoutObject:2.1"]);
     expect(result.references.filter((r) => r.fromUid.includes(":layout")).map((r) => r.fromUid)).toEqual(["F0:layoutObject:2.1", "F0:layout:2"]);
     expect(result.objects.some((o) => o.type === "script")).toBe(true);
+    // The error itself, stack trace and all, goes to the console.
+    expect(logged).toHaveBeenCalledWith("MAIN: layout “BAD” could not be read", expect.objectContaining({ message: "boom" }));
+    logged.mockRestore();
+  });
+
+  it("leaves no trace in the uids of the layouts after it", () => {
+    // Objects with neither id nor a distinct UUID: their uid is the UUID, the
+    // same on both layouts, so a count the failed layout kept would suffix it.
+    const uuidOnly = (id: string, name: string): string =>
+      `<Layout id="${id}" name="${name}"><PartsList><Part type="Body"><Definition absolute="0" size="100"></Definition><ObjectList>` +
+      `<LayoutObject type="Text" name="t"><UUID>U-1</UUID></LayoutObject></ObjectList></Part></PartsList></Layout>`;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = parseDocuments([
+      {
+        name: "MAIN.xml",
+        content: `<FMSaveAsXML File="MAIN.fmp12"><Structure><AddAction><LayoutCatalog>${uuidOnly("1", "BAD")}${uuidOnly("2", "GOOD")}</LayoutCatalog></AddAction></Structure><DDR_INFO></DDR_INFO></FMSaveAsXML>`,
+      },
+    ]);
+    logged.mockRestore();
+    expect(result.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid)).toEqual(["F0:layoutObject:U-1"]);
   });
 });
 
 describe("a file that fails to parse", () => {
   it("is reported and left out, and the other files are kept", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = parseDocuments([doc("BAD"), doc("GOOD")]);
     expect(result.errors).toEqual(["BAD.xml: parsing stopped and this file was left out — boom"]);
     expect(result.files.map((f) => f.name)).toEqual(["GOOD"]);
     expect(result.objects.filter((o) => o.type === "script").map((o) => `${o.fileName}:${o.name}`)).toEqual(["GOOD:S"]);
+    expect(logged).toHaveBeenCalledWith("BAD.xml: parsing stopped", expect.objectContaining({ message: "boom" }));
+    logged.mockRestore();
   });
 });
