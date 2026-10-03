@@ -3,6 +3,7 @@ import {
   OBJECT_TYPE_META,
   objectLabel,
   isBrokenTableOccurrence,
+  isUnresolvedTableOccurrence,
   type FmObject,
   type LayoutBounds,
   type LayoutObjectInfo,
@@ -41,7 +42,11 @@ function fieldRefLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): stri
   const parentTable = edge.target?.parentUid ? byUid.get(edge.target.parentUid) : undefined;
   const occName = occ?.name ?? parentTable?.name;
   const fieldName = edge.target?.name ?? edge.ref.toName;
-  if (!fieldName || /Missing>$/.test(fieldName)) return null;
+  if (/Missing>$/.test(fieldName)) return null;
+  // FileMaker leaves a field's name blank when it was deleted — or when it
+  // sits behind a file that wasn't available at export, which can't be
+  // verified: that one reads as FileMaker's own step text writes it.
+  if (!fieldName) return occ && isUnresolvedTableOccurrence(occ) ? `${occ.name}::<File Missing>` : null;
   return occName ? `${occName}::${fieldName}` : fieldName;
 }
 
@@ -1798,9 +1803,13 @@ export function GroupedRefList({
               const obj = edge.target;
               const unresolved = side === "to" && !obj;
               // A deleted object (FileMaker emits "<… Missing>" or an empty name) is
-              // broken; so is anything flagged broken in resolution. A target that
+              // broken; so is anything flagged broken in resolution. A field behind
+              // a file that wasn't available at export has an empty name too, but
+              // can't be verified — not broken, as the parser reads it. A target that
               // merely lives in another, unloaded file is "external" — not an error.
-              const deleted = unresolved && (edge.ref.toName === "" || /Missing>$/.test(edge.ref.toName));
+              const via = edge.ref.viaUid ? byUid.get(edge.ref.viaUid) : undefined;
+              const unverifiable = unresolved && edge.ref.toName === "" && via != null && isUnresolvedTableOccurrence(via);
+              const deleted = unresolved && !unverifiable && (edge.ref.toName === "" || /Missing>$/.test(edge.ref.toName));
               const broken = unresolved && (edge.ref.broken || deleted);
               const external = unresolved && !broken;
               const unused = obj != null && (isUnused?.(obj.uid) ?? false);
@@ -1817,11 +1826,13 @@ export function GroupedRefList({
                       : `${OBJECT_TYPE_META[edge.ref.toType].label} ${edge.ref.toId}`);
               const title = broken
                 ? `Broken — ${label}`
-                : external
-                  ? `${label} — in another file (not loaded)`
-                  : unused
-                    ? `${label} — itself unused`
-                    : label;
+                : unverifiable
+                  ? `${label} — can't be verified: its file wasn't available when this file was exported`
+                  : external
+                    ? `${label} — in another file (not loaded)`
+                    : unused
+                      ? `${label} — itself unused`
+                      : label;
               return (
                 <li
                   key={rowKey}

@@ -1121,6 +1121,36 @@ describe("a field read through another file's occurrence, recovered from a calc'
   });
 });
 
+describe("a field read through another file's occurrence while that file isn't loaded", () => {
+  // As SampleA's JOB_X: X has its base table recorded, so its file
+  // was open at export.
+  const TABLE_AND_EXTERNAL = TABLE.replace(
+    "</TableOccurrenceCatalog>",
+    `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference>
+      <DataSourceReference id="1" name="EXT"></DataSourceReference><BaseTableReference id="1" name="T" UUID="U-EXT-T"></BaseTableReference>
+    </BaseTableSourceReference></TableOccurrence></TableOccurrenceCatalog>
+    <ExternalDataSourceCatalog><ExternalDataSource id="1" name="EXT"></ExternalDataSource></ExternalDataSourceCatalog>`,
+  );
+  const named = `<FieldReference id="5" name="b"><TableOccurrenceReference id="2" name="X"></TableOccurrenceReference></FieldReference>`;
+  const fieldUse = (result: ParseResult, uid: string) => buildModel(result).references.find((r) => r.fromUid === uid && r.toType === "field");
+
+  it("is broken when FileMaker left its name blank: it was deleted", () => {
+    const result = parse(doc("MAIN", `<AddAction>${TABLE_AND_EXTERNAL}${layout(editBox("1", blankField("7", "2", "X")))}</AddAction>`));
+    expect(object(result, "F0:layoutObject:10.1").name).toBe("X::<Field Missing>");
+    expect(fieldUse(result, "F0:layoutObject:10.1")).toMatchObject({ toUid: null, broken: true });
+  });
+
+  it("stays unresolved, not broken, when it has a name", () => {
+    const result = parse(doc("MAIN", `<AddAction>${TABLE_AND_EXTERNAL}${layout(editBox("1", named))}</AddAction>`));
+    expect(fieldUse(result, "F0:layoutObject:10.1")).toMatchObject({ toUid: null, broken: false });
+  });
+
+  it("isn't broken behind a file that wasn't available at export, where FileMaker blanks every name", () => {
+    const result = parse(doc("MAIN", `<AddAction>${TABLE_AND_UNAVAILABLE}${layout(editBox("1", blankField("7", "2", "X")))}</AddAction>`));
+    expect(fieldUse(result, "F0:layoutObject:10.1")).toMatchObject({ toUid: null, broken: false });
+  });
+});
+
 describe("a layout object's search text", () => {
   it("isn't read for placeholders: a name that reads like one is no broken use", () => {
     const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Edit Box" name="&lt;Field Missing&gt;"></LayoutObject>`)}</AddAction>`));

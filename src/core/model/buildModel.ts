@@ -190,6 +190,11 @@ function resolveFieldReference(
     const resolved = byUid.has(targetUid);
     return { ...base(raw), toUid: resolved ? targetUid : null, broken: !resolved, viaUid: viaOccUid };
   }
+  // An external occurrence whose file isn't loaded, so the field can't be
+  // looked up — but FileMaker had that file open at export (the occurrence has
+  // its base table recorded) and still left the field's name blank: it was
+  // deleted (`TO::<Field Missing>`), as the parser reads it.
+  if (occ && raw.toName === "") return { ...base(raw), toUid: null, broken: true, viaUid: viaOccUid };
   // No usable occurrence context. A field reference that names its base table
   // directly (e.g. a summary field summarizing a field in its own table)
   // resolves within the referencing file's matching base table.
