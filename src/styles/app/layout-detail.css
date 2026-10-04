@@ -9,6 +9,26 @@
 .layout-map {
   flex: 0 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Part names: outside the map, on its right, level with their band. */
+.layout-map-labels {
+  position: relative;
+  flex: none;
+  min-width: 96px;
+}
+
+.layout-map-part-name {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .layout-map > svg {
@@ -30,10 +50,6 @@
   fill: var(--nh-deep);
   stroke: var(--border);
   stroke-width: 1;
-}
-
-.layout-map-label {
-  fill: var(--text-dim);
 }
 
 .layout-map-obj {

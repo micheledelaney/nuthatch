@@ -24,7 +24,7 @@ import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { CodeBox } from "./CodeBox";
 import { ScriptWorkspace } from "./ScriptWorkspace";
-import { Highlight, LinkedCode } from "./Highlight";
+import { LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
 import { TypePill } from "./TypePill";
 import { pressable } from "./a11y";
@@ -810,7 +810,7 @@ export function Detail({
   }
 
   if (detail.kind === "privilegeSet") {
-    return <PrivilegeSetDetail detail={detail} />;
+    return <PrivilegeSetDetail detail={detail} model={model} owner={owner} onGo={onGo} />;
   }
 
   return <ValueListDetail detail={detail} refIndex={refIndex} model={model} owner={owner.uid} onGo={onGo} />;
@@ -819,10 +819,22 @@ export function Detail({
 /** A privilege set's custom privileges: per-table record access (with an
  * expandable per-field breakdown), then per-layout, per-script and
  * per-value-list access for whichever of those categories is Custom. */
-function PrivilegeSetDetail({ detail }: { detail: Extract<ObjectDetail, { kind: "privilegeSet" }> }) {
+function PrivilegeSetDetail({
+  detail,
+  model,
+  owner,
+  onGo,
+}: {
+  detail: Extract<ObjectDetail, { kind: "privilegeSet" }>;
+  model: SolutionModel;
+  owner: FmObject;
+  onGo: (uid: string, rowKey: string) => void;
+}) {
+  // What the record-access calculations refer to, so their names link.
+  const link: CodeLinks = { targets: refIndexFor(model, owner.uid).targets, model, owner: owner.uid, onGo };
   return (
     <>
-      {detail.tables.length > 0 && <PrivilegeTableAccess tables={detail.tables} />}
+      {detail.tables.length > 0 && <PrivilegeTableAccess tables={detail.tables} link={link} />}
       {detail.layouts && <PrivilegeObjectAccess title="Layout access" column="Layout" grants={detail.layouts} showRecords />}
       {detail.scripts && <PrivilegeObjectAccess title="Script access" column="Script" grants={detail.scripts} />}
       {detail.valueLists && <PrivilegeObjectAccess title="Value list access" column="Value list" grants={detail.valueLists} />}
@@ -869,7 +881,7 @@ function PrivilegeObjectAccess({
 /** Custom per-table record access — one row per table, with an expandable
  * per-field breakdown for any table whose field access is itself Custom
  * (potentially hundreds of fields, so it starts collapsed). */
-function PrivilegeTableAccess({ tables }: { tables: PrivilegeSetTableAccess[] }) {
+function PrivilegeTableAccess({ tables, link }: { tables: PrivilegeSetTableAccess[]; link: CodeLinks }) {
   return (
     <Section title="Table & field access" count={tables.length}>
       <table className="comparison-table privilege-access-table">
@@ -888,14 +900,14 @@ function PrivilegeTableAccess({ tables }: { tables: PrivilegeSetTableAccess[] })
             <tr key={i}>
               <td>{t.table}</td>
               <td>
-                <PrivilegeConditionCell label={t.view} condition={t.viewCondition} />
+                <PrivilegeConditionCell label={t.view} condition={t.viewCondition} link={link} />
               </td>
               <td>
-                <PrivilegeConditionCell label={t.edit} condition={t.editCondition} />
+                <PrivilegeConditionCell label={t.edit} condition={t.editCondition} link={link} />
               </td>
               <td>{t.create}</td>
               <td>
-                <PrivilegeConditionCell label={t.delete} condition={t.deleteCondition} />
+                <PrivilegeConditionCell label={t.delete} condition={t.deleteCondition} link={link} />
               </td>
               <td>
                 <PrivilegeFieldsCell table={t} />
@@ -908,9 +920,18 @@ function PrivilegeTableAccess({ tables }: { tables: PrivilegeSetTableAccess[] })
   );
 }
 
+/** What code needs to turn names into links: the objects it refers to, plus
+ * the model, its owner and the navigation callback. */
+interface CodeLinks {
+  targets: FmObject[];
+  model: SolutionModel;
+  owner: string;
+  onGo: (uid: string, rowKey: string) => void;
+}
+
 /** A "Limited" View/Edit/Delete grant — click to expand the calculation
  * formula behind it, syntax-highlighted the same way a calc field's body is. */
-function PrivilegeConditionCell({ label, condition }: { label: string; condition?: string }) {
+function PrivilegeConditionCell({ label, condition, link }: { label: string; condition?: string; link: CodeLinks }) {
   const [open, setOpen] = useState(false);
   if (!condition) return <>{label}</>;
   return (
@@ -921,7 +942,7 @@ function PrivilegeConditionCell({ label, condition }: { label: string; condition
       {open && (
         <CodeBox text={condition}>
           <pre className="code privilege-condition">
-            <Highlight text={condition} />
+            <LinkedCode text={condition} objects={link.targets} onGo={link.onGo} model={link.model} owner={link.owner} />
           </pre>
         </CodeBox>
       )}
@@ -1210,31 +1231,109 @@ function layoutTriggerRowKey(
 
 const ACTION_STEP_COLLAPSE_THRESHOLD = 120;
 
-function ActionStepSection({ name, params }: { name: string; params: string }) {
+/** A button's single step, drawn like a script step (see ScriptWorkspace): the
+ * code box with its copy button, the number cell with the expand glyph before
+ * it. `children` is what follows the step name; `text` is what gets copied. */
+function StepBlock({
+  name,
+  text,
+  long,
+  expanded,
+  onToggle,
+  children,
+}: {
+  name: string;
+  text: string;
+  long: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Section title="Step" flush>
+      <CodeBox text={text}>
+        <div className="sw">
+          <div className="sw-line">
+            <span className="lo-chevron-space" />
+            <span className="sw-ln">
+              {long && (
+                <button type="button" className="glyph-btn lo-chevron" onClick={onToggle} aria-expanded={expanded}>
+                  <span className={`fchevron${expanded ? " open" : ""}`}>›</span>
+                </button>
+              )}
+              1
+            </span>
+            <span className="sw-step">
+              <span className="sw-name">{name}</span>
+              {children}
+            </span>
+          </div>
+        </div>
+      </CodeBox>
+    </Section>
+  );
+}
+
+function ActionStepSection({ name, params, link }: { name: string; params: string; link: CodeLinks }) {
   const long = params.length > ACTION_STEP_COLLAPSE_THRESHOLD;
   const [expanded, setExpanded] = useState(!long);
   const display = long && !expanded ? params.slice(0, ACTION_STEP_COLLAPSE_THRESHOLD) + "…" : params;
   return (
-    <Section title="Step">
-      <div className="sw">
-        <div className="sw-line">
-          {long ? (
-            <button type="button" className="glyph-btn lo-chevron" onClick={() => setExpanded((v) => !v)}>
-              <span className={`fchevron${expanded ? " open" : ""}`}>›</span>
-            </button>
-          ) : (
-            <span className="lo-chevron-space" />
-          )}
-          <span className="sw-ln">1</span>
-          <span className="sw-step">
-            <span className="sw-name">{name}</span>
-            {params && (
-              <span className="sw-params"> {display}</span>
-            )}
-          </span>
-        </div>
-      </div>
-    </Section>
+    <StepBlock name={name} text={params ? `${name} ${params}` : name} long={long} expanded={expanded} onToggle={() => setExpanded((v) => !v)}>
+      {params && (
+        <span className="sw-params">
+          {" "}
+          <LinkedCode text={display} objects={link.targets} onGo={link.onGo} model={link.model} owner={link.owner} />
+        </span>
+      )}
+    </StepBlock>
+  );
+}
+
+/** A button that runs a script, drawn as the Perform Script step it is: the
+ * script's name links to the script, and the parameter (if any) follows it. */
+function PerformScriptSection({
+  scriptName,
+  scriptObj,
+  parameter,
+  targets,
+  model,
+  owner,
+  onGo,
+}: {
+  scriptName: string;
+  scriptObj: FmObject | null;
+  parameter?: string;
+  /** The objects the button refers to, so names in the parameter link to them. */
+  targets: FmObject[];
+  model: SolutionModel;
+  owner: string;
+  onGo: (uid: string, rowKey: string) => void;
+}) {
+  const long = (parameter?.length ?? 0) > ACTION_STEP_COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(!long);
+  const shown = parameter && long && !expanded ? parameter.slice(0, ACTION_STEP_COLLAPSE_THRESHOLD) + "…" : parameter;
+  const text = `Perform Script [ "${scriptName}"${parameter ? ` ; Parameter: ${parameter}` : ""} ]`;
+  return (
+    <StepBlock name="Perform Script" text={text} long={long} expanded={expanded} onToggle={() => setExpanded((v) => !v)}>
+      <span className="sw-params">
+        {" [ "}
+        {scriptObj ? (
+          <ObjLink obj={scriptObj} onGo={(uid) => onGo(uid, `lo-script:${uid}`)}>
+            “{scriptName}”
+          </ObjLink>
+        ) : (
+          <span className="syn-field" title="This script isn't in the loaded files">“{scriptName}”</span>
+        )}
+        {shown ? (
+          <>
+            {" ; Parameter: "}
+            <LinkedCode text={shown} objects={targets} onGo={onGo} model={model} owner={owner} />
+          </>
+        ) : null}
+        {" ]"}
+      </span>
+    </StepBlock>
   );
 }
 
@@ -1288,7 +1387,9 @@ function LayoutObjectColumnDetail({
     <>
       {detail.loType === "Text" && detail.info && (
         <Section title="Definition">
-          <pre className="lo-text-content">{detail.info}</pre>
+          <CodeBox text={detail.info}>
+            <pre className="code">{detail.info}</pre>
+          </CodeBox>
         </Section>
       )}
 
@@ -1327,24 +1428,23 @@ function LayoutObjectColumnDetail({
       )}
 
       {detail.actionStep && (
-        <ActionStepSection name={detail.actionStep.name} params={detail.actionStep.params} />
+        <ActionStepSection
+          name={detail.actionStep.name}
+          params={detail.actionStep.params}
+          link={{ targets: refIndexFor(model, owner.uid).targets, model, owner: owner.uid, onGo }}
+        />
       )}
 
       {scriptName && (
-        <Section title="Script">
-          <ul className="ref-list">
-            <li>
-              <div
-                {...pressable(() => scriptObj && onGo(scriptObj.uid, `lo-script:${scriptObj.uid}`), { inert: !scriptObj })}
-                title={scriptName}
-                className={scriptObj ? "row" : "row external inert"}
-              >
-                <TypePill type="script" short />
-                <span className="ellipsis">{scriptName}</span>
-              </div>
-            </li>
-          </ul>
-        </Section>
+        <PerformScriptSection
+          scriptName={scriptName}
+          scriptObj={scriptObj}
+          parameter={detail.scriptParameter}
+          targets={refIndexFor(model, owner.uid).targets}
+          model={model}
+          owner={owner.uid}
+          onGo={onGo}
+        />
       )}
 
       {valueListName && (
@@ -1857,9 +1957,9 @@ function LayoutMap({
   const scale = Math.min(MAX_W / width, MAX_H / height, 1);
   const w = Math.round(width * scale);
   const h = Math.round(height * scale);
-  // Labels are authored in layout units; divide by the scale so they stay ~11px
-  // on screen at full size. Strokes use non-scaling-stroke instead (see CSS).
-  const inv = 1 / scale;
+  // A part's name sits outside the map, on the right, level with the middle of
+  // its band; a band too thin to carry a label on screen goes without one.
+  const MIN_LABEL_H = 12;
 
   return (
     <div className="layout-map">
@@ -1875,11 +1975,6 @@ function LayoutMap({
                 className="layout-map-part"
                 vectorEffect="non-scaling-stroke"
               />
-              {part.height * scale > 16 && (
-                <text x={6 * inv} y={part.top + 16 * inv} className="layout-map-label" fontSize={11 * inv}>
-                  {part.type}
-                </text>
-              )}
             </g>
           ) : null,
         )}
@@ -1902,6 +1997,16 @@ function LayoutMap({
           />
         )}
       </svg>
+      <div className="layout-map-labels" style={{ height: h }}>
+        {detail.parts.map(
+          (part, i) =>
+            part.height * scale >= MIN_LABEL_H && (
+              <span key={i} className="layout-map-part-name" style={{ top: (part.top + part.height / 2) * scale }}>
+                {part.type}
+              </span>
+            ),
+        )}
+      </div>
     </div>
   );
 }

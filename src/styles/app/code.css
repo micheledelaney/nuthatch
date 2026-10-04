@@ -198,19 +198,6 @@ pre.code {
   font-size: 12px;
 }
 
-pre.lo-text-content {
-  background: var(--nh-deep);
-  border: 0;
-  border-radius: var(--nh-radius-soft);
-  padding: 14px 18px;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-}
-
 /* Value list custom values */
 ol.value-list {
   margin: 6px 0;

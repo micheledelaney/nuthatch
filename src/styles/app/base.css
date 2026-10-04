@@ -19,6 +19,16 @@ body {
   line-height: 1.57;
 }
 
+/* Selected text is highlighted in the accent, not the system blue/purple. The
+   text keeps its own colour, so syntax colours stay readable inside it. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+::-moz-selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
 /* Buttons carry a kind (kinds.css); a bare <button> keeps the theme's reset. */
 
 input[type="search"],
