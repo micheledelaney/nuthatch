@@ -274,8 +274,7 @@
 /* Fields: as tall as the app's other controls, one border (the focused field
    turns it orange; no second ring on top). */
 .modal input[type="text"],
-.modal select,
-.modal .locked-field {
+.modal select {
   height: var(--icon-btn);
   padding: 0 12px;
   font-size: 12.5px;
@@ -286,9 +285,15 @@
   background-position: right 12px center;
 }
 
+/* As tall as an input for a one-line name; a long name wraps inside it. */
 .modal .locked-field {
   display: flex;
   align-items: center;
+  min-height: var(--icon-btn);
+  padding: 4px 12px;
+  font-size: 12.5px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
   border-radius: var(--radius);
 }
 
