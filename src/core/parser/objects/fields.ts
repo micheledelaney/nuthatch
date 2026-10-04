@@ -3,10 +3,10 @@ import type { FileIndex, FileParse, TextScan } from "../context";
 import { attr, cdataText, child, children, displayText, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN, NO_FIELD_LABEL, UNKNOWN_TARGET } from "../sentinels";
 import { ownValue } from "../ownValue";
-import { collectCatalogItems, fieldCatalogs } from "../catalogWalk";
+import { catalogOrdering, collectCatalogItems, fieldCatalogs } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { activeFieldNode, isAutoEnterOptionActive, isValidationOptionActive } from "../refs/activeOptions";
-import { makeObject } from "./catalogItems";
+import { makeObject, withCustomOrder } from "./catalogItems";
 import { calculationText } from "../calcText";
 import { calcOf, qualifiedField } from "./common";
 
@@ -17,17 +17,24 @@ import { calcOf, qualifiedField } from "./common";
  */
 export function parseTablesAndFields(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   const tableUidById = new Map<string, string>();
+  const tableOrder = catalogOrdering(containerNode["BaseTableCatalog"]).positions;
+  const catalogs = fieldCatalogs(containerNode).map((catalog) => ({ ...catalog, ordering: catalogOrdering(catalog.node) }));
+  // How each table's fields are listed in Manage Database (its field catalog's "View by").
+  const fieldsViewBy = new Map(catalogs.map((catalog) => [catalog.tableId, catalog.ordering.viewBy]));
   for (const table of collectCatalogItems(containerNode["BaseTableCatalog"], "BaseTable")) {
-    const tableObj = makeObject(fp, table, "table");
-    if (!tableObj) continue;
+    const base = makeObject(fp, table, "table");
+    if (!base) continue;
+    const viewBy = fieldsViewBy.get(base.id);
+    const ordered = withCustomOrder(base, tableOrder);
+    const tableObj = viewBy ? { ...ordered, attributes: { ...ordered.attributes, fieldsListedBy: viewBy } } : ordered;
     fp.objects.push(tableObj);
     scans.push({ obj: tableObj, text: cdataText(table), source: table });
     tableUidById.set(tableObj.id, tableObj.uid);
   }
   let orphans = 0;
-  for (const catalog of fieldCatalogs(containerNode)) {
+  for (const catalog of catalogs) {
     const tableUid = tableUidById.get(catalog.tableId);
-    if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId, scans);
+    if (tableUid) addFields(fp, catalog.node, tableUid, catalog.tableId, catalog.ordering.positions, scans);
     else orphans += collectCatalogItems(catalog.node, "Field").length;
   }
   if (orphans > 0) {
@@ -36,13 +43,20 @@ export function parseTablesAndFields(fp: FileParse, containerNode: Record<string
   }
 }
 
-function addFields(fp: FileParse, fieldContainer: unknown, tableUid: string, tableId: string, scans: TextScan[]): void {
+function addFields(
+  fp: FileParse,
+  fieldContainer: unknown,
+  tableUid: string,
+  tableId: string,
+  customOrder: ReadonlyMap<string, number>,
+  scans: TextScan[],
+): void {
   for (const field of collectCatalogItems(fieldContainer, "Field")) {
     // Field ids are unique only within a base table, so namespace the uid by
     // the owning table to keep object uids globally unique.
     const base = makeObject(fp, field, "field", tableUid, tableId);
     if (!base || !isRecord(field)) continue;
-    const fieldObj = annotateField(field, base, fp.index);
+    const fieldObj = withCustomOrder(annotateField(field, base, fp.index), customOrder);
     fp.objects.push(fieldObj);
     // Without its switched-off auto-enter / validation calcs, for the element
     // scan and the placeholder passes (which read text, not elements) alike.
@@ -87,11 +101,25 @@ const SUMMARY_OPERATION_LABELS: Readonly<Record<string, string>> = {
   Minimum: "Minimum of",
   Maximum: "Maximum of",
   StandardDeviation: "Standard deviation of",
+  // The spelling FileMaker writes (FM 22 sample).
+  StdDeviation: "Standard deviation of",
   Fraction: "Fraction of total of",
   FractionOfTotal: "Fraction of total of",
   List: "List of",
   RunningTotal: "Running total of",
   RunningCount: "Running count of",
+};
+
+/** A summary's "Summarize repetitions" option (<SummaryInfo summarizeRepetition>). */
+const SUMMARY_REPETITION_LABELS: Readonly<Record<string, string>> = {
+  Together: "All together",
+  Individually: "Individually",
+};
+
+/** A lookup's "If no exact match, then" option (<Looked_up noMatchCopyOption>),
+ * apart from a constant (see lookupOptions). Unlisted options show as written. */
+const NO_MATCH_LABELS: Readonly<Record<string, string>> = {
+  DoNotCopy: "Do not copy",
 };
 
 /** Validation's "Strict data type" option (<Strict>). */
@@ -112,7 +140,7 @@ function annotateField(fieldNode: Record<string, unknown>, fieldObj: FmObject, i
   const storage = child(fieldNode, "Storage");
   const autoEnter = child(fieldNode, "AutoEnter");
   const formula = fieldFormula(fieldNode, autoEnter, storage);
-  const detail = formula?.detail ?? summaryDetail(fieldNode) ?? lookupDetail(autoEnter, index);
+  const detail = formula?.detail ?? summaryDetail(fieldNode, index) ?? lookupDetail(autoEnter, index);
   return {
     ...fieldObj,
     attributes: {
@@ -130,8 +158,13 @@ function annotateField(fieldNode: Record<string, unknown>, fieldObj: FmObject, i
 function storageAttributes(fieldNode: Record<string, unknown>, storage: unknown): Record<string, string> {
   const a: Record<string, string> = {};
   if (attr(storage, "global") === "True") a.global = "Yes";
-  // Container fields: where the data lives — in the file, or externally.
-  if (attr(fieldNode, "datatype") === "Binary") a.containerStorage = containerStorage(storage);
+  // Container fields: where the data lives — in the file, or externally, where
+  // open storage adds its own folder (a calculation) under the base directory.
+  if (attr(fieldNode, "datatype") === "Binary") {
+    a.containerStorage = containerStorage(storage);
+    const folder = calcOf(child(child(storage, "Remote"), "Location"));
+    if (folder) a.containerFolder = folder;
+  }
   // Repetitions beyond the default single value are worth surfacing.
   const reps = attr(storage, "maxRepetitions");
   if (reps && reps !== "1") a.repetitions = reps;
@@ -194,18 +227,34 @@ function fieldFormula(
 }
 
 /** A summary field carries no formula — instead a <SummaryInfo> naming the
- * aggregate operation and the field(s) it summarizes. */
-function summaryDetail(fieldNode: Record<string, unknown>): ObjectDetail | undefined {
+ * aggregate operation, the field(s) it summarizes, and its options: whether it
+ * restarts for each sorted group, the second field the options name, and how
+ * repetitions are summarized. */
+function summaryDetail(fieldNode: Record<string, unknown>, index: FileIndex): ObjectDetail | undefined {
   const summaryInfo = child(fieldNode, "SummaryInfo");
   if (!isRecord(summaryInfo)) return undefined;
-  const operation = ownValue(SUMMARY_OPERATION_LABELS, attr(summaryInfo, "operation")) ?? "Summary of";
+  const rawOperation = attr(summaryInfo, "operation");
+  const operation = ownValue(SUMMARY_OPERATION_LABELS, rawOperation) ?? "Summary of";
   const fields: string[] = [];
   for (const sf of children(summaryInfo, "SummaryField")) {
     const ref = child(sf, "FieldReference");
     // A deleted field's reference stays, with its name blank.
     if (ref != null) fields.push(textAttr(ref, "name") || MISSING_FIELD_TOKEN);
   }
-  return { kind: "summary", operation, fields };
+  // <AdditionalField>: the field a running total or count restarts by (a
+  // fraction of total is subtotaled by) when sorted — or, for an average, the
+  // field it's weighted by.
+  const additional = qualifiedField(child(child(summaryInfo, "AdditionalField"), "FieldReference"), index);
+  const rawRepetitions = attr(summaryInfo, "summarizeRepetition");
+  const repetitions = rawRepetitions && (ownValue(SUMMARY_REPETITION_LABELS, rawRepetitions) ?? rawRepetitions);
+  return {
+    kind: "summary",
+    operation,
+    fields,
+    ...(attr(summaryInfo, "restartEachGroup") === "True" ? { restartsEachGroup: true } : {}),
+    ...(additional ? (rawOperation === "Average" ? { weightedBy: additional } : { sortedBy: additional }) : {}),
+    ...(repetitions ? { repetitions } : {}),
+  };
 }
 
 /** A "looked-up value" auto-enter field carries no formula — instead an enabled
@@ -217,9 +266,25 @@ function lookupDetail(autoEnter: unknown, index: FileIndex): ObjectDetail | unde
   if (!isAutoEnterOptionActive(autoEnter, "Looked_up") || !isRecord(lookedUp)) return undefined;
   // A lookup never pointed at a field names `<FieldReference id="0" name="">`.
   const ref = child(lookedUp, "FieldReference");
-  if (attr(ref, "id") === "0" && !textAttr(ref, "name")) return { kind: "lookup", source: NO_FIELD_LABEL };
+  if (attr(ref, "id") === "0" && !textAttr(ref, "name")) return { kind: "lookup", source: NO_FIELD_LABEL, ...lookupOptions(lookedUp) };
   const source = qualifiedField(lookedUp["FieldReference"], index);
-  return source ? { kind: "lookup", source } : undefined;
+  return source ? { kind: "lookup", source, ...lookupOptions(lookedUp) } : undefined;
+}
+
+/** A lookup's settings beside its source field: the occurrence it starts from
+ * (<Context>), "Don't copy contents if empty", and what it copies when no
+ * record matches — a constant is the <ConstantData> beside the option. */
+function lookupOptions(lookedUp: Record<string, unknown>): Partial<Extract<ObjectDetail, { kind: "lookup" }>> {
+  const startingFrom = textAttr(child(child(lookedUp, "Context"), "TableOccurrenceReference"), "name");
+  const dontCopyIfEmpty = attr(lookedUp, "dontCopyIfEmpty");
+  const noMatch = attr(lookedUp, "noMatchCopyOption");
+  const ifNoMatch =
+    noMatch === "ConstantData" ? `Use “${displayText(lookedUp["ConstantData"])}”` : noMatch && (ownValue(NO_MATCH_LABELS, noMatch) ?? noMatch);
+  return {
+    ...(startingFrom ? { startingFrom } : {}),
+    ...(dontCopyIfEmpty != null ? { skipEmpty: dontCopyIfEmpty === "True" } : {}),
+    ...(ifNoMatch ? { ifNoMatch } : {}),
+  };
 }
 
 /** Any non-calculated auto-enter option (the calculated case is the field's
@@ -297,9 +362,13 @@ function validationAttributes(fieldNode: Record<string, unknown>): Record<string
 
   const formula = isCalculated ? calcOf(calculated) : "";
   const message = validationMessage(validation);
+  // The calculation dialog's "Validate only if field has been modified", which
+  // reads as the opposite of `alwaysValidate` (False in every sample).
+  const alwaysValidate = isCalculated ? attr(validation, "alwaysValidate") : undefined;
   return {
     validation: requirements.join(", "),
     ...(formula ? { validationCalculation: formula } : {}),
+    ...(alwaysValidate != null ? { validateOnlyIfModified: alwaysValidate === "True" ? "No" : "Yes" } : {}),
     ...(message ? { validationMessage: message } : {}),
     validateWhen: attr(validation, "type") === "Always" ? "Always" : "Only during data entry",
     validationOverride: attr(validation, "allowOverride") === "True" ? "User can override" : "Strict (no override)",

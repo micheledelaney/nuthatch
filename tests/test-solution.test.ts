@@ -14,9 +14,22 @@ import { loadSnapshot, type Snapshot } from "./support/snapshot";
 const DIR = fileURLToPath(new URL("./fixtures/test-solution/", import.meta.url));
 
 /** What FileMaker 21 legitimately exports differently from the expected output. */
+/** What FileMaker 26 exports that earlier versions don't: the Manage dialogs'
+ * custom order and "View by", and the default-fields option. */
+const NOT_BEFORE_FM26: AttributeOverrides = {
+  "MAIN:file:TEST_MAIN": { useDefaultFields: { absent: true }, tablesListedBy: { absent: true }, valueListsListedBy: { absent: true } },
+  "MAIN:table:T_Main": { customOrder: { absent: true }, fieldsListedBy: { absent: true } },
+  "MAIN:field:T_Main::f_Text": { customOrder: { absent: true } },
+};
+
+/** What FileMaker 22 legitimately exports differently from the expected output. */
+const FM22: AttributeOverrides = NOT_BEFORE_FM26;
+
 const FM21: AttributeOverrides = {
-  // Lowered from 22.0 so FileMaker 21 could open the file for this export.
-  "MAIN:file:TEST_MAIN": { minimumVersion: "18.0" },
+  ...NOT_BEFORE_FM26,
+  // Lowered from 22.0 so FileMaker 21 could open the file for this export,
+  // which has no page setup either.
+  "MAIN:file:TEST_MAIN": { ...NOT_BEFORE_FM26["MAIN:file:TEST_MAIN"], minimumVersion: "18.0", pageSetup: { absent: true } },
   // FileMaker 21 has no "Manage database" / "Manage custom menus" privileges.
   "MAIN:privilegeSet:PS_Other": {
     otherPrivileges:
@@ -46,8 +59,8 @@ const SCENARIOS: {
   { name: "FM26 intact: TEST_MAIN alone", oracle: "expected-intact.json", files: ["XML FM26/TEST_MAIN__intact.xml"], mainAlone: true },
   { name: "FM26 final: TEST_MAIN + TEST_EXT", oracle: "expected.json", files: ["XML FM26/TEST_MAIN.xml", "XML FM26/TEST_EXT.xml"], mainAlone: false },
   { name: "FM26 final: TEST_MAIN alone", oracle: "expected.json", files: ["XML FM26/TEST_MAIN.xml"], mainAlone: true },
-  { name: "FM22 final: TEST_MAIN + TEST_EXT", oracle: "expected.json", files: ["XML FM22/TEST_MAIN.xml", "XML FM22/TEST_EXT.xml"], mainAlone: false },
-  { name: "FM22 final: TEST_MAIN alone", oracle: "expected.json", files: ["XML FM22/TEST_MAIN.xml"], mainAlone: true },
+  { name: "FM22 final: TEST_MAIN + TEST_EXT", oracle: "expected.json", files: ["XML FM22/TEST_MAIN.xml", "XML FM22/TEST_EXT.xml"], mainAlone: false, overrides: FM22 },
+  { name: "FM22 final: TEST_MAIN alone", oracle: "expected.json", files: ["XML FM22/TEST_MAIN.xml"], mainAlone: true, overrides: FM22 },
   { name: "FM21 final: TEST_MAIN + TEST_EXT", oracle: "expected.json", files: ["XML FM21/TEST_MAIN.xml", "XML FM21/TEST_EXT.xml"], mainAlone: false, overrides: FM21 },
   { name: "FM21 final: TEST_MAIN alone", oracle: "expected.json", files: ["XML FM21/TEST_MAIN.xml"], mainAlone: true, overrides: FM21 },
   {

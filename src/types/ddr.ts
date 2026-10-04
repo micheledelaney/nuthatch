@@ -139,6 +139,16 @@ export type ObjectDetail =
       operation: string;
       /** Names of the summarized field(s). */
       fields: string[];
+      /** "Restart summary for each sorted group" ("Subtotaled" for a fraction
+       * of total). */
+      restartsEachGroup?: boolean;
+      /** The field the summary restarts (or is subtotaled) by when sorted, as
+       * "TableOccurrence::Field". */
+      sortedBy?: string;
+      /** A weighted average's weight field, as "TableOccurrence::Field". */
+      weightedBy?: string;
+      /** How repeating fields are summarized: "All together" or "Individually". */
+      repetitions?: string;
     }
   | {
       kind: "relationship";
@@ -160,6 +170,12 @@ export type ObjectDetail =
       kind: "lookup";
       /** The source field, as "TableOccurrence::Field". */
       source: string;
+      /** The occurrence the lookup starts from ("Starting with table"). */
+      startingFrom?: string;
+      /** "Don't copy contents if empty". */
+      skipEmpty?: boolean;
+      /** What's copied when no record matches ("If no exact match, then"). */
+      ifNoMatch?: string;
     }
   | {
       /** An individual object placed on a layout (field, button, portal, …). */
@@ -188,6 +204,17 @@ export type ObjectDetail =
       hideInFind?: boolean;
       /** Conditional-formatting condition calculations, in evaluation order. */
       conditionalFormats?: string[];
+      /** The formatting each condition applies (normalized like `style`), by
+       * position in conditionalFormats; "" for a condition with none. */
+      conditionalFormatStyles?: string[];
+      /** Placeholder text calculation of a field object. */
+      placeholder?: string;
+      /** The placeholder also shows in Find mode. */
+      placeholderInFind?: boolean;
+      /** Popover title calculation (on its popover button). */
+      popoverTitle?: string;
+      /** A chart's setup. */
+      chart?: ChartInfo;
       /** Absolute position on the layout. */
       bounds?: LayoutBounds;
       /** Normalized per-object styling from `<LocalCSS>` (fill/text/border colors,
@@ -200,6 +227,10 @@ export type ObjectDetail =
       portalRows?: number;
       /** Portal: the fields its records are sorted by. */
       portalSort?: SortField[];
+      /** Portal: the filter calculation ("Filter portal records"). */
+      portalFilter?: string;
+      /** Portal: the first related record it shows ("Initial row"). */
+      portalInitialRow?: number;
     }
   | {
       kind: "layout";
@@ -211,6 +242,8 @@ export type ObjectDetail =
       parts: LayoutPart[];
       /** Objects parked entirely to the right of the layout (off the drawn area). */
       offLayout: LayoutObjectInfo[];
+      /** The columns of its Table View setup (FM 26), in order. */
+      tableView?: TableViewColumn[];
     }
   | {
       /** A file's own options. Scalar options (auto-login, encryption, …) live in
@@ -346,7 +379,42 @@ export interface LayoutPart {
   top: number;
   /** Height of the part in layout points. */
   height: number;
+  /** A sub-summary part's break field ("when sorted by"), as "TableOccurrence::Field". */
+  breakField?: string;
   objects: LayoutObjectInfo[];
+}
+
+/** One column of a layout's Table View setup. */
+export interface TableViewColumn {
+  /** The field it shows, as "TableOccurrence::Field". */
+  field: string;
+  /** Width in points. */
+  width: number;
+  hidden: boolean;
+}
+
+/** A chart object's setup: its type, where its data comes from, and the
+ * formulas behind its titles and data series. */
+export interface ChartInfo {
+  /** Chart type, e.g. "Column", "Line", "Pie". */
+  type?: string;
+  /** The records it charts, e.g. "Current Found Set". */
+  dataSource?: string;
+  /** "Show data from record groups when sorted" (found-set charts). */
+  groupsWhenSorted?: boolean;
+  title?: string;
+  xAxisTitle?: string;
+  yAxisTitle?: string;
+  /** The series with a value or title formula, in X, Y, W, Z list order. */
+  series: ChartSeries[];
+}
+
+export interface ChartSeries {
+  /** The series list it's in: "X", "Y", "W" or "Z". */
+  axis: string;
+  /** The data formula, when FileMaker exported one. */
+  value?: string;
+  title?: string;
 }
 
 /** A single object placed on a layout (field, button, web viewer, …). */
@@ -377,6 +445,10 @@ export interface LayoutObjectInfo {
   portalRows?: number;
   /** Portal: the fields its records are sorted by (Portal Setup ▸ Sort portal records). */
   portalSort?: SortField[];
+  /** Portal: the filter calculation (Portal Setup ▸ Filter portal records). */
+  portalFilter?: string;
+  /** Portal: the first related record it shows (Portal Setup ▸ Initial row). */
+  portalInitialRow?: number;
   /** Nested objects: portal fields, tab/slide panel contents, group members. */
   children?: LayoutObjectInfo[];
   /** Field binding: "TO::FieldName" for field-type objects. */
@@ -400,6 +472,17 @@ export interface LayoutObjectInfo {
   hideInFind?: boolean;
   /** Conditional-formatting condition calculations, in evaluation order. */
   conditionalFormats?: string[];
+  /** The formatting each condition applies (normalized like `style`), by
+   * position in conditionalFormats; "" for a condition with none. */
+  conditionalFormatStyles?: string[];
+  /** Placeholder text calculation of a field object (Inspector ▸ Data). */
+  placeholder?: string;
+  /** The placeholder also shows in Find mode. */
+  placeholderInFind?: boolean;
+  /** Popover title calculation, read from its panel onto the popover button. */
+  popoverTitle?: string;
+  /** A chart's setup. */
+  chart?: ChartInfo;
   /** Normalized per-object styling from `<LocalCSS>` (colors, fonts, borders, …),
    * one declaration per line. */
   style?: string;
@@ -447,6 +530,9 @@ export interface ValueListFieldSource {
   showOnlySecondary?: boolean;
   /** When set, only related values are shown, anchored from this occurrence. */
   showRelatedFrom?: string;
+  /** Sorted by the second field instead of the primary one (FileMaker sorts a
+   * field's value list by one or the other). */
+  sortBySecondField?: boolean;
 }
 
 export interface ScriptStep {

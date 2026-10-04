@@ -1,7 +1,8 @@
-import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
+import type { ChartInfo, ChartSeries, LayoutObjectInfo, LayoutPart, ObjectDetail, TableViewColumn } from "@/types/ddr";
 import type { FileIndex } from "../context";
 import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
+import { ownValue } from "../ownValue";
 import { calculationText, literalText } from "../calcText";
 import { BUTTON_ACTION_TAGS, calcOf, fieldRefState, qualifiedField, scriptTriggers, sortFields } from "./common";
 import { actionScanTexts, stepParams } from "./stepText";
@@ -45,7 +46,16 @@ export function layoutDetail(node: unknown, index: FileIndex): LayoutNodes | und
   const declaredWidth = num(attr(node, "width"));
   const { parts, offLayout } = splitOffLayout(rawParts, declaredWidth);
   const { width, height } = canvasSize(parts, declaredWidth);
-  return { kind: "layout", width, height, triggers: scriptTriggers(node["ScriptTriggers"]), parts, offLayout };
+  const tableView = tableViewColumns(node, index);
+  return {
+    kind: "layout",
+    width,
+    height,
+    triggers: scriptTriggers(node["ScriptTriggers"]),
+    parts,
+    offLayout,
+    ...(tableView.length > 0 ? { tableView } : {}),
+  };
 }
 
 /** The layout's parts, each with the objects placed on it. */
@@ -55,14 +65,54 @@ function layoutParts(partsList: Record<string, unknown>, index: FileIndex): Part
     if (!isRecord(part)) continue;
     // The part's top offset (absolute) and height (size) live on its <Definition>.
     const def = child(part, "Definition");
+    const kind = attr(part, "kind");
+    const type = ownValue(PART_KINDS, kind) ?? attr(part, "type") ?? "Part";
+    const breakField = kind === "3" || kind === "5" ? partBreakField(def, index) : undefined;
     parts.push({
-      type: attr(part, "type") ?? "Part",
+      type,
       top: num(attr(def, "absolute")),
       height: num(attr(def, "size")),
+      ...(breakField ? { breakField } : {}),
       objects: layoutObjects(part["ObjectList"], index),
     });
   }
   return parts;
+}
+
+/** Part names by the part's `kind`. FM 21 and FM 22 write a trailing
+ * sub-summary (kind 5) as `type="Trailing Grand Summary"`, so the kind is what
+ * tells them apart; an unlisted kind goes by its `type`. */
+const PART_KINDS: Readonly<Record<string, string>> = {
+  "0": "Title Header",
+  "1": "Header",
+  "2": "Leading Grand Summary",
+  "3": "Leading Sub-summary",
+  "4": "Body",
+  "5": "Trailing Sub-summary",
+  "6": "Trailing Grand Summary",
+  "7": "Footer",
+  "8": "Title Footer",
+  "12": "Top Navigation",
+  "13": "Bottom Navigation",
+};
+
+/** A sub-summary part's "when sorted by" field, from its <Definition>
+ * (`id="0"` with no name is no field). */
+function partBreakField(def: unknown, index: FileIndex): string | undefined {
+  const ref = child(def, "FieldReference");
+  if (!isRecord(ref) || (attr(ref, "id") === "0" && !textAttr(ref, "name"))) return undefined;
+  return qualifiedField(ref, index) || undefined;
+}
+
+/** The columns of a layout's Table View setup (FM 26 <TableView>), in order. */
+function tableViewColumns(node: Record<string, unknown>, index: FileIndex): TableViewColumn[] {
+  return children(child(child(node, "TableView"), "ObjectList"), "TableViewLayoutObject")
+    .filter(isRecord)
+    .map((column) => ({
+      field: qualifiedField(child(column, "FieldReference"), index) || textAttr(column, "name") || MISSING_FIELD_TOKEN,
+      width: num(attr(column, "width")),
+      hidden: attr(column, "hidden") === "True",
+    }));
 }
 
 /** Objects sitting entirely to the right of the layout's real right edge (a
@@ -122,6 +172,12 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
   const portalTo = child(portal, "TableOccurrenceReference");
   const portalOptions = child(portal, "Options");
   const portalSort = sortFields(child(portal, "SortSpecification"), index);
+  // The filter formula is kept whether or not "Filter portal records" is on —
+  // which the <Options> bitmask may record (unconfirmed), so it isn't read.
+  const portalFilter = calcOf(portal);
+  const portalInitialRow = attr(portalOptions, "index");
+  const chart = chartInfo(obj);
+  const popoverTitle = popoverTitleOf(obj);
   const kids = childObjects(obj, index);
   const triggers = scriptTriggers(obj["ScriptTriggers"]);
   const tooltip = calcOf(child(obj, "Tooltip"));
@@ -143,6 +199,10 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
     ...(isRecord(portalTo) ? { portalTable: textAttr(portalTo, "name") ?? "" } : {}),
     ...(isRecord(portalOptions) ? { portalRows: num(attr(portalOptions, "show")) } : {}),
     ...(portalSort.length > 0 ? { portalSort } : {}),
+    ...(portalFilter ? { portalFilter } : {}),
+    ...(portalInitialRow != null ? { portalInitialRow: num(portalInitialRow) } : {}),
+    ...(popoverTitle ? { popoverTitle } : {}),
+    ...(chart ? { chart } : {}),
     ...(kids ? { children: kids.map((kid) => kid.info) } : {}),
     ...fieldBinding(obj, index),
     ...(action.scriptRef ? { scriptRef: action.scriptRef } : {}),
@@ -151,6 +211,7 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(shownTooltip ? { tooltip: shownTooltip } : {}),
+    ...fieldPlaceholder(obj),
     ...conditions(obj),
   };
   const missing = missingBinding(obj, index);
@@ -184,15 +245,8 @@ function panelLabel(obj: Record<string, unknown>): string | undefined {
  * button. Popovers, button bars and groups only count when they hold something.
  */
 function childObjects(obj: Record<string, unknown>, index: FileIndex): LayoutObjectNode[] | undefined {
-  const popover = child(obj, "PopoverButton");
-  if (isRecord(popover)) {
-    const panels = [
-      ...asArray(popover["PopoverPanel"]),
-      ...asArray(popover["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
-    ];
-    const contents = panels.flatMap((panel) => (isRecord(panel) ? layoutObjects(panel["ObjectList"], index) : []));
-    if (contents.length > 0) return contents;
-  }
+  const contents = popoverPanels(obj).flatMap((panel) => layoutObjects(panel["ObjectList"], index));
+  if (contents.length > 0) return contents;
   for (const tag of ["ButtonBar", "GroupedButton"]) {
     const holder = child(obj, tag);
     const members = isRecord(holder) ? layoutObjects(holder["ObjectList"], index) : [];
@@ -200,6 +254,86 @@ function childObjects(obj: Record<string, unknown>, index: FileIndex): LayoutObj
   }
   const holder = ["SlidePanel", "TabPanel", "SlideControl", "TabControl", "Portal"].map((tag) => child(obj, tag)).find(isRecord);
   return holder ? layoutObjects(holder["ObjectList"], index) : undefined;
+}
+
+/** A popover button's panels: <LayoutObject type="PopoverPanel"> under its
+ * <PopoverButton>, or a bare <PopoverPanel> element there (FM 21). */
+function popoverPanels(obj: Record<string, unknown>): Record<string, unknown>[] {
+  const popover = child(obj, "PopoverButton");
+  if (!isRecord(popover)) return [];
+  return [
+    ...asArray(popover["PopoverPanel"]),
+    ...asArray(popover["LayoutObject"]).filter((lo) => attr(lo, "type") === "PopoverPanel"),
+  ].filter(isRecord);
+}
+
+/** A popover's title, from its panel's <Title> calculation; a static title
+ * reads as its text, like a button label. */
+function popoverTitleOf(obj: Record<string, unknown>): string | undefined {
+  for (const panel of popoverPanels(obj)) {
+    const title = calculationText(child(panel, "Title"));
+    if (title) return literalText(title) ?? title;
+  }
+  return undefined;
+}
+
+/** A field object's placeholder text (Inspector ▸ Data ▸ Placeholder text):
+ * <Field><Display><Placeholder findMode>, a calculation shown like a tooltip. */
+function fieldPlaceholder(obj: Record<string, unknown>): Pick<LayoutObjectInfo, "placeholder" | "placeholderInFind"> {
+  const placeholder = child(child(child(obj, "Field"), "Display"), "Placeholder");
+  const formula = calcOf(placeholder);
+  if (!formula) return {};
+  return { placeholder: literalText(formula) ?? formula, ...(attr(placeholder, "findMode") === "True" ? { placeholderInFind: true } : {}) };
+}
+
+/** A chart's series lists, with the axis letter each is shown by. */
+const CHART_SERIES_LISTS = [
+  ["XSeriesList", "X"],
+  ["YSeriesList", "Y"],
+  ["WSeriesList", "W"],
+  ["ZSeriesList", "Z"],
+] as const;
+
+/** A chart title (the chart's, an axis's or a series'): <Title><Text><Calculation>,
+ * a static one read as its text. */
+function chartTitle(owner: unknown): string | undefined {
+  const formula = calculationText(child(child(child(owner, "Title"), "Text"), "Calculation"));
+  return formula ? (literalText(formula) ?? formula) : undefined;
+}
+
+/**
+ * A chart object's setup (<External type="CHRT"><Chart>): its type, the records
+ * it charts, and the formulas behind its titles and series. FileMaker often
+ * leaves a series' <Value> empty — FM 22 exports even the whole <Chart> — so
+ * a chart's data fields can be missing from the export.
+ */
+function chartInfo(obj: Record<string, unknown>): ChartInfo | undefined {
+  const chart = child(child(obj, "External"), "Chart");
+  if (!isRecord(chart)) return undefined;
+  const type = displayText(child(child(chart, "Visual"), "Type"));
+  const source = child(chart, "SeriesSource");
+  const dataSource = textAttr(source, "source");
+  const groups = displayText(child(source, "ShowRecordGroupDataWhenSorted"));
+  const axis = (list: string) => child(child(child(chart, "ChartAxis"), list), "Axis");
+  const title = chartTitle(chart);
+  const xAxisTitle = chartTitle(axis("XAxisList"));
+  const yAxisTitle = chartTitle(axis("YAxisList"));
+  const series: ChartSeries[] = CHART_SERIES_LISTS.flatMap(([list, letter]) =>
+    children(child(child(chart, "ChartSeries"), list), "Series").flatMap((s) => {
+      const value = calcOf(child(s, "Value"));
+      const seriesTitle = chartTitle(s);
+      return value || seriesTitle ? [{ axis: letter, ...(value ? { value } : {}), ...(seriesTitle ? { title: seriesTitle } : {}) }] : [];
+    }),
+  );
+  return {
+    ...(type ? { type } : {}),
+    ...(dataSource ? { dataSource } : {}),
+    ...(groups ? { groupsWhenSorted: groups === "True" } : {}),
+    ...(title ? { title } : {}),
+    ...(xAxisTitle ? { xAxisTitle } : {}),
+    ...(yAxisTitle ? { yAxisTitle } : {}),
+    series,
+  };
 }
 
 /**
@@ -264,18 +398,23 @@ function buttonAction(obj: Record<string, unknown>): ButtonAction {
 
 /** Hide-object-when and conditional-formatting calculations:
  * <Conditions><Hide findMode=…><Calculation> and
- * <Conditions><Formatting><Condition><Calculation>. */
+ * <Conditions><Formatting><Condition><Calculation>, with each condition's
+ * <LocalCSS>. */
 function conditions(obj: Record<string, unknown>): Pick<LayoutObjectInfo, "hideWhen" | "hideInFind" | "conditionalFormats"> {
   const conditionsNode = child(obj, "Conditions");
   if (!isRecord(conditionsNode)) return {};
   const hide = child(conditionsNode, "Hide");
   const hideWhen = calcOf(hide);
+  // Each condition's formula — FileMaker writes one for a "Value is …"
+  // condition too — and the formatting it applies (its <LocalCSS>).
   const formats = children(child(conditionsNode, "Formatting"), "Condition")
-    .map((c) => calcOf(c))
-    .filter((c) => c !== "");
+    .map((c) => ({ formula: calcOf(c), style: normalizeLocalCss(displayText(child(c, "LocalCSS"))) }))
+    .filter((c) => c.formula !== "");
+  const styles = formats.map((c) => c.style);
   return {
     ...(hideWhen ? { hideWhen, ...(attr(hide, "findMode") === "True" ? { hideInFind: true } : {}) } : {}),
-    ...(formats.length > 0 ? { conditionalFormats: formats } : {}),
+    ...(formats.length > 0 ? { conditionalFormats: formats.map((c) => c.formula) } : {}),
+    ...(styles.some((style) => style !== "") ? { conditionalFormatStyles: styles } : {}),
   };
 }
 

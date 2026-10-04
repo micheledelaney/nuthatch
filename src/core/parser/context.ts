@@ -25,6 +25,9 @@ export interface FileParse {
   /** How many catalog items of each type had no `id`, so became no object
    * (see makeObject); reported once the file is read. */
   readonly withoutId: Map<ObjectType, number>;
+  /** Theme id → the base theme its layouts' <LayoutThemeReference Base> names,
+   * for a theme that doesn't name its own (see addThemeBases). */
+  readonly themeBases: Map<string, string>;
   readonly objects: FmObject[];
   readonly references: RawReference[];
   /** Shared with the whole parse: problems worth telling the user about. */

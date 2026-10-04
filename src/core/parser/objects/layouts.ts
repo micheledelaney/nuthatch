@@ -44,6 +44,7 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   // only be replaced by its compact text.
   const base = makeObject(fp, layout, "layout", undefined, undefined, "");
   if (!base) return false;
+  recordThemeBase(fp, layout);
   // The layout's own objects and references, added to the file's at the end.
   const lp: FileParse = { ...fp, objects: [], references: [] };
   const uidCounts = new Map<string, number>();
@@ -56,6 +57,15 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   for (const ref of lp.references) fp.references.push(ref);
   for (const [uid, count] of uidCounts) fp.layoutObjectUidCounts.set(uid, count);
   return true;
+}
+
+/** The base theme the layout's theme reference names, for its theme (see
+ * FileParse.themeBases). */
+function recordThemeBase(fp: FileParse, layout: unknown): void {
+  const ref = child(layout, "LayoutThemeReference");
+  const id = attr(ref, "id");
+  const base = textAttr(ref, "Base");
+  if (id != null && base && !fp.themeBases.has(id)) fp.themeBases.set(id, base);
 }
 
 /** The layout object, after its layout objects and its own references, with
@@ -245,10 +255,15 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
   }
   if (lo.scriptParameter) a.scriptParameter = lo.scriptParameter;
   if (lo.tooltip) a.tooltip = lo.tooltip;
+  if (lo.placeholder) a.placeholder = lo.placeholderInFind ? `${lo.placeholder} (also in Find mode)` : lo.placeholder;
   if (lo.hideWhen) a.hideWhen = lo.hideInFind ? `${lo.hideWhen} (also in Find mode)` : lo.hideWhen;
   if (lo.conditionalFormats) a.conditionalFormats = lo.conditionalFormats.join("\n");
+  if (lo.popoverTitle) a.popoverTitle = lo.popoverTitle;
+  if (lo.chart?.type) a.chartType = lo.chart.type;
   if (lo.portalTable) a.portalOccurrence = lo.portalTable;
   if (lo.portalRows != null) a.portalRows = String(lo.portalRows);
+  if (lo.portalInitialRow != null) a.portalInitialRow = String(lo.portalInitialRow);
+  if (lo.portalFilter) a.portalFilter = lo.portalFilter;
   return a;
 }
 
@@ -293,7 +308,8 @@ function nameForLayoutObj(lo: LayoutObjectInfo): string {
 
 /** The searchable text fragments of a single layout object — its name, field
  * binding, portal/script references, script parameter, label/url info,
- * tooltip, and trigger scripts. Shared by the per-object search index and the
+ * tooltip, placeholder, conditions, portal filter, popover and chart titles,
+ * and trigger scripts. Shared by the per-object search index and the
  * layout's own compacted text (compactLayoutText). */
 function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
   return [
@@ -305,10 +321,20 @@ function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
     lo.valueListRef?.name,
     lo.info,
     lo.tooltip,
+    lo.placeholder,
     lo.hideWhen,
     ...(lo.conditionalFormats ?? []),
+    lo.portalFilter,
+    lo.popoverTitle,
+    ...chartTerms(lo.chart),
     ...(lo.triggers ?? []).map((t) => t.scriptName),
   ].filter((s): s is string => !!s);
+}
+
+/** A chart's titles and series formulas, for search. */
+function chartTerms(chart: LayoutObjectInfo["chart"]): (string | undefined)[] {
+  if (!chart) return [];
+  return [chart.title, chart.xAxisTitle, chart.yAxisTitle, ...chart.series.flatMap((s) => [s.title, s.value])];
 }
 
 /**

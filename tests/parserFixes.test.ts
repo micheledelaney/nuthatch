@@ -1562,12 +1562,142 @@ describe("a lookup that copies from no field", () => {
 
   it("says so, and isn't broken", () => {
     const result = parse(doc("MAIN", `<AddAction>${lookup("")}</AddAction>`));
-    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "lookup", source: "(no field set)" });
+    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "lookup", source: "(no field set)", startingFrom: "T" });
     expect(buildModel(result).brokenReferences.filter((r) => r.fromUid === "F0:field:1.2")).toEqual([]);
   });
 
   it("counts for nothing while switched off", () => {
     const result = parse(doc("MAIN", `<AddAction>${lookup(' enable="False"')}</AddAction>`));
     expect(object(result, "F0:field:1.2").detail?.kind).not.toBe("lookup");
+  });
+});
+
+describe("settings the samples write in shapes the test solution doesn't", () => {
+  /** TABLE with field b replaced by `field` (an element with id 2). */
+  const withField = (field: string): string => TABLE.replace('<Field id="2" name="b"></Field>', field);
+
+  it("reads a lookup's constant for no match (Dev Invoice)", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${withField(`<Field id="2" name="b"><AutoEnter type="Looked_up"><Looked_up dontCopyIfEmpty="False" noMatchCopyOption="ConstantData">
+          <ConstantData>none</ConstantData>
+          <FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference>
+          <Context><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></Context>
+        </Looked_up></AutoEnter></Field>`)}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "lookup", source: "T::a", startingFrom: "T", skipEmpty: false, ifNoMatch: "Use “none”" });
+  });
+
+  it("names a standard deviation as FileMaker spells it (Dev OrderLists)", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${withField(`<Field id="2" name="b" fieldtype="Summary"><SummaryInfo restartEachGroup="False" summarizeRepetition="Individually" operation="StdDeviation">
+          <SummaryField><FieldReference id="1" name="a"><BaseTableReference id="1" name="T"></BaseTableReference></FieldReference></SummaryField>
+        </SummaryInfo></Field>`)}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "summary", operation: "Standard deviation of", fields: ["a"], repetitions: "Individually" });
+  });
+
+  it("reads an average's extra field as what it's weighted by", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${withField(`<Field id="2" name="b" fieldtype="Summary"><SummaryInfo summarizeRepetition="Together" operation="Average">
+          <SummaryField><FieldReference id="1" name="a"><BaseTableReference id="1" name="T"></BaseTableReference></FieldReference></SummaryField>
+          <AdditionalField><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></AdditionalField>
+        </SummaryInfo></Field>`)}</AddAction>`,
+      ),
+    );
+    const detail = object(result, "F0:field:1.2").detail;
+    expect(detail).toMatchObject({ kind: "summary", weightedBy: "T::a" });
+    expect(detail).not.toHaveProperty("sortedBy");
+  });
+
+  it("lists every container base directory and the thumbnail setting (SampleA)", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction><BaseDirectoryCatalog membercount="2" generate="True" temporary="False">
+          <BaseDirectory name="Mona_Lisa/" id="0" relativeTo="True"></BaseDirectory>
+          <BaseDirectory name="Tasks/" id="3" relativeTo="True"></BaseDirectory>
+        </BaseDirectoryCatalog>${TABLE}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:file:F0").attributes).toMatchObject({
+      containerBaseDirectories: "Mona_Lisa/ (relative to the file), Tasks/ (relative to the file)",
+      containerThumbnails: "Permanent",
+    });
+  });
+
+  it("keeps a custom order position, and shows an unknown View by code as written", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE.replace(
+          '<ObjectList><Field id="1" name="a"></Field>',
+          '<CustomOrderList><key>2</key><key>1</key></CustomOrderList><SortOrder>3</SortOrder><ObjectList><Field id="1" name="a"></Field>',
+        )}</AddAction>`,
+      ),
+    );
+    expect(object(result, "F0:field:1.1").attributes.customOrder).toBe("2");
+    expect(object(result, "F0:field:1.2").attributes.customOrder).toBe("1");
+    expect(object(result, "F0:table:1").attributes.fieldsListedBy).toBe("3");
+  });
+
+  it("reads a chart's series data formula when FileMaker exports one (SampleA)", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Chart" name=""><External type="CHRT" name="Chart"><Chart>
+          <SeriesSource source="Current Record (delimited data)"></SeriesSource>
+          <ChartSeries><YSeriesList><Series>
+            <Value><Calculation><DDRREF kind="ChunkList" hash="H1">_P1</DDRREF><Text><![CDATA[T::a]]></Text></Calculation></Value>
+            <Title><Text></Text></Title>
+          </Series></YSeriesList></ChartSeries>
+          <Visual><Type>Line</Type></Visual>
+        </Chart></External></LayoutObject>`)}</AddAction>`,
+      ),
+    );
+    const lo = object(result, "F0:layoutObject:10.1");
+    expect(lo.detail).toMatchObject({ chart: { type: "Line", dataSource: "Current Record (delimited data)", series: [{ axis: "Y", value: "T::a" }] } });
+    expect(lo.text).toContain("T::a");
+  });
+
+  it("keeps each conditional format's style in step with its formula", () => {
+    const result = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Edit Box" name="">
+          <Field><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference>
+            <Display><Placeholder findMode="False"><Calculation><Text><![CDATA["Type here"]]></Text></Calculation></Placeholder></Display></Field>
+          <Conditions><Formatting>
+            <Condition type="0" id="0"><Calculation><Text><![CDATA[1]]></Text></Calculation></Condition>
+            <Condition type="13" id="1"><Calculation><Text><![CDATA[IsEmpty(Self)]]></Text></Calculation><LocalCSS><![CDATA[self .self { color: red; }]]></LocalCSS></Condition>
+          </Formatting></Conditions>
+        </LayoutObject>`)}</AddAction>`,
+      ),
+    );
+    const lo = object(result, "F0:layoutObject:10.1");
+    expect(lo.detail).toMatchObject({ conditionalFormats: ["1", "IsEmpty(Self)"], conditionalFormatStyles: ["", "self .self {\n  color: red;\n}"], placeholder: "Type here" });
+    expect(lo.detail).not.toHaveProperty("placeholderInFind");
+  });
+
+  it("shows a changed portal filter as a change", () => {
+    const portal = (filter: string) =>
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Portal" name=""><Portal>
+          <TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><Options index="3" show="4">144</Options>
+          <Calculation><Text><![CDATA[${filter}]]></Text></Calculation><ObjectList></ObjectList>
+        </Portal></LayoutObject>`)}</AddAction>`,
+      );
+    const before = parse(portal("T::a = 1"));
+    expect(object(before, "F0:layoutObject:10.1").attributes).toMatchObject({ portalFilter: "T::a = 1", portalInitialRow: "3" });
+    const diff = diffAnalyses(before, parse(portal("T::a = 2")), 0, 0);
+    expect(diff.changed.map((c) => c.uid)).toContain("F0:layoutObject:10.1");
   });
 });

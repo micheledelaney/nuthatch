@@ -46,16 +46,24 @@
         "requirePasscode": "Yes",
         "showSignInFields": "Yes",
         "requireFileAuthorization": "Yes",
-        "authorizedFilesSameHost": "Yes"
+        "authorizedFilesSameHost": "Yes",
+        "pageSetup": "Portrait · 100% · 826.39 × 1169.44 pt",
+        "containerBaseDirectories": "TEST_MAIN/ (relative to the file)",
+        "containerThumbnails": "Temporary",
+        "useDefaultFields": "Yes",
+        "tablesListedBy": "Custom order",
+        "valueListsListedBy": "Creation order"
       },
+      "MAIN:table:T_Main": {"customOrder": "1", "fieldsListedBy": "Creation order"},
       "EXT:file:TEST_EXT": {"autoLogin": "Guest account", "_unverified": "Depends on which <Login type> FileMaker writes for Guest; see openQuestions."},
-      "MAIN:field:T_Main::f_Text": {"comment": "Main text field"},
+      "MAIN:field:T_Main::f_Text": {"comment": "Main text field", "customOrder": "2"},
       "MAIN:field:T_Main::f_ValAll": {
         "validation": "Strict data type: numeric only, Not empty, Unique, Max 10 characters, In value list “VL_Custom”, In range 1 to 100, By calculation",
         "validateWhen": "Always",
         "validationOverride": "Strict (no override)",
         "validationCalculation": "f_ValAll > 0",
-        "validationMessage": {"contains": "Bad value"}
+        "validationMessage": {"contains": "Bad value"},
+        "validateOnlyIfModified": "Yes"
       },
       "MAIN:field:T_Main::f_ValDate": {"validation": "Strict data type: 4-digit year date", "validateWhen": "Only during data entry", "validationOverride": "User can override"},
       "MAIN:field:T_Main::f_ValTime": {"validation": "Strict data type: time of day"},
@@ -66,8 +74,8 @@
       "MAIN:field:T_Main::g_Global": {"global": "Yes"},
       "MAIN:field:T_Main::f_Rep": {"repetitions": "5"},
       "MAIN:field:T_Main::f_Indexed": {"indexing": "All", "indexLanguage": "German"},
-      "MAIN:field:T_Main::f_Cont": {"containerStorage": "External (Secure) · TEST_MAIN/", "validation": "Max 500 KB"},
-      "MAIN:field:T_Main::f_ContOpen": {"containerStorage": "External (Open) · TEST_MAIN/"},
+      "MAIN:field:T_Main::f_Cont": {"containerStorage": "External (Secure) · TEST_MAIN/", "validation": "Max 500 KB", "containerFolder": {"absent": true}},
+      "MAIN:field:T_Main::f_ContOpen": {"containerStorage": "External (Open) · TEST_MAIN/", "containerFolder": "\"TestDir/\""},
       "MAIN:field:T_Main::f_Serial": {"autoEnter": "Serial number", "serialIncrement": "2", "serialGenerate": "On commit"},
       "MAIN:field:T_Main::f_Created": {"autoEnter": "Creation timestamp"},
       "MAIN:field:T_Main::f_Const": {"autoEnter": "Data: ABC"},
@@ -108,7 +116,9 @@
       "MAIN:account:autologin": {"password": "Yes", "privilegeSet": "PS_Other"},
       "MAIN:account:Admin": {"password": "Yes", "privilegeSet": "[Full Access]"},
       "MAIN:extendedPrivilege:xpTest": {"description": "Test keyword"},
-      "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}},
+      "MAIN:customMenu:M_Custom": {"basedOn": {"contains": "Edit"}, "installCondition": {"contains": "SystemPlatform"}, "menuTitle": {"absent": true}},
+      "MAIN:customMenu:M_Sub": {"menuTitle": "M_Sub", "_note": "a new menu's title is an override calculation"},
+      "MAIN:theme:Apex Blue": {"baseName": "com.filemaker.theme.minimalist_touch", "_note": "a built-in theme's base, read from the layouts that use it"},
       "MAIN:customMenuItem:Paste": {"itemType": "Command", "_note": "M_Sub's item"},
       "MAIN:customMenuItem:Copy": {"itemType": "Command"},
       "MAIN:customMenuItem:Run S_Main": {"itemType": "Performs script", "overrides": {"contains": "Name"}, "_note": "named by its title calculation, not by the script it runs"},
@@ -134,12 +144,15 @@
       "MAIN:field:T_Main::c_Stored": {"kind": "calculation", "body": "f_Text & \"!\""},
       "MAIN:field:T_Main::f_AECalc": {"kind": "calculation", "signature": "Auto-enter calculation", "body": "f_Text"},
       "MAIN:field:T_Main::f_AECalcOff": {"_absent": true, "_note": "The switched-off auto-enter calc must not show as the field's calculation."},
-      "MAIN:field:T_Main::f_Lookup": {"kind": "lookup", "source": "TO_Child::c_Name"},
+      "MAIN:field:T_Main::f_Lookup": {"kind": "lookup", "source": "TO_Child::c_Name", "startingFrom": "TO_Main", "skipEmpty": true, "ifNoMatch": "Do not copy"},
       "MAIN:field:T_Main::f_LookupOff": {"_absent": true},
-      "MAIN:field:T_Main::s_Total": {"kind": "summary", "operation": "Running total of", "fields": ["f_ValAll"]},
-      "MAIN:field:T_Main::s_List": {"kind": "summary", "operation": "List of", "fields": ["f_Text"]},
+      "MAIN:field:T_Main::s_Total": {
+        "kind": "summary", "operation": "Running total of", "fields": ["f_ValAll"],
+        "restartsEachGroup": true, "sortedBy": "TO_Main::f_ValAll", "repetitions": "All together"
+      },
+      "MAIN:field:T_Main::s_List": {"kind": "summary", "operation": "List of", "fields": ["f_Text"], "restartsEachGroup": {"absent": true}, "sortedBy": {"absent": true}},
       "MAIN:valueList:VL_Custom": {"kind": "valueList", "source": "Custom", "customValues": ["A", "B", "-", "C"]},
-      "MAIN:valueList:VL_Field": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "sort": true}},
+      "MAIN:valueList:VL_Field": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "sort": true, "sortBySecondField": {"absent": true}}},
       "MAIN:valueList:VL_Field2nd": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "secondaryField": "TO_Child::c_ID"}},
       "MAIN:valueList:VL_Field2ndOff": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "secondaryField": {"absent": true}}},
       "MAIN:valueList:VL_Related": {"kind": "valueList", "field": {"primaryField": "TO_Child::c_Name", "showRelatedFrom": "TO_Main"}},
@@ -160,6 +173,7 @@
         "kind": "layout",
         "triggers": [{"action": "OnLayoutEnter", "scriptName": "S_Trigger"}, {"action": "OnRecordLoad", "scriptName": "<unknown>"}],
         "partCount": 4,
+        "parts": [{"type": "Trailing Sub-summary", "breakField": "TO_Main::f_Text", "_note": "FM 21/22 write its type as Trailing Grand Summary; its kind (5) says otherwise"}],
         "offLayout": [{"info": {"contains": "Off-layout"}}]
       },
       "MAIN:privilegeSet:PS_CustomRecords": {
@@ -215,18 +229,29 @@
           "hideWhen": {"contains": "f_Serial"},
           "hideInFind": true,
           "conditionalFormats": ["TO_Main::f_ValAll > 10", "TO_Main::f_ValAll < 10"],
+          "conditionalFormatStyles": {"contains": "background-color"},
+          "placeholder": "\"Enter \" & TO_Main::f_ID",
+          "placeholderInFind": true,
           "triggers": [{"action": "OnObjectEnter", "scriptName": "S_Trigger"}, {"action": "OnObjectModify", "scriptName": "<unknown>"}],
           "style": {"present": true}
         }
       },
-      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "TO_Child"}, "expect": {"portalRows": 5}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "TO_Child"}, "expect": {"portalRows": 5, "portalInitialRow": 1, "portalFilter": {"absent": true}}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "<Table Missing>"}, "expect": {}},
       {"layout": "MAIN:layout:L_Start", "match": {"objectName": "obj_Named"}, "expect": {"info": {"contains": "$$MERGE_VAR"}}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Main"}, "expect": {"scriptParameter": "\"fromButton\""}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Grouped Button", "scriptRef": "S_Main"}, "expect": {"scriptParameter": "TO_Main::f_ID"}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Sub"}, "expect": {"_note": "button bar segment 1", "scriptParameter": {"absent": true}}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "actionStep": "Go to Layout"}, "expect": {}},
-      {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Popover"}}, "expect": {"children": {"contains": "f_Created"}}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Popover"}}, "expect": {"children": {"contains": "f_Created"}, "popoverTitle": "Popover"}},
+      {
+        "layout": "MAIN:layout:L_Start",
+        "match": {"loType": "Chart"},
+        "expect": {
+          "chart": {"type": "Column", "dataSource": "Current Found Set", "xAxisTitle": "TO_Main::f_Text", "yAxisTitle": "TO_Main::f_ValAll", "series": [{"axis": "Y", "title": "Series 1"}]},
+          "_note": "FileMaker exports the series' data formulas empty, so the X/Y data fields aren't in the XML"
+        }
+      },
       {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Tab"}}, "expect": {"children": {"contains": "TO_Child"}}}
     ]
   },

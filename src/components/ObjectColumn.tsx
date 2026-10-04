@@ -3,6 +3,7 @@ import {
   OBJECT_TYPE_META,
   objectLabel,
   isBrokenTableOccurrence,
+  type ChartInfo,
   type FmObject,
   type LayoutBounds,
   type LayoutObjectInfo,
@@ -95,6 +96,7 @@ const ATTR_LABELS: Record<string, string> = {
   autoEnter: "Auto-enter",
   global: "Global storage",
   containerStorage: "Container storage",
+  containerFolder: "Container folder",
   width: "Width",
   runsWithFullAccess: "Runs with full access",
   recordsAccess: "Records",
@@ -123,6 +125,7 @@ const ATTR_LABELS: Record<string, string> = {
   validationOverride: "Override",
   validationCalculation: "Validation calculation",
   validationMessage: "Validation message",
+  validateOnlyIfModified: "Validate only if modified",
   indexing: "Indexing",
   autoIndex: "Auto-index",
   indexLanguage: "Index language",
@@ -147,10 +150,15 @@ const ATTR_LABELS: Record<string, string> = {
   label: "Label",
   scriptParameter: "Script parameter",
   tooltip: "Tooltip",
+  placeholder: "Placeholder text",
   hideWhen: "Hide object when",
   conditionalFormats: "Conditional formatting",
+  popoverTitle: "Popover title",
+  chartType: "Chart type",
   portalOccurrence: "Table occurrence",
   portalRows: "Portal rows",
+  portalInitialRow: "Initial row",
+  portalFilter: "Filter",
   // Layout options.
   includeInLayoutMenus: "Include in layout menus",
   clientType: "Client type",
@@ -160,6 +168,7 @@ const ATTR_LABELS: Record<string, string> = {
   color: "Color",
   // Custom menu / menu item.
   installCondition: "Install when",
+  menuTitle: "Menu title",
   overrides: "Overrides",
   sourceUuid: "Source UUID",
   // File options.
@@ -174,6 +183,23 @@ const ATTR_LABELS: Record<string, string> = {
   hiddenOnWebDirectHomepage: "Hidden on WebDirect homepage",
   requireFileAuthorization: "Require full access to reference file",
   authorizedFilesSameHost: "Authorized files on same host only",
+  useDefaultFields: "Default fields in new tables",
+  pageSetup: "Page setup",
+  containerBaseDirectories: "Container base directories",
+  containerThumbnails: "Container thumbnails",
+  // Manage-dialog ordering (FM 26).
+  customOrder: "Custom order position",
+  fieldsListedBy: "Fields listed by",
+  tablesListedBy: "Tables listed by",
+  tableOccurrencesListedBy: "Table occurrences listed by",
+  valueListsListedBy: "Value lists listed by",
+  customFunctionsListedBy: "Custom functions listed by",
+  privilegeSetsListedBy: "Privilege sets listed by",
+  dataSourcesListedBy: "Data sources listed by",
+  customMenusListedBy: "Custom menus listed by",
+  menuSetsListedBy: "Menu sets listed by",
+  // Theme.
+  baseName: "Based on theme",
 };
 
 /** A single color value (e.g. a table occurrence's graph box) as a swatch + hex. */
@@ -659,16 +685,44 @@ export function Detail({
     const fieldObjs = detail.fields
       .map((name) => refIndex.resolve(name, "field"))
       .filter((o): o is FmObject => o != null);
+    const field = (qualified: string) => <FieldRefLink qualified={qualified} model={model} owner={owner.uid} onGo={onGo} />;
     return (
       <Section title="Definition">
         <pre className="code">
           <LinkedCode text={text} objects={fieldObjs} onGo={onGo} model={model} owner={owner.uid} />
         </pre>
+        <dl className="kv compact">
+          {detail.restartsEachGroup && (
+            <>
+              <dt>{detail.operation.startsWith("Fraction") ? "Subtotaled" : "Restarts for each sorted group"}</dt>
+              <dd>Yes</dd>
+            </>
+          )}
+          {detail.sortedBy && (
+            <>
+              <dt>When sorted by</dt>
+              <dd>{field(detail.sortedBy)}</dd>
+            </>
+          )}
+          {detail.weightedBy && (
+            <>
+              <dt>Weighted by</dt>
+              <dd>{field(detail.weightedBy)}</dd>
+            </>
+          )}
+          {detail.repetitions && (
+            <>
+              <dt>Summarize repetitions</dt>
+              <dd>{detail.repetitions}</dd>
+            </>
+          )}
+        </dl>
       </Section>
     );
   }
 
   if (detail.kind === "lookup") {
+    const startingFrom = detail.startingFrom ? refIndex.resolve(detail.startingFrom, "tableOccurrence") : null;
     return (
       <Section title="Definition">
         <dl className="kv compact">
@@ -676,6 +730,24 @@ export function Detail({
           <dd>
             <FieldRefLink qualified={detail.source} model={model} owner={owner.uid} onGo={onGo} />
           </dd>
+          {detail.startingFrom && (
+            <>
+              <dt>Starting with</dt>
+              <dd>{startingFrom ? <ObjLink obj={startingFrom} onGo={onGo} /> : renderWithBrokenPlaceholders(detail.startingFrom)}</dd>
+            </>
+          )}
+          {detail.ifNoMatch && (
+            <>
+              <dt>If no exact match</dt>
+              <dd>{detail.ifNoMatch}</dd>
+            </>
+          )}
+          {detail.skipEmpty != null && (
+            <>
+              <dt>Don't copy if empty</dt>
+              <dd>{detail.skipEmpty ? "Yes" : "No"}</dd>
+            </>
+          )}
         </dl>
       </Section>
     );
@@ -948,7 +1020,8 @@ function LayoutDetail({
               <div key={i} className="lo-part-section">
                 <div className="lo-part-divider clickable" onClick={() => togglePart(i)}>
                   <span className={`fchevron${open ? " open" : ""}`}>›</span>
-                  {part.type} · {objects.length}
+                  {part.type}
+                  {part.breakField && <> by {renderWithBrokenPlaceholders(part.breakField)}</>} · {objects.length}
                 </div>
                 {open && objects.map((obj, j) => (
                   <LayoutObjectTree
@@ -986,6 +1059,20 @@ function LayoutDetail({
             );
           })()}
         </div>
+        </Section>
+      )}
+      {detail.tableView && detail.tableView.length > 0 && (
+        <Section title="Table View columns" count={detail.tableView.length} defaultOpen={false}>
+          <ol className="value-list">
+            {detail.tableView.map((column, i) => (
+              <li key={i}>
+                <FieldRefLink qualified={column.field} model={model} owner={owner.uid} onGo={onGo} />{" "}
+                <span className="subtle">
+                  {column.width} pt{column.hidden ? " · hidden" : ""}
+                </span>
+              </li>
+            ))}
+          </ol>
         </Section>
       )}
     </>
@@ -1258,39 +1345,9 @@ function LayoutObjectColumnDetail({
       )}
 
       {detail.triggers && detail.triggers.length > 0 && (
-        <Section title="Triggers" count={detail.triggers.length}>
-          <dl className="kv compact layout-triggers">
-            {detail.triggers.map((t, i) => {
-              const target = scriptTarget(t.scriptId);
-              const sName = t.scriptName || (t.scriptId ? `Script ${t.scriptId}` : "(missing script)");
-              return (
-                <Fragment key={i}>
-                  <dt>{t.action}</dt>
-                  <dd>
-                    <div className="layout-obj-row">
-                      {target ? (
-                        <button
-                          className="layout-obj-name layout-trigger-link"
-                          type="button"
-                          onClick={() => onGo(target.uid, `lo-trig:${target.uid}:${i}`)}
-                        >
-                          {sName}
-                        </button>
-                      ) : (
-                        <span className="layout-obj-name">{sName}</span>
-                      )}
-                      {t.modes.map((mode) => (
-                        <span className="layout-obj-type" key={mode}>
-                          {mode}
-                        </span>
-                      ))}
-                    </div>
-                  </dd>
-                </Fragment>
-              );
-            })}
-          </dl>
-        </Section>
+        // The same rows as a layout's and a file's triggers: script, modes,
+        // parameter and parameter field.
+        <LayoutTriggers triggers={detail.triggers} owner={owner} model={model} onGo={onGo} title="Triggers" />
       )}
 
       {children.length > 0 && (
@@ -1306,6 +1363,22 @@ function LayoutObjectColumnDetail({
         </Section>
       )}
 
+      {detail.chart && <ChartSection chart={detail.chart} owner={owner} model={model} onGo={onGo} />}
+
+      {detail.conditionalFormats && detail.conditionalFormats.length > 0 && (
+        <Section title="Conditional formatting" count={detail.conditionalFormats.length} defaultOpen={false}>
+          {detail.conditionalFormats.map((formula, i) => (
+            <Fragment key={i}>
+              <div className="signature">Condition {i + 1}</div>
+              <pre className="code">
+                <LinkedCode text={formula} objects={refIndexFor(model, owner.uid).targets} onGo={onGo} model={model} owner={owner.uid} />
+              </pre>
+              {detail.conditionalFormatStyles?.[i] && <pre className="code">{detail.conditionalFormatStyles[i]}</pre>}
+            </Fragment>
+          ))}
+        </Section>
+      )}
+
       {detail.style && (
         <Section title="Style" defaultOpen={false}>
           <pre className="code">{detail.style}</pre>
@@ -1318,6 +1391,74 @@ function LayoutObjectColumnDetail({
         </Section>
       )}
     </>
+  );
+}
+
+/** A chart's setup: its type, the records it charts, and the formulas behind
+ * its titles and series. */
+function ChartSection({
+  chart,
+  owner,
+  model,
+  onGo,
+}: {
+  chart: ChartInfo;
+  owner: FmObject;
+  model: SolutionModel;
+  onGo: (uid: string, rowKey: string) => void;
+}) {
+  const targets = refIndexFor(model, owner.uid).targets;
+  const code = (text: string) => <LinkedCode text={text} objects={targets} onGo={onGo} model={model} owner={owner.uid} />;
+  return (
+    <Section title="Chart">
+      <dl className="kv compact">
+        {chart.type && (
+          <>
+            <dt>Type</dt>
+            <dd>{chart.type}</dd>
+          </>
+        )}
+        {chart.dataSource && (
+          <>
+            <dt>Data from</dt>
+            <dd>
+              {chart.dataSource}
+              {chart.groupsWhenSorted ? " · record groups when sorted" : ""}
+            </dd>
+          </>
+        )}
+        {chart.title && (
+          <>
+            <dt>Title</dt>
+            <dd>{code(chart.title)}</dd>
+          </>
+        )}
+        {chart.xAxisTitle && (
+          <>
+            <dt>X-axis title</dt>
+            <dd>{code(chart.xAxisTitle)}</dd>
+          </>
+        )}
+        {chart.yAxisTitle && (
+          <>
+            <dt>Y-axis title</dt>
+            <dd>{code(chart.yAxisTitle)}</dd>
+          </>
+        )}
+        {chart.series.map((series, i) => (
+          <Fragment key={i}>
+            <dt>{series.axis} series</dt>
+            <dd>
+              {series.title && <div>Title: {code(series.title)}</div>}
+              {series.value && <div>Data: {code(series.value)}</div>}
+            </dd>
+          </Fragment>
+        ))}
+      </dl>
+      {!chart.series.some((series) => series.value) && (
+        <div className="subtle indent">The export doesn't include this chart's data series.</div>
+      )}
+    </Section>
   );
 }
 
@@ -1387,7 +1528,10 @@ function LayoutObjectTree({
           obj.fieldRef,
           obj.scriptParameter ? `Parameter: ${obj.scriptParameter}` : "",
           obj.tooltip ? `Tooltip: ${obj.tooltip}` : "",
+          obj.placeholder ? `Placeholder: ${obj.placeholder}` : "",
           obj.hideWhen ? `Hide when: ${obj.hideWhen}` : "",
+          obj.portalFilter ? `Filter: ${obj.portalFilter}` : "",
+          obj.popoverTitle ? `Popover title: ${obj.popoverTitle}` : "",
           obj.bounds ? `${obj.bounds.left}, ${obj.bounds.top} → ${obj.bounds.right}, ${obj.bounds.bottom}` : "",
         ]
           .filter(Boolean)
@@ -1771,7 +1915,7 @@ function ValueListDetail({
             </>
           )}
           <dt>Sorted</dt>
-          <dd>{field.sort ? "By this field" : "By field order"}</dd>
+          <dd>{field.sort ? "By this field" : field.sortBySecondField ? "By second field" : "By field order"}</dd>
           <dt>Scope</dt>
           <dd>
             {field.showRelatedFrom ? (

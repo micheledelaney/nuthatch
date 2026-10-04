@@ -1,10 +1,10 @@
 import type { FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse, TextScan } from "../context";
 import { cdataText, isRecord } from "../xmlUtils";
-import { collectCatalogItems } from "../catalogWalk";
+import { catalogOrdering, collectCatalogItems } from "../catalogWalk";
 import { occurrenceSource } from "../occurrences";
 import { scanRefs } from "../refs/scanRefs";
-import { makeObject } from "./catalogItems";
+import { makeObject, withCustomOrder } from "./catalogItems";
 import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs, customFunctionScanText } from "./customFunctions";
 import { annotateExternalDataSource } from "./dataSources";
 import { annotateCustomMenu, annotateCustomMenuSet } from "./menus";
@@ -135,10 +135,11 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
 /** Every object of the catalogs in catalogSpecs, with its references. */
 export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   for (const spec of catalogSpecs(fp, containerNode)) {
+    const customOrder = catalogOrdering(containerNode[spec.catalogKey]).positions;
     for (const item of collectCatalogItems(containerNode[spec.catalogKey], spec.itemTag)) {
       const base = makeObject(fp, item, spec.type, undefined, undefined, spec.annotateSetsText ? "" : undefined);
       if (!base || !isRecord(item)) continue;
-      const obj = spec.annotate ? spec.annotate(item, base) : base;
+      const obj = withCustomOrder(spec.annotate ? spec.annotate(item, base) : base, customOrder);
       fp.objects.push(obj);
       // The text passes read what the element scan reads, so a placeholder
       // in a part the scan leaves out flags nothing.

@@ -36,6 +36,11 @@ export function annotateCustomMenu(node: Record<string, unknown>, obj: FmObject)
   if (modes.length) a.installsIn = modes.join(", ");
   const install = installCondition(node);
   if (install) a.installCondition = install;
+  // An overridden menu title is a calculation — <Options><Override><Title> (FM 22
+  // and later) or <Override><name> (FM 21) — shown like an item's title.
+  const override = child(options, "Override");
+  const title = calcOf(child(override, "Title")) || calcOf(child(override, "name"));
+  if (title) a.menuTitle = literalText(title) ?? title;
   return { ...obj, attributes: { ...obj.attributes, ...a } };
 }
 

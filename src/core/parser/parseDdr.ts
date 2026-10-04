@@ -13,6 +13,7 @@ import { addFileRefs, makeFileObject } from "./objects/fileObject";
 import { parseLayoutsInTree, parseLayoutsStreaming, splitLayoutCatalog } from "./objects/layoutStream";
 import { parseCustomMenuItems } from "./objects/menus";
 import { parseScripts } from "./objects/scripts";
+import { addThemeBases } from "./objects/themes";
 
 interface SourceDoc {
   name: string;
@@ -168,6 +169,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
     layoutObjectUidCounts: new Map(),
     withoutId: new Map(),
+    themeBases: new Map(),
     objects: [fileObject],
     references: [],
     errors,
@@ -185,6 +187,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   addTextDerivedRefs(fp, scans);
   const nextOrder = layoutCatalog ? parseLayoutsStreaming(fp, layoutCatalog) : 0;
   parseLayoutsInTree(fp, node["LayoutCatalog"], nextOrder);
+  addThemeBases(fp);
   for (const [type, count] of fp.withoutId) {
     const { label, plural } = OBJECT_TYPE_META[type];
     const what = count === 1 ? `1 ${label.toLowerCase()} without an id was` : `${count} ${plural.toLowerCase()} without an id were`;
