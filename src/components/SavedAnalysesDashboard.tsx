@@ -104,7 +104,6 @@ export function SavedAnalysesDashboard() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="dashboard-heading">
-          <span className="nh-eyebrow">Workspace</span>
           <h2>Projects</h2>
           <p className="subtle">
             Add analyses to a project to build its history — when adding, you can select several XML

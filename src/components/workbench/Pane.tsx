@@ -82,11 +82,11 @@ export function Pane({
         </button>
         {isSplit ? (
           <button type="button" className="icon-btn" title="Swap panes" aria-label="Swap panes" onClick={swapPanes}>
-            ⇄
+            <SwapIcon />
           </button>
         ) : (
           <button type="button" className="icon-btn" title="Open in split pane" aria-label="Open in split pane" onClick={() => openInPane("secondary", uid)}>
-            ◫
+            <SplitIcon />
           </button>
         )}
         <button type="button" className="icon-btn" title="Close pane" aria-label="Close pane" onClick={() => closePane(side)}>
@@ -127,6 +127,25 @@ function CloseIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
       <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+    </svg>
+  );
+}
+
+/** Open in a split pane: a window with a divider, at the star's weight. */
+function SplitIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <path d="M8 3v10" />
+    </svg>
+  );
+}
+
+/** Swap the two panes: arrows both ways, at the star's weight. */
+function SwapIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 5.5h10M10.5 3l2.5 2.5-2.5 2.5M13 10.5H3M5.5 8 3 10.5 5.5 13" />
     </svg>
   );
 }

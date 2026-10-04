@@ -4,7 +4,7 @@
 .comparison {
   height: 100%;
   overflow-y: auto;
-  padding: 40px 32px;
+  padding: 32px;
 }
 
 .comparison-header {
@@ -64,31 +64,28 @@
   color: var(--text-muted);
 }
 
-/* Power's notice: a sunk rounded strip with an orange mark. */
+/* A notice: an inline row with an orange mark, no box. */
 .comparison-warning {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
-  margin: -8px 0 22px;
-  padding: 14px 22px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
-  background: var(--nh-deep);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  margin: -8px 0 24px;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--text-dim);
 }
 
 .comparison-warning-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--nh-accent-deep);
   color: var(--accent);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -107,10 +104,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 10px 18px;
-  background: var(--nh-pane);
-  border: 1px solid var(--border);
-  border-radius: var(--nh-radius-card);
+  padding: 0;
 }
 
 .comparison-tag-project {
@@ -133,18 +127,19 @@
   margin-bottom: 14px;
 }
 
-.file-filter-select {
+.file-filter-select,
+.type-filter-select {
   width: auto;
+  height: var(--icon-btn);
+  padding: 0 32px 0 12px;
+  font-size: 12.5px;
+  background-position: right 12px center;
 }
 
 .type-filter-row {
   display: flex;
   margin-top: 14px;
   margin-bottom: 24px;
-}
-
-.type-filter-select {
-  width: auto;
 }
 
 .file-summary-row {
@@ -155,7 +150,9 @@
 }
 
 .file-summary-card {
-  padding: 14px 16px;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 .file-summary-name {
@@ -173,15 +170,18 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
-  padding: 6px 2px;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 .file-summary-num {
-  font-family: var(--nh-font-display);
-  font-size: 20px;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
 }
 
 .file-summary-label {
@@ -217,14 +217,15 @@
 .comparison-table th,
 .comparison-table td {
   text-align: left;
-  padding: 6px 18px 6px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 5px 24px 5px 0;
 }
 
 .comparison-table th {
   color: var(--text-dim);
   font-weight: 400;
-  font-size: 12px;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .privilege-access-table {
@@ -270,11 +271,9 @@
 }
 
 .change-group {
-  background: var(--nh-pane);
-  border: 1px solid var(--border);
-  border-radius: var(--nh-radius-card);
-  border-left-width: 3px;
-  padding: 14px 16px;
+  /* No box: a thin rule in the change's colour marks the list. */
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 12px;
 }
 
 .change-group-block .comparison-section-title {
@@ -284,12 +283,12 @@
 }
 
 .change-count {
-  background: var(--nh-pane-2);
-  border-radius: var(--nh-radius-pill);
-  padding: 0 9px;
+  border: 1px solid var(--nh-line-2);
+  border-radius: var(--radius);
+  padding: 0 7px;
   font-size: 11px;
   letter-spacing: 0;
-  color: var(--text-muted);
+  color: var(--text-dim);
 }
 
 .change-group ul {
@@ -367,11 +366,8 @@
   display: flex;
   flex-direction: column;
   margin-top: 10px;
-  padding: 8px;
-  background: var(--nh-pane);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--info);
-  border-radius: var(--nh-radius-card);
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--info);
 }
 
 .changed-item {
@@ -391,9 +387,9 @@
 .linediff {
   margin: 4px 0 8px;
   padding: 10px 0;
-  border: 1px solid var(--border);
-  border-radius: var(--nh-radius-soft);
-  background: var(--nh-deep);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--code-bg);
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 12px;
