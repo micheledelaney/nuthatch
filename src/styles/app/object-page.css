@@ -1,0 +1,355 @@
+/* Browse, right side: history bar, object page, detail widgets, reference lists, call chain. */
+
+/* The object page's scrolling body (.op-body). */
+.detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+/* Expandable "widget" wrapping each detail-view section (Script steps,
+   Calculation, Metadata, etc.): no box, just a spaced-caps head and spacing. */
+.detail-widget {
+  margin: 24px 0;
+}
+
+/* The section's title (.head): its chevron starts on the same edge as the
+   labels and code below, and it is sized to read as a title. */
+.detail-widget {
+  /* Where a section's title text starts (past its chevron): content that
+     should line up with the title uses this. */
+  --section-title-indent: 15px;
+}
+.detail-widget-header {
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+/* The chevron's left edge sits on the section's edge, level with the name. */
+.detail-widget-header .fchevron {
+  text-align: left;
+}
+
+.detail-widget-body {
+  margin-top: 10px;
+}
+
+/* Everything in a section starts where the title's text starts, past its
+   chevron. Script steps are the exception (.flush). */
+.detail-widget-body:not(.flush) {
+  padding-left: var(--section-title-indent);
+}
+
+/* A reference subgroup (one object type) inside References / Referenced By. */
+.ref-group {
+  margin-top: 4px;
+}
+
+.ref-group-label {
+  padding: 8px 12px 2px;
+}
+
+/* Rows carry their own side padding; inside a section pull the list back so
+   its content starts where the section's other content does. */
+.detail-widget-body .ref-list {
+  margin-left: calc(-1 * var(--row-pad-x));
+}
+.detail-widget-body .ref-show-more {
+  margin-left: 0;
+}
+
+.ref-group .ref-list {
+  margin-top: 0;
+}
+
+/* "Show in graph" — sits at the far right of a table occurrence's title row. */
+.graph-jump-btn {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* A broken attribute value (e.g. an "<unknown>" external data source). */
+.broken-value {
+  color: var(--high);
+}
+
+/* Warning pill in the detail header — shown for broken objects and objects
+   with broken outbound references: a red exclamation mark in a solid pill. */
+.broken-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--high);
+  color: var(--bg-panel);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+}
+
+.kv.compact {
+  grid-template-columns: var(--kv-label-w) 1fr;
+  gap: 2px 16px;
+  margin: 8px 0;
+}
+
+/* Inspector */
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 16px;
+  margin: 14px 0;
+}
+
+.kv dt {
+  color: var(--text-dim);
+}
+
+.kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+/* Theme color palette — small rounded chips, one per swatch. */
+.palette-swatches {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.palette-swatches .swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+/* Reference / dependency lists: their items are .row. */
+.ref-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.ref-list .row.broken {
+  color: var(--high);
+}
+
+/* A reference whose target lives in another file that isn't loaded — not an
+   error, just unresolved here. Dimmed (not red), with a small tag. */
+.ref-list .row.external {
+  color: var(--text-dim);
+}
+
+/* "Show N more" toggle below a truncated reference list. */
+.ref-show-more {
+  display: block;
+  margin: 8px 0 2px 12px;
+}
+
+/* A menu-item separator, drawn as a divider line (matches .nav-divider). */
+.ref-list li.ref-divider {
+  display: block;
+  height: 1px;
+  margin: 6px 12px;
+  background: var(--border);
+}
+
+/* Call chain tree: its nodes are .row. */
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tree .call-node.root {
+  font-weight: 600;
+}
+
+.tree .call-node.broken {
+  color: var(--high);
+}
+
+/* A performed script in another file that isn't loaded — dimmed, not an error. */
+.tree .call-node.external {
+  color: var(--text-dim);
+}
+
+/* A script nothing in use reaches — dimmed like an unreferenced Browse row. */
+.tree .call-node.unused {
+  opacity: 0.4;
+  font-style: italic;
+}
+
+/* History bar (top of each Browse pane): round back/forward buttons, the
+   crumbs, then the pane's round action buttons. */
+.history-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--subbar-h);
+  padding: 0 28px;
+  background: var(--bg-panel);
+  min-width: 0;
+}
+
+.hb-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.hb-crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.hb-sep {
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
+/* Crumbs are .tab. The current one is marked by its filled type tag (like
+   a pin) and goes nowhere. */
+.hb-crumb {
+  max-width: 240px;
+}
+
+.hb-crumb.current {
+  cursor: default;
+}
+
+/* Object page */
+.object-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.op-header {
+  flex: none;
+  padding: 24px 28px 0;
+  background: var(--bg-panel);
+}
+
+/* Name row: the name, its flag chips, then any actions at the far right. */
+.op-glance-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  /* A tab's side padding: the name starts level with the first tab's label. */
+  padding-left: 14px;
+}
+
+/* The object's name: the condensed display face, in the name's real case
+   (names are FileMaker data, so no uppercasing). */
+.op-glance-name {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* The key attributes, in the Details tab's At a glance section — the same
+   columns as the Metadata section's .kv.compact. */
+.op-glance-kv {
+  display: grid;
+  grid-template-columns: var(--kv-label-w) minmax(0, 1fr);
+  gap: 2px 16px;
+  margin: 8px 0;
+}
+
+/* Each row is a wrapper so dt/dd pairs stay together; let them join the grid. */
+.op-glance-row {
+  display: contents;
+}
+
+.op-glance-kv dt {
+  color: var(--text-dim);
+}
+
+.op-glance-kv dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  word-break: break-word;
+}
+
+/* Used only by: several linked objects, wrapping onto more lines. */
+.op-glance-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.op-glance-list-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.op-glance-note {
+  color: var(--text-dim);
+}
+
+.op-glance-empty {
+  color: var(--text-dim);
+}
+
+.op-glance-kv code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* Flags (.tag): red for broken, yellow for warnings. */
+.op-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The object's tabs (.tabs / .tab). */
+.op-tabs {
+  max-width: none;
+  margin: 16px -28px 0;
+  padding: 8px 28px 0;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.op-tab-count {
+  font-size: 11.5px;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.op-body {
+  padding: 0 28px 36px;
+}
+
+.op-tab-panel {
+  margin: 22px 0;
+  max-width: 900px;
+}

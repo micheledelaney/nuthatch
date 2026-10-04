@@ -20,7 +20,7 @@ export function PinShelf() {
         const obj = model.byUid.get(uid);
         if (!obj) return null;
         return (
-          <span key={uid} className="wb-pin">
+          <span key={uid} className="row wb-pin">
             <button
               type="button"
               className="wb-pin-open"
@@ -30,7 +30,7 @@ export function PinShelf() {
               <TypePill type={obj.type} short />
               <span className="ellipsis">{objectLabel(obj)}</span>
             </button>
-            <button type="button" className="wb-pin-x" title="Unpin" aria-label="Unpin" onClick={() => togglePin(uid)}>
+            <button type="button" className="glyph-btn" title="Unpin" aria-label="Unpin" onClick={() => togglePin(uid)}>
               ×
             </button>
           </span>

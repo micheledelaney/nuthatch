@@ -4,6 +4,7 @@ import { readSourceDocs } from "@/state/loadFiles";
 import { Menu } from "@/components/Menu";
 import type { ProjectRecord, SavedMeta } from "@/state/savedAnalyses";
 import { PlaybackVideo } from "./PlaybackVideo";
+import { keyPressable } from "./a11y";
 
 /** Format an epoch-millis timestamp as `yyyy-mm-dd hh:mm` (local, 24-hour). */
 function formatSavedAt(ms: number): string {
@@ -103,13 +104,14 @@ export function SavedAnalysesDashboard() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="dashboard-heading">
+          <span className="nh-eyebrow">Workspace</span>
           <h2>Projects</h2>
           <p className="subtle">
             Add analyses to a project to build its history — when adding, you can select several XML
             files at once (hold ⌘ or Ctrl while clicking). Click one to reopen it, or tick two to compare.
           </p>
         </div>
-        <button className="primary" onClick={startNewProject}>
+        <button className="btn btn-primary" onClick={startNewProject}>
           + New project
         </button>
       </header>
@@ -123,9 +125,9 @@ export function SavedAnalysesDashboard() {
         <div className="compare-bar">
           <span>2 analyses selected</span>
           <div className="compare-bar-actions">
-            <button onClick={() => setSelected([])}>Clear</button>
+            <button className="btn" onClick={() => setSelected([])}>Clear</button>
             <button
-              className="primary"
+              className="btn btn-primary"
               onClick={() => {
                 const [first, second] = selected;
                 if (first && second) void compareAnalyses(first, second);
@@ -173,7 +175,7 @@ function ProjectRow({
   return (
     <section className="project">
       <div className="project-head">
-        <button className="project-head-main" onClick={() => setExpanded((v) => !v)}>
+        <button className="row project-head-main" onClick={() => setExpanded((v) => !v)}>
           <span className={`fchevron${expanded ? " open" : ""}`}>›</span>
           <span className="project-name">{project.name}</span>
         </button>
@@ -264,7 +266,7 @@ function AnalysisRow({
   }, [isNew, clearRecentlyAdded]);
 
   return (
-    <li ref={rowRef} className={`snapshot${isNew ? " snapshot-new" : ""}`} onClick={() => void openSaved(item.id)}>
+    <li ref={rowRef} className={`row snapshot${isNew ? " snapshot-new" : ""}`} onClick={() => void openSaved(item.id)}>
       <input
         type="checkbox"
         className="snapshot-check"
@@ -274,7 +276,7 @@ function AnalysisRow({
         onClick={(e) => e.stopPropagation()}
         onChange={() => onToggle(item.id)}
       />
-      <div className="snapshot-main">
+      <div className="snapshot-main" {...keyPressable(() => void openSaved(item.id))}>
         <span className="snapshot-name">{item.name}</span>
         <span className="snapshot-files" title={item.fileNames.join(", ")}>
           {item.fileNames.join(", ") || "—"}
@@ -398,7 +400,7 @@ function MetricCard({
   return (
     <button
       type="button"
-      className={`metric-card${selected ? " selected" : ""}`}
+      className={`card metric-card${selected ? " active" : ""}`}
       style={metricStyle(def.color)}
       disabled={!last}
       onClick={() => onSelect(def.key)}
@@ -596,7 +598,7 @@ function EmptyState() {
         dialog — otherwise references inside calculations and scripts can’t be resolved.
       </p>
       <p className="subtle">Create a project to get started, then add analyses to it.</p>
-      <button className="primary" onClick={startNewProject}>
+      <button className="btn btn-primary" onClick={startNewProject}>
         + New project
       </button>
     </div>

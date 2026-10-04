@@ -1,0 +1,171 @@
+/* App-wide variables: the app's names for Power's --nh-* tokens, plus shared sizes. */
+
+/* Power theme. The palette, type and shapes come from
+   src/styles/nuthatch-power.css (loaded before this file); the app's own
+   variables below point at its --nh-* tokens. Colours Power doesn't define
+   (a "good" green, an info blue, syntax colours, the object types it has no
+   glyph for) are added here as --nh-* so they sit beside the rest. */
+:root {
+  /* One corner radius for everything that isn't a round icon button or a dot:
+     buttons, tabs, chips, fields, tiles, tags, panels, menus. */
+  --radius: 6px;
+  --nh-radius-pill: var(--radius);
+  --nh-radius-card: var(--radius);
+  --nh-radius-soft: var(--radius);
+  --nh-radius-tile: var(--radius);
+  --nh-radius-window: var(--radius);
+  /* The ground, the wells and the headers are all the old app's background
+     grey; cards and the hover fill stay as they are. */
+  --nh-bg: #1b1c1e;
+  /* Syntax-highlighted code (calculations, script steps): a step darker than the ground. */
+  --code-bg: #131415;
+  --nh-deep: var(--nh-bg);
+  /* The top toolbar and the view-tabs header: the old app's header colour,
+     the same as the ground. */
+  --header-bg: var(--nh-bg);
+  /* Neutral greys from the old app, no purple tint: cards, hover fill, lines,
+     secondary text. */
+  --nh-pane: #232830;
+  --nh-pane-2: #2d333f;
+  --nh-line: #272b33;
+  /* Main text: a neutral light grey, dimmer than Power's warm off-white. */
+  --nh-ink: #d2d4d8;
+  --nh-ink-soft: #b4b7bc;
+  --nh-ink-muted: #a9b0bd;
+  --nh-on-accent: var(--nh-bg);
+  --nh-danger-soft: #3b2326;
+  /* Control outlines (buttons, chips, fields) drawn at 3:1 against the
+     ground, the minimum for the edge of a control. */
+  --nh-line-2: #575e6a;
+  /* Dim text, 4.5:1 on the background and on cards. */
+  --nh-ink-dim: #8b94a3;
+  /* A file's name reads as plain text, not a coloured type. */
+  --nh-t-file: #cfd5df;
+  --nh-ok: #79dca4;
+  --nh-info: #7fb4ff;
+  --nh-t-xpriv: #e8928a;
+  --nh-t-access: #d6a8a8;
+  --nh-t-source: #8fa8ff;
+  --nh-t-menuset: #a7b0c6;
+  --nh-t-menuitem: #cdd2de;
+  --nh-t-theme: #dcbd6a;
+  --nh-t-global: #c7e88f;
+  --nh-syn-string: #79dca4;
+  --nh-syn-var: #f2cc5c;
+  --nh-syn-func: #6fdccb;
+  --nh-syn-kw: #7fb4ff;
+  --nh-syn-num: #e6ad73;
+  --nh-syn-exit: #f08fb0;
+
+  /* Sizes for the kinds in kinds.css. A row is the original navigator row:
+     24px, a 16px line in 4px padding, no gap between rows. Chips, tags and
+     type tags are 16px, so they sit in a row without stretching it. */
+  --row-pad-y: 4px;
+  --row-pad-x: 12px;
+  --row-font: 13px;
+  --row-line: 16px;
+  --row-radius: var(--radius);
+  --chip-pad: 0 8px;
+  --chip-font: 10.5px;
+  --chip-line: 14px;
+  --label-font: 11.5px;
+  --label-tracking: 0.16em;
+  /* Type tags (pills and rail glyphs) draw their type colour (--tc, set
+     inline) toned down toward the ground: text a notch dimmer, border faint. */
+  --tag-text: 78%;
+  --tag-border: 40%;
+  /* Hover: every clickable thing gets this much lighter (kinds.css). */
+  --hover-lift: 1.25;
+  /* One size for every text button (.btn, .btn-primary). */
+  --btn-pad: 0 16px;
+  --btn-font: 13px;
+  /* One round icon button (.icon-btn): small button, generous glyph. */
+  --icon-btn: 26px;
+  /* Label column of a key/value table (At a glance, Metadata, Definition):
+     one width, so stacked cards line up; fits "Relationship depth". */
+  --kv-label-w: 152px;
+  --icon-glyph: 16px;
+
+  --bg: var(--nh-bg);
+  --bg-panel: var(--nh-bg);
+  --bg-elevated: var(--nh-pane-2);
+  --border: var(--nh-line);
+  /* Main text: Power's soft off-white (its brighter --nh-ink is unused). */
+  --text: var(--nh-ink-soft);
+  --text-dim: var(--nh-ink-dim);
+  --text-muted: var(--nh-ink-muted);
+  /* Relationship-graph lines: a plain relationship is the main text colour
+     dimmed, cascade lines the theme colours a step toward the ground. Solid
+     colours (no opacity), so lines lying on top of each other don't add up
+     to a brighter line. */
+  --fmg-edge: color-mix(in srgb, var(--text) 50%, var(--nh-deep));
+  --fmg-edge-del: color-mix(in srgb, var(--nh-danger) 75%, var(--nh-deep));
+  --fmg-edge-create: color-mix(in srgb, var(--nh-ok) 75%, var(--nh-deep));
+  --fmg-edge-sort: color-mix(in srgb, var(--nh-info) 75%, var(--nh-deep));
+  --fmg-edge-dim: #4b5260;
+  --fmg-edge-del-dim: color-mix(in srgb, var(--nh-danger) 30%, var(--nh-deep));
+  --fmg-edge-create-dim: color-mix(in srgb, var(--nh-ok) 30%, var(--nh-deep));
+  --fmg-edge-sort-dim: color-mix(in srgb, var(--nh-info) 30%, var(--nh-deep));
+  --accent: var(--nh-accent);
+  --accent-dim: var(--nh-accent-deep);
+  /* Selected rows: Power's pane-2 pill (with orange text where the row allows). */
+  --selected-soft: var(--nh-pane-2);
+  --high: var(--nh-danger);
+  --warn: var(--nh-warning);
+  --ok: var(--nh-ok);
+  --info: var(--nh-info);
+
+  --type-file: var(--nh-t-file);
+  --type-table: var(--nh-t-table);
+  --type-field: var(--nh-t-field);
+  --type-table-occurrence: var(--nh-t-to);
+  --type-script: var(--nh-t-script);
+  --type-layout: var(--nh-t-layout);
+  --type-layout-object: var(--nh-t-object);
+  --type-relationship: var(--nh-t-rel);
+  --type-value-list: var(--nh-t-vl);
+  --type-custom-function: var(--nh-t-cf);
+  --type-account: var(--nh-t-acct);
+  --type-privilege-set: var(--nh-t-ps);
+  --type-extended-privilege: var(--nh-t-xpriv);
+  --type-file-access: var(--nh-t-access);
+  --type-data-source: var(--nh-t-source);
+  --type-menu-set: var(--nh-t-menuset);
+  --type-menu: var(--nh-t-menu);
+  --type-menu-item: var(--nh-t-menuitem);
+  --type-theme: var(--nh-t-theme);
+  --type-global-variable: var(--nh-t-global);
+  --type-default: var(--nh-ink-muted);
+  /* A separator's pill ("Sep") — a subdued, desaturated blend of the script
+     green and the dim ink, so it reads as "not a real object". */
+  --type-separator: color-mix(in srgb, var(--type-script) 45%, var(--nh-ink-dim) 55%);
+
+  --syn-string: var(--nh-syn-string);
+  --syn-var: var(--nh-syn-var);
+  --syn-func: var(--nh-syn-func);
+  --syn-kw: var(--nh-syn-kw);
+  --syn-num: var(--nh-syn-num);
+  --syn-op: var(--nh-ink-muted);
+
+  /* Power is monospace everywhere; condensed display type is for titles. */
+  --font-ui: var(--nh-font-mono);
+  --font-mono: var(--nh-font-mono);
+  --font-sans: var(--nh-font-mono);
+
+  --rail-w: 76px;
+  --sidebar-w: 320px;
+  /* Shared bar heights so the Browse pane's horizontal lines continue the
+     navigator's: the pin bar matches the navigator header, and the pane's
+     breadcrumb bar matches the navigator's file row beneath it. */
+  --bar-h: 46px;
+  --subbar-h: 40px;
+
+  /* Functional transitions use Power's --nh-ease. This springy curve is
+     reserved for ARRIVAL moments only — a popup or modal opening. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  color-scheme: dark;
+}

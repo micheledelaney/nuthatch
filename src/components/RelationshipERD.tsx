@@ -1,4 +1,5 @@
 import type { FmObject, JoinPredicate, ObjectType, RelationshipSide } from "@/types/ddr";
+import { pressable } from "./a11y";
 
 const TITLE_H = 28;
 const ROW_H = 26;
@@ -9,6 +10,8 @@ const MIN_BOX_W = 80;
 
 const TITLE_FONT = 11;
 const FIELD_FONT = 10;
+const NOTE_FONT = 11;
+const NOTE_H = 16; // line height of the cascade/sort notes under a box
 
 /** A compact ERD for a relationship: the two table occurrences and the field
  * pairs (with comparison operator) that join them. */
@@ -42,18 +45,25 @@ export function RelationshipERD({
   const leftBoxW = boxWidth(leftTable, predicates.map((p) => p.leftField));
   const rightBoxW = boxWidth(rightTable, predicates.map((p) => p.rightField));
 
-  const W = leftBoxW + GAP + rightBoxW;
+  const leftNotes = sideNotes(left);
+  const rightNotes = sideNotes(right);
+
+  const boxesW = leftBoxW + GAP + rightBoxW;
   const LEFT_X = 0;
-  const RIGHT_X = W - rightBoxW;
+  const RIGHT_X = boxesW - rightBoxW;
   const CENTER_X = LEFT_X + leftBoxW + GAP / 2;
+  // A note can be wider than its box; keep the right-hand one inside the SVG.
+  const W = Math.max(boxesW, RIGHT_X + notesWidth(rightNotes));
 
   const bodyTop = TOP + TITLE_H + 6;
-  const height = bodyTop + rows * ROW_H + 6;
+  const boxBottom = bodyTop + rows * ROW_H + 4;
+  const noteRows = Math.max(leftNotes.length, rightNotes.length);
+  const height = bodyTop + rows * ROW_H + 6 + (noteRows > 0 ? 4 + noteRows * NOTE_H : 0);
   const rowY = (i: number) => bodyTop + i * ROW_H + ROW_H / 2;
 
   return (
     <div className="graph-wrap">
-      <svg width={W} height={height} role="img" aria-label="Relationship diagram">
+      <svg width={W} height={height} role="group" aria-label="Relationship diagram">
         <TableBox x={LEFT_X} width={leftBoxW} rows={rows} label={leftTable} onClick={linkTo(leftTable, "tableOccurrence")} />
         <TableBox x={RIGHT_X} width={rightBoxW} rows={rows} label={rightTable} onClick={linkTo(rightTable, "tableOccurrence")} />
 
@@ -78,47 +88,39 @@ export function RelationshipERD({
             </g>
           );
         })}
+
+        <BoxNotes x={LEFT_X} top={boxBottom} lines={leftNotes} />
+        <BoxNotes x={RIGHT_X} top={boxBottom} lines={rightNotes} />
       </svg>
-      <CascadeNotes leftTable={leftTable} rightTable={rightTable} left={left} right={right} />
     </div>
   );
 }
 
-/** The per-side cascade/sort settings beneath the diagram. Rendered only for the
- * sides that have a non-default setting, so plain relationships stay uncluttered. */
-function CascadeNotes({
-  leftTable,
-  rightTable,
-  left,
-  right,
-}: {
-  leftTable: string;
-  rightTable: string;
-  left?: RelationshipSide;
-  right?: RelationshipSide;
-}) {
-  const notes = [
-    [leftTable, left],
-    [rightTable, right],
-  ]
-    .map(([table, side]) => {
-      const s = side as RelationshipSide | undefined;
-      if (!s) return null;
-      const flags: string[] = [];
-      if (s.cascadeCreate) flags.push("allow creation");
-      if (s.cascadeDelete) flags.push("delete related");
-      if (s.sorted) flags.push("sorted");
-      return flags.length ? `${table as string}: ${flags.join(", ")}` : null;
-    })
-    .filter((n): n is string => n != null);
+/** The non-default cascade/sort settings of one side, one per line, so plain
+ * relationships stay uncluttered. */
+function sideNotes(side?: RelationshipSide): string[] {
+  if (!side) return [];
+  const flags: string[] = [];
+  if (side.cascadeCreate) flags.push("allow creation");
+  if (side.cascadeDelete) flags.push("delete related");
+  if (side.sorted) flags.push("sorted");
+  return flags;
+}
 
-  if (notes.length === 0) return null;
+function notesWidth(lines: string[]): number {
+  return Math.ceil(lines.reduce((max, l) => Math.max(max, estTextWidth(l, NOTE_FONT, false)), 0));
+}
+
+/** A box's notes, left-aligned underneath it. */
+function BoxNotes({ x, top, lines }: { x: number; top: number; lines: string[] }) {
   return (
-    <ul className="rel-cascade subtle">
-      {notes.map((n, i) => (
-        <li key={i}>{n}</li>
+    <>
+      {lines.map((l, i) => (
+        <text key={l} className="erd-note" x={x} y={top + 14 + i * NOTE_H}>
+          {l}
+        </text>
       ))}
-    </ul>
+    </>
   );
 }
 
@@ -140,7 +142,7 @@ function TableBox({
 }) {
   const boxHeight = TITLE_H + 10 + rows * ROW_H;
   return (
-    <g className={`erd-node${onClick ? " clickable" : ""}`} onClick={onClick}>
+    <g className={`erd-node${onClick ? " clickable" : ""}`} aria-label={label || undefined} {...pressable(() => onClick?.(), { inert: !onClick })}>
       <rect className="erd-box" x={x} y={TOP} width={width} height={boxHeight} rx={6} />
       <rect className="erd-titlebar" x={x} y={TOP} width={width} height={Math.min(TITLE_H, boxHeight)} rx={6} />
       {boxHeight > TITLE_H && (
@@ -160,10 +162,9 @@ const FIELD_HIT_H = 18;
  * breathing room on each side, rather than hugging the text. */
 const FIELD_HIT_INSET = 4;
 
-/** A predicate field name: an invisible hit/highlight box behind the label so
- * hovering it shows the same bg-elevated highlight as any other inline link,
- * instead of a one-off accent+underline treatment. The hit box spans the whole
- * table box (minus a small inset), matching the full-width row hover elsewhere. */
+/** A predicate field name: an invisible hit pill behind the label, so hovering
+ * it shows the same grey fill as a row. The pill spans the whole table box
+ * (minus a small inset), like the full-width row hover elsewhere. */
 function FieldLabel({
   text,
   x,
@@ -182,7 +183,7 @@ function FieldLabel({
   onClick?: () => void;
 }) {
   return (
-    <g className={`erd-field-label${onClick ? " clickable" : ""}`} onClick={onClick}>
+    <g className={`erd-field-label${onClick ? " clickable" : ""}`} aria-label={text} {...pressable(() => onClick?.(), { inert: !onClick })}>
       {onClick && (
         <rect
           className="erd-field-hit"
@@ -190,7 +191,7 @@ function FieldLabel({
           y={y - FIELD_HIT_H / 2}
           width={boxW - FIELD_HIT_INSET * 2}
           height={FIELD_HIT_H}
-          rx={3}
+          rx={6}
         />
       )}
       <text className="erd-field" x={x} y={y + 4} textAnchor={align}>

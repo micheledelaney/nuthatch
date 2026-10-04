@@ -107,13 +107,13 @@ export function HistoryBar({
 
   return (
     <div className="history-bar">
-      <button type="button" className="hb-nav" onClick={back} disabled={!canBack} title="Back (← or ⌘[)">
+      <button type="button" className="icon-btn" onClick={back} disabled={!canBack} title="Back (← or ⌘[)" aria-label="Back">
         ‹
       </button>
-      <button type="button" className="hb-nav" onClick={forward} disabled={!canForward} title="Forward (→ or ⌘])">
+      <button type="button" className="icon-btn" onClick={forward} disabled={!canForward} title="Forward (→ or ⌘])" aria-label="Forward">
         ›
       </button>
-      <div className="hb-crumbs" ref={crumbsRef}>
+      <nav className="hb-crumbs" ref={crumbsRef} aria-label="History">
         {history.map((uid, i) => {
           const obj = model.byUid.get(uid);
           const current = i === history.length - 1;
@@ -122,17 +122,18 @@ export function HistoryBar({
               {i > 0 && <span className="hb-sep">›</span>}
               <button
                 type="button"
-                className={`hb-crumb${current ? " current" : ""}`}
+                className={`tab hb-crumb${current ? " current" : ""}`}
                 onClick={() => goTo(i)}
+                aria-current={current ? "page" : undefined}
                 title={obj ? objectLabel(obj) : uid}
               >
-                {obj && <TypePill type={obj.type} short />}
+                {obj && <TypePill type={obj.type} short filled={current} />}
                 <span className="ellipsis">{obj ? objectLabel(obj) : "(missing)"}</span>
               </button>
             </span>
           );
         })}
-      </div>
+      </nav>
       {children && <div className="hb-actions">{children}</div>}
     </div>
   );

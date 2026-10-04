@@ -19,12 +19,12 @@ export function Toolbar() {
       <div className="spacer" />
 
       {previousComparison && !comparison && (
-        <button onClick={returnToComparison}>← Comparison</button>
+        <button className="btn" onClick={returnToComparison}>← Comparison</button>
       )}
       {comparison ? (
-        <button onClick={closeComparison}>Dashboard</button>
+        <button className="btn" onClick={closeComparison}>Dashboard</button>
       ) : (
-        model && <button onClick={reset}>Dashboard</button>
+        model && <button className="btn" onClick={reset}>Dashboard</button>
       )}
     </header>
   );

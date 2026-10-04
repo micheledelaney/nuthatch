@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from "react";
+import { useContext, useId, useMemo, useState } from "react";
 import { useStore } from "@/state/store";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type SolutionModel } from "@/types/ddr";
 import { buildDependencyView } from "@/core/analysis/dependencies";
@@ -16,8 +16,9 @@ import {
 import { TypePill } from "../TypePill";
 import { isInUnusedChain, isUnreferenced } from "./filters";
 import { factsFor } from "./facts";
-import { Glance } from "./Glance";
+import { Glance, GlanceSection } from "./Glance";
 import { PaneNavContext } from "../workbench/paneNav";
+import { pressable, onTabListKeyDown } from "../a11y";
 
 /** Rows shown per tab before "Show more" — a tab is the whole view, so it can
  * afford far more than the old side-by-side widgets. */
@@ -26,8 +27,8 @@ const TAB_PREVIEW_LIMIT = 200;
 type Tab = "definition" | "usedBy" | "uses" | "calls";
 
 /**
- * The object page: the At a glance card (name, type, key attributes, flags), then tabs (Definition, Referenced
- * by, References, Call chain). The pane's history bar above it is the only breadcrumb.
+ * The object page: the name and flags, then tabs (Details, Used by, Uses,
+ * Calls — short so they fit a split pane). The pane's history bar above it is the only breadcrumb.
  * Every link inside navigates forward from this page's trail position.
  */
 export function ObjectPage({ uid, index }: { uid: string; index: number }) {
@@ -37,6 +38,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   const showGraphFor = useStore((s) => s.showGraphFor);
   // A workbench pane may take over navigation (e.g. ⇧-click → other pane).
   const paneGo = useContext(PaneNavContext);
+  const panelId = useId();
   const [tab, setTab] = useState<Tab>("definition");
 
   const view = useMemo(() => (model ? buildDependencyView(model, uid) : null), [model, uid]);
@@ -66,35 +68,41 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "definition", label: "Details" },
-    { id: "usedBy", label: "Referenced by", count: inbound.length },
-    { id: "uses", label: "References", count: outbound.length },
+    { id: "usedBy", label: "Used by", count: inbound.length },
+    { id: "uses", label: "Uses", count: outbound.length },
   ];
-  if (obj.type === "script") tabs.push({ id: "calls", label: "Call chain", count: callCount });
+  if (obj.type === "script") tabs.push({ id: "calls", label: "Calls", count: callCount });
 
   return (
     <div className="object-page">
       <header className="op-header">
         <Glance
           obj={obj}
-          model={model}
           facts={facts}
-          onGo={go}
           actions={
             obj.type === "tableOccurrence" && (
-              <button className="graph-jump-btn" title="Show in relationship graph" onClick={() => showGraphFor(uid)}>
-                Show in graph
+              <button
+                className="icon-btn graph-jump-btn"
+                title="Show in relationship graph"
+                aria-label="Show in relationship graph"
+                onClick={() => showGraphFor(uid)}
+              >
+                <GraphIcon />
               </button>
             )
           }
         />
-        <div className="op-tabs" role="tablist">
+        <div className="tabs op-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabListKeyDown}>
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               role="tab"
+              id={`${panelId}-${t.id}`}
               aria-selected={tab === t.id}
-              className={`op-tab${tab === t.id ? " active" : ""}`}
+              aria-controls={`${panelId}-panel`}
+              tabIndex={tab === t.id ? 0 : -1}
+              className={`tab${tab === t.id ? " active" : ""}`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -104,7 +112,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
         </div>
       </header>
 
-      <div className="detail-body op-body">
+      <div className="detail-body op-body" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`}>
         {tab === "definition" && (
           <DefinitionTab obj={obj} model={model} onGo={go} scrollToStep={highlight && highlight.uid === uid ? highlight.step : null} />
         )}
@@ -134,8 +142,8 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   );
 }
 
-/** Details tab: the type-specific detail first (steps, calc, layout, …),
- * then children, then the full property sheet. */
+/** Details tab: At a glance first, then the type-specific detail (steps,
+ * calc, layout, …), then children, then the full property sheet. */
 function DefinitionTab({
   obj,
   model,
@@ -159,6 +167,7 @@ function DefinitionTab({
 
   return (
     <>
+      <GlanceSection obj={obj} model={model} onGo={onGo} />
       {obj.type === "tableOccurrence" ? (
         <OccurrenceRelationships model={model} toUid={uid} onGo={onGo} />
       ) : obj.detail ? (
@@ -179,9 +188,11 @@ function DefinitionTab({
               child.isSeparator ? (
                 <li key={child.uid} className="ref-divider" aria-hidden />
               ) : (
-                <li key={child.uid} onClick={() => onGo(child.uid, child.uid)} title={objectLabel(child)}>
-                  <TypePill type={child.type} short />
-                  <span className="ellipsis">{child.name}</span>
+                <li key={child.uid}>
+                  <div className="row" {...pressable(() => onGo(child.uid, child.uid))} title={objectLabel(child)}>
+                    <TypePill type={child.type} short />
+                    <span className="ellipsis">{child.name}</span>
+                  </div>
                 </li>
               ),
             )}
@@ -191,5 +202,17 @@ function DefinitionTab({
 
       <DetailsProps obj={obj} model={model} refIndex={refIndexFor(model, uid)} onGo={onGo} />
     </>
+  );
+}
+
+/** Three linked nodes: the relationship graph. */
+function GraphIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+      <path d="M6.6 5.1 4.4 10.4M9.4 5.1l2.2 5.3M5.6 12.5h4.8" />
+      <circle cx="8" cy="3.5" r="2" />
+      <circle cx="3.5" cy="12.5" r="2" />
+      <circle cx="12.5" cy="12.5" r="2" />
+    </svg>
   );
 }

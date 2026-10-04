@@ -1,3 +1,4 @@
+import { SearchIcon } from "./workbench/CommandPalette";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/store";
 import { buildRelationshipGraph, type FileGraph, type GraphNode } from "@/core/analysis/relationshipGraph";
@@ -61,32 +62,15 @@ function drawnHeight(n: GraphNode, expanded: boolean): number {
   return TITLE_H + (rows.length + (overflow > 0 ? 1 : 0)) * ROW_H;
 }
 
-const BG_ELEV: [number, number, number] = [45, 51, 63];
-
-function hexToRgb(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ];
-}
-
-function mix(a: number[], b: number[], t: number): string {
-  const c = a.map((v, i) => Math.round(v * (1 - t) + b[i]! * t));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
-
+/** A box's colours, drawn like the type tags: the occurrence's colour toned
+ * toward the ground for the border and the name, with a faint tint of it as
+ * the title bar's fill. */
 function boxColors(color: string | undefined): { fill: string; border: string; text: string } {
-  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) {
-    return { fill: "var(--accent-dim)", border: "var(--accent)", text: "var(--text)" };
-  }
-  const c = hexToRgb(color);
-  const filled = c.map((v, i) => Math.round(v * 0.28 + BG_ELEV[i]! * 0.72));
-  const lum = (0.299 * filled[0]! + 0.587 * filled[1]! + 0.114 * filled[2]!) / 255;
+  const c = color && /^#[0-9a-f]{6}$/i.test(color) ? color : "var(--accent)";
   return {
-    fill: `rgb(${filled[0]}, ${filled[1]}, ${filled[2]})`,
-    border: mix(c, [255, 255, 255], 0.3),
-    text: lum > 0.55 ? "#1b1b1b" : "#ffffff",
+    fill: `color-mix(in srgb, ${c} 14%, var(--nh-deep))`,
+    border: `color-mix(in srgb, ${c} var(--tag-border), var(--nh-deep))`,
+    text: `color-mix(in srgb, ${c} 92%, var(--nh-deep))`,
   };
 }
 
@@ -127,7 +111,7 @@ export function RelationshipGraphView() {
   if (graphs.length === 0) {
     return (
       <div className="panel">
-        <h2>Relationship Graph</h2>
+        <h2 className="head">Relationship Graph</h2>
         <div className="subtle">No table occurrences with graph coordinates were found.</div>
       </div>
     );
@@ -135,24 +119,26 @@ export function RelationshipGraphView() {
 
   return (
     <div className="panel fmg-panel">
-      <div className="erd-head">
-        <h2>Relationship Graph</h2>
-        <span className="subtle">
-          {graph!.nodes.length} occurrences · {graph!.edges.length} relationships
-        </span>
-        {graphs.length > 1 && (
-          <select className="fmg-file-select" value={graph!.fileUid} onChange={(e) => setFileUid(e.target.value)}>
-            {graphs.map((g) => (
-              <option key={g.fileUid} value={g.fileUid}>
-                {g.fileName}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
       <GraphCanvas
         key={graph!.fileUid}
         graph={graph!}
+        head={
+          <>
+            <h2 className="head">Relationship Graph</h2>
+            <span className="subtle">
+              {graph!.nodes.length} occurrences · {graph!.edges.length} relationships
+            </span>
+            {graphs.length > 1 && (
+              <select className="fmg-file-select" value={graph!.fileUid} onChange={(e) => setFileUid(e.target.value)}>
+                {graphs.map((g) => (
+                  <option key={g.fileUid} value={g.fileUid}>
+                    {g.fileName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
+        }
         onOpen={reveal}
         focusUid={graphFocus && focusFileUid === graph!.fileUid ? graphFocus : null}
         onFocusConsumed={clearGraphFocus}
@@ -161,13 +147,27 @@ export function RelationshipGraphView() {
   );
 }
 
+/** A bold serif "i" that fills the icon box: a dot over a stem with a flag
+ * and a foot. No circle. */
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="2.6" r="1.35" fill="currentColor" stroke="none" />
+      <path d="M5.8 6.2h2.6v7.3M5.6 13.6h5" />
+    </svg>
+  );
+}
+
 function GraphCanvas({
   graph,
+  head,
   onOpen,
   focusUid,
   onFocusConsumed,
 }: {
   graph: FileGraph;
+  /** The title row's left side (title, counts, file picker); the zoom controls join it on the right. */
+  head: React.ReactNode;
   onOpen: (uid: string, type: "tableOccurrence" | "relationship") => void;
   /** A table occurrence to select and scroll to on mount (opened from elsewhere). */
   focusUid?: string | null;
@@ -300,24 +300,44 @@ function GraphCanvas({
 
   return (
     <>
+      <div className="erd-head">
+        {head}
+        <div className="fmg-zoom" role="group" aria-label="Zoom">
+          <button className="icon-btn" onClick={() => zoomBy(1 / 1.2)} title="Zoom out" aria-label="Zoom out">
+            −
+          </button>
+          <span className="fmg-zoom-pct">{Math.round(scale * 100)}%</span>
+          <button className="icon-btn" onClick={() => zoomBy(1.2)} title="Zoom in" aria-label="Zoom in">
+            +
+          </button>
+          <button className="btn" onClick={fitToView}>
+            Fit
+          </button>
+        </div>
+      </div>
+
       <div className="fmg-toolbar">
-        <button className="fmg-zoom" onClick={() => zoomBy(1 / 1.2)} title="Zoom out" aria-label="Zoom out">
-          −
-        </button>
-        <span className="fmg-zoom-pct">{Math.round(scale * 100)}%</span>
-        <button className="fmg-zoom" onClick={() => zoomBy(1.2)} title="Zoom in" aria-label="Zoom in">
-          +
-        </button>
-        <button className="fmg-fit" onClick={fitToView}>
-          Fit
-        </button>
+        <label className="nav-search has-query">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search table occurrences"
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+        </label>
         <span className="fmg-cascade-group" role="group" aria-label="Color lines by cascade rule">
           <span className="subtle">Color:</span>
           {CASCADE_RULES.map((rule) => (
             <button
               key={rule.key}
               type="button"
-              className={`fmg-cascade-toggle${cascade[rule.key] ? " on" : ""}`}
+              className={`chip fmg-cascade-toggle${cascade[rule.key] ? " active" : ""}`}
               aria-pressed={cascade[rule.key]}
               title={`${rule.title}: ${cascade[rule.key] ? "colored" : "not colored"}`}
               onClick={() => setCascade((c) => ({ ...c, [rule.key]: !c[rule.key] }))}
@@ -330,16 +350,16 @@ function GraphCanvas({
         <span className="fmg-info-wrap">
           <button
             type="button"
-            className="fmg-info"
-            aria-label="About cascade-rule colors"
+            className="icon-btn"
+            aria-label="About the graph"
             onClick={() => setShowInfo((v) => !v)}
           >
-            ⓘ
+            <InfoIcon />
           </button>
           {showInfo && (
             <>
               <div className="fmg-info-overlay" onClick={() => setShowInfo(false)} />
-              <div className="fmg-info-pop" role="tooltip">
+              <div className="popover fmg-info-pop" role="tooltip">
                 <div className="fmg-info-title">Relationship lines are colored by cascade option:</div>
                 <div className="fmg-info-row">
                   <span className="fmg-swatch cas-del" /> Delete related records
@@ -350,6 +370,10 @@ function GraphCanvas({
                 <div className="fmg-info-row">
                   <span className="fmg-swatch cas-sort" /> Sorted relationship
                 </div>
+                <div className="fmg-info-title fmg-info-gap">Using the graph:</div>
+                <div className="fmg-info-row">Click a box to highlight its siblings</div>
+                <div className="fmg-info-row">Double-click a box to expand it</div>
+                <div className="fmg-info-row">⌘/Ctrl-click a box or line to open it</div>
               </div>
             </>
           )}
@@ -358,30 +382,11 @@ function GraphCanvas({
           <span className="fmg-selinfo">
             <strong>{selected.name ?? "(no base table)"}</strong> · {kinCount} occurrence
             {kinCount === 1 ? "" : "s"}
-            <button className="fmg-clear" onClick={() => setSelected(null)}>
+            <button className="btn" onClick={() => setSelected(null)}>
               Clear
             </button>
           </span>
-        ) : (
-          <span className="subtle fmg-hint">
-            click to highlight siblings · double-click to expand · ⌘/Ctrl-click box or line to open
-          </span>
-        )}
-      </div>
-
-      <div className="fmg-search-row">
-        <input
-          className="fmg-search"
-          type="search"
-          placeholder="Search table occurrences…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search table occurrences"
-          autoComplete="new-password"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-        />
+        ) : null}
       </div>
 
       <div className="fmg-canvas-wrap" ref={scrollRef} onWheel={onWheel}>
@@ -390,7 +395,7 @@ function GraphCanvas({
           height={boundsH * scale}
           viewBox={viewBox}
           className={`fmg-canvas${selected ? " selecting" : ""}`}
-          role="img"
+          role="group"
           aria-label="FileMaker relationship graph"
           onClick={() => setSelected(null)}
         >
@@ -530,6 +535,20 @@ function GraphBox({
     <g
       className={`fmg-node${state ? ` ${state}` : ""}`}
       style={{ ["--toc" as string]: colors.border }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${node.name} — Enter selects, ⌘/Ctrl+Enter opens, Shift+Enter shows fields`}
+      aria-pressed={state === "sel"}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.metaKey || e.ctrlKey) onOpen();
+        else if (e.shiftKey) onToggleExpand();
+        else onSelect();
+      }}
+      onFocus={() => onHover(node.uid)}
+      onBlur={() => onHover(null)}
       onClick={(e) => {
         e.stopPropagation();
         if (e.metaKey || e.ctrlKey) onOpen();

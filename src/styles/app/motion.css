@@ -1,0 +1,21 @@
+/* Keyframes, and the reduced-motion switch (last, so it wins). */
+
+/* Popups and dialogs spring open (see --ease-spring); transform/opacity
+   only, so it composes with each element's own state styles. */
+@keyframes spring-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-popup,
+  .modal {
+    animation: none;
+  }
+}

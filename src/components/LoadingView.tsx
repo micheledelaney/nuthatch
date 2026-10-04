@@ -14,12 +14,12 @@ function AnimatedEllipsis() {
     return () => clearInterval(id);
   }, []);
 
-  return <span style={{ display: "inline-block", width: "1.5ch" }}>{".".repeat(dots)}</span>;
+  return <span aria-hidden="true" style={{ display: "inline-block", width: "1.5ch" }}>{".".repeat(dots)}</span>;
 }
 
 export function LoadingView({ note }: { note?: string }) {
   return (
-    <div className="loading">
+    <div className="loading" role="status">
       <PlaybackVideo />
       <div className="loading-title">Parsing<AnimatedEllipsis /></div>
       <div className="subtle" style={{ maxWidth: 360, textAlign: "center" }}>

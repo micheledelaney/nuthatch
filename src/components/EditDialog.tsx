@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useStore } from "@/state/store";
 import type { EditTarget } from "@/state/store";
+import { useModalFocus } from "./a11y";
 
 /** Presentation for each edit kind. */
 function configFor(target: EditTarget): { title: string; label: string; multiline: boolean } {
@@ -24,6 +25,8 @@ export function EditDialog() {
 
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(!!editDialog);
+  const titleId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -48,9 +51,9 @@ export function EditDialog() {
 
   return (
     <div className="modal-overlay" onClick={cancelEdit}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>{title}</h3>
-        <label className="field-label" htmlFor="edit-field">
+      <div className="popover modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef} onClick={(e) => e.stopPropagation()}>
+        <h3 id={titleId}>{title}</h3>
+        <label className="head field-label" htmlFor="edit-field">
           {label}
         </label>
         {multiline ? (
@@ -88,8 +91,8 @@ export function EditDialog() {
           />
         )}
         <div className="modal-actions">
-          <button onClick={cancelEdit}>Cancel</button>
-          <button className="primary" onClick={save} disabled={!canSave}>
+          <button className="btn" onClick={cancelEdit}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={!canSave}>
             Save
           </button>
         </div>

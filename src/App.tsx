@@ -12,6 +12,7 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { EditDialog } from "@/components/EditDialog";
 import { ComparisonView } from "@/components/ComparisonView";
 import { SidebarResizer, useSidebarWidth } from "@/components/SidebarResizer";
+import { onTabListKeyDown } from "./components/a11y";
 
 export function App() {
   const status = useStore((s) => s.status);
@@ -36,17 +37,17 @@ export function App() {
       >
         {showSidebar && <TypeRail />}
         {showSidebar && (
-          <aside className={`sidebar${sidebarWidth === 0 ? " collapsed" : ""}`}>
+          <aside className={`sidebar${sidebarWidth === 0 ? " collapsed" : ""}`} aria-label="Objects">
             {sidebarWidth > 0 && <Navigator />}
             <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
           </aside>
         )}
-        <section className="main">
-          {error && <div className="banner">{error}</div>}
+        <main className="main">
+          {error && <div className="banner" role="alert">{error}</div>}
           {notice && (
-            <div className="banner banner-notice">
+            <div className="banner banner-notice" role="status">
               <span>{notice}</span>
-              <button className="banner-close" aria-label="Dismiss" onClick={dismissNotice}>
+              <button className="glyph-btn banner-close" aria-label="Dismiss" onClick={dismissNotice}>
                 ×
               </button>
             </div>
@@ -58,7 +59,7 @@ export function App() {
           ) : (
             <MainContent parsing={status === "parsing"} view={view} />
           )}
-        </section>
+        </main>
       </div>
       <SaveAnalysisDialog />
       <NewProjectDialog />
@@ -88,15 +89,33 @@ function MainHeader({ view }: { view: HomeView }) {
   const analysisName = useStore((s) => s.analysisName);
 
   return (
-    <nav className="main-header">
-      <div className="seg-control">
-        <button className={`seg-btn${view === "report" ? " active" : ""}`} onClick={() => setView("report")}>
+    <nav className="main-header" aria-label="Main">
+      <div className="tabs" role="tablist" aria-label="View" onKeyDown={onTabListKeyDown}>
+        <button
+          role="tab"
+          aria-selected={view === "report"}
+          tabIndex={view === "report" ? 0 : -1}
+          className={`tab${view === "report" ? " active" : ""}`}
+          onClick={() => setView("report")}
+        >
           Report Card
         </button>
-        <button className={`seg-btn${view === "browse" ? " active" : ""}`} onClick={() => setView("browse")}>
+        <button
+          role="tab"
+          aria-selected={view === "browse"}
+          tabIndex={view === "browse" ? 0 : -1}
+          className={`tab${view === "browse" ? " active" : ""}`}
+          onClick={() => setView("browse")}
+        >
           Browse
         </button>
-        <button className={`seg-btn${view === "erd" ? " active" : ""}`} onClick={() => setView("erd")}>
+        <button
+          role="tab"
+          aria-selected={view === "erd"}
+          tabIndex={view === "erd" ? 0 : -1}
+          className={`tab${view === "erd" ? " active" : ""}`}
+          onClick={() => setView("erd")}
+        >
           ERD
         </button>
       </div>

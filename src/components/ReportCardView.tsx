@@ -1,5 +1,6 @@
 import { useStore } from "@/state/store";
-import { OBJECT_TYPE_META, isUnresolvedTableOccurrence, type ObjectType } from "@/types/ddr";
+import { isUnresolvedTableOccurrence, type ObjectType, type RiskFlagKind } from "@/types/ddr";
+import { RiskFlags } from "@/components/RiskFlags";
 
 /** Report card dashboard — the home base for a parsed solution. */
 export function ReportCardView() {
@@ -19,114 +20,126 @@ export function ReportCardView() {
   // checked. They're not counted as broken — say so, so the numbers don't mislead.
   const unresolvedExternalCount = model.objects.filter(isUnresolvedTableOccurrence).length;
 
-  // Point the navigator at every type, filtered to broken / unreferenced objects,
-  // and switch to Browse so the sidebar is visible.
-  const showBroken = () => {
+  // Where each check's "show me" goes: the navigator, pointed at the matching
+  // objects, on the Browse tab so the sidebar is visible. Shared by the tiles
+  // and the risk flags.
+  const showAll = (filter: "broken" | "unreferenced" | "unusedChain") => {
     showBrowse();
     setNavType("all");
+    setNavRefFilter(filter);
+  };
+  const goTo: Record<RiskFlagKind, () => void> = {
+    broken: () => showAll("broken"),
+    unreferenced: () => showAll("unreferenced"),
+    unusedChain: () => showAll("unusedChain"),
+    noPassword: () => {
+      showBrowse();
+      setNavRefFilter("all");
+      setNavType("account");
+      setNavAccountFilter("active");
+      setNavAccountPw("none");
+    },
+    unstored: () => {
+      setNavRefFilter("all");
+      focusFields("unstored");
+    },
+    globalVariables: () => {
+      showBrowse();
+      setNavRefFilter("all");
+      setNavType("globalVariable");
+    },
+  };
+  // A type's broken objects, for the risk card's "Found in" chips.
+  const showBrokenOfType = (type: ObjectType) => {
+    showBrowse();
+    setNavType(type);
     setNavRefFilter("broken");
   };
-  const showUnreferenced = () => {
-    showBrowse();
-    setNavType("all");
-    setNavRefFilter("unreferenced");
-  };
-  const showUnusedChain = () => {
-    showBrowse();
-    setNavType("all");
-    setNavRefFilter("unusedChain");
-  };
 
-  const typeMetrics = (Object.keys(OBJECT_TYPE_META) as ObjectType[])
-    .filter((t) => t !== "file" && card.countsByType[t] > 0)
-    .map((t) => ({ type: t, label: OBJECT_TYPE_META[t].plural, value: card.countsByType[t] }));
+  // The main issue above already shows (and links) its own figure, so its tile
+  // is left out rather than repeating the number.
+  const hero = card.riskFlags[0]?.kind;
 
   return (
-    <div className="panel">
+    <div className="report-card">
       {unresolvedExternalCount > 0 && (
-        <div className="report-warning" role="note">
-          <span className="report-warning-icon" aria-hidden>
-            ⚠
+        <div className="nh-notice" role="note">
+          <span className="nh-notice__icon" aria-hidden>
+            !
           </span>
-          <span>
+          <p>
             <strong>Incomplete DDR export.</strong> {unresolvedExternalCount.toLocaleString()} external
             table occurrence{unresolvedExternalCount === 1 ? "" : "s"} couldn't be resolved because their
             source files weren't available when this DDR was generated — references through them can't be
             verified, so they aren't counted as broken. Re-export the DDR with all referenced files open for
             complete broken-reference detection.
-          </span>
+          </p>
         </div>
       )}
       {/* Problems the parser hit but could work around (a missing DDR_INFO, a
           layout it couldn't read) — the numbers below are incomplete without them. */}
       {model.parseErrors.map((message, i) => (
-        <div key={i} className="report-warning" role="note">
-          <span className="report-warning-icon" aria-hidden>
-            ⚠
+        <div key={i} className="nh-notice" role="note">
+          <span className="nh-notice__icon" aria-hidden>
+            !
           </span>
-          <span>{message}</span>
+          <p>{message}</p>
         </div>
       ))}
-      <h2 style={{ fontSize: 13 }}>Health</h2>
-      <div className="metrics">
-        <Metric label="References" value={card.referenceCount} />
-        <Metric label="Objects with broken references" value={card.brokenReferenceCount} onClick={showBroken} accent={card.brokenReferenceCount > 0 ? "high" : undefined} />
-        <Metric label="Unreferenced objects" value={card.unreferencedCount} onClick={showUnreferenced} accent={card.unreferencedCount > 0 ? "warn" : undefined} />
-        <Metric label="Used only by unreferenced objects" value={card.unusedChainCount} onClick={showUnusedChain} accent={card.unusedChainCount > 0 ? "warn" : undefined} />
-        <Metric label="Active accounts, no password" value={card.accountsNoPasswordCount} onClick={() => { showBrowse(); setNavRefFilter("all"); setNavType("account"); setNavAccountFilter("active"); setNavAccountPw("none"); }} accent={card.accountsNoPasswordCount > 0 ? "high" : undefined} />
-        <Metric label="Unstored calculations" value={card.unstoredCalculationCount} onClick={() => { setNavRefFilter("all"); focusFields("unstored"); }} accent={card.unstoredCalculationCount > 0 ? "warn" : undefined} />
-        <Metric label="Deep calcs (depth ≥ 2)" value={card.deepCalcCount} onClick={() => { setNavRefFilter("all"); focusFields("deepCalc"); }} accent={card.deepCalcCount > 0 ? "warn" : undefined} />
-        <Metric label="Global variables" value={card.globalVariableCount} onClick={() => { showBrowse(); setNavRefFilter("all"); setNavType("globalVariable"); }} />
-        <Metric label="Global fields" value={card.globalFieldCount} onClick={() => { setNavRefFilter("all"); focusFields("global"); }} />
-      </div>
 
-      <h2 style={{ fontSize: 13 }}>Risk flags</h2>
-      <ul className="flags">
-        {card.riskFlags.map((flag, i) => (
-          <li key={i} className={flag.severity}>
-            {flag.message}
-          </li>
-        ))}
-      </ul>
+      <section>
+        <RiskFlags model={model} goTo={goTo} onFoundIn={showBrokenOfType} />
+      </section>
 
-      <h2 style={{ fontSize: 13 }}>Object inventory</h2>
-      <div className="metrics" style={{ marginTop: 10 }}>
-        {typeMetrics.map((m) => (
-          <Metric
-            key={m.type}
-            label={m.label}
-            value={m.value}
-            onClick={() => {
-              showBrowse();
-              setNavRefFilter("all");
-              setNavType(m.type);
-            }}
-          />
-        ))}
-      </div>
+      <section>
+        <div className="nh-tiles nh-card report-tiles">
+          {hero !== "broken" && <Metric label="Objects with broken references" hint="They point to something that was deleted or can't be found, so the step, calculation or button that uses it fails." value={card.brokenReferenceCount} onClick={goTo.broken} tone={card.brokenReferenceCount > 0 ? "danger" : undefined} />}
+          {hero !== "noPassword" && <Metric label="Active accounts, no password" hint="Anyone who knows the account name can open the file. Set a password or turn the account off." value={card.accountsNoPasswordCount} onClick={goTo.noPassword} tone={card.accountsNoPasswordCount > 0 ? "danger" : undefined} />}
+          {hero !== "unstored" && <Metric label="Unstored calculations" hint="Recalculated every time they're displayed, which slows lists, finds and reports. Store them where you can." value={card.unstoredCalculationCount} onClick={goTo.unstored} tone={card.unstoredCalculationCount > 0 ? "warning" : undefined} />}
+          <Metric label="Deep calculations" hint="Built on calculations that are themselves built on calculations, two or more levels down. A change at the bottom ripples up and is hard to trace." value={card.deepCalcCount} onClick={() => { setNavRefFilter("all"); focusFields("deepCalc"); }} tone={card.deepCalcCount > 0 ? "warning" : undefined} />
+          {hero !== "globalVariables" && <Metric label="Global variables" hint="Distinct $$variables in use: state shared across scripts. Each is a hidden dependency between them." value={card.globalVariableCount} onClick={goTo.globalVariables} />}
+          <Metric label="Global fields" hint="Fields with global storage: one value for the whole file, often used for settings and navigation." value={card.globalFieldCount} onClick={() => { setNavRefFilter("all"); focusFields("global"); }} />
+        </div>
+      </section>
+
+      <section>
+        <div className="nh-tiles nh-card report-tiles">
+          {hero !== "unreferenced" && <Metric label="Unreferenced objects" hint="Scripts, fields, layouts, custom functions and other objects that no calculation, script, layout, button or relationship refers to." value={card.unreferencedCount} onClick={goTo.unreferenced} tone={card.unreferencedCount > 0 ? "warning" : undefined} />}
+          {hero !== "unusedChain" && <Metric label="Used only by unreferenced objects" hint="Their only users are unreferenced themselves, so they are dead too. Deleting the unreferenced ones leaves them without a caller." value={card.unusedChainCount} onClick={goTo.unusedChain} tone={card.unusedChainCount > 0 ? "warning" : undefined} />}
+        </div>
+      </section>
     </div>
   );
 }
 
+/** A stat tile: a cell in the section's tile strip. The value takes the
+ * severity colour; clickable tiles are buttons that fill on hover. */
 function Metric({
   label,
+  hint,
   value,
   onClick,
-  accent,
+  tone,
 }: {
   label: string;
+  /** One line on what the figure means. */
+  hint?: string;
   value: number;
   onClick?: () => void;
-  accent?: "high" | "warn";
+  tone?: "danger" | "warning";
 }) {
-  return (
-    <div
-      className={`metric${onClick ? " clickable" : ""}${accent ? ` ${accent}` : ""}`}
-      onClick={onClick}
-      role={onClick ? "button" : undefined}
-    >
-      <div className="value">{value.toLocaleString()}</div>
-      <div className="label">{label}</div>
-    </div>
+  const body = (
+    <>
+      <b className={`nh-tile__value${tone ? ` nh-val-${tone}` : ""}`}>{value.toLocaleString()}</b>
+      <span className="nh-tile__label">{label}</span>
+      {hint && <span className="nh-tile__hint">{hint}</span>}
+    </>
+  );
+  return onClick ? (
+    <button type="button" className="nh-tile" onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className="nh-tile">{body}</div>
   );
 }

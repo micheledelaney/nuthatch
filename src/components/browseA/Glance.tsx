@@ -3,7 +3,7 @@ import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, t
 import { chainTops } from "@/core/analysis/unusedChains";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
-import { renderWithBrokenPlaceholders } from "../ObjectColumn";
+import { renderWithBrokenPlaceholders, Section } from "../ObjectColumn";
 import type { Fact } from "./facts";
 import { isInUnusedChain } from "./filters";
 
@@ -367,33 +367,45 @@ function usedOnlyByRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceR
 }
 
 /**
- * The At a glance block at the top of an object page: the object's name, a
- * Type row, three developer-relevant rows (what it's based on, how it's set
- * up), and its flags. Stays above the tabs so it's visible on every tab.
+ * The top of an object page: the object's name and its flags, which stay
+ * above the tabs so they're visible on every tab. The key attributes are the
+ * At a glance section on the Details tab (see GlanceSection).
  */
 export function Glance({
   obj,
-  model,
   facts,
-  onGo,
   actions,
 }: {
   obj: FmObject;
-  model: SolutionModel;
   facts: Fact[];
-  onGo: OnGo;
   /** Extra buttons for the name row (e.g. "Show in graph"). */
   actions?: React.ReactNode;
 }) {
+  return (
+    <div className="op-glance-head">
+      <h1 className="op-glance-name" title={objectLabel(obj)}>
+        {renderWithBrokenPlaceholders(objectLabel(obj))}
+      </h1>
+      {facts.length > 0 && (
+        <div className="op-facts">
+          {facts.map((fact, i) => (
+            <span key={`${i}-${fact.label}`} className={`tag op-fact${fact.tone ? ` tone-${fact.tone}` : ""}`} title={fact.title}>
+              {fact.label}
+            </span>
+          ))}
+        </div>
+      )}
+      {actions}
+    </div>
+  );
+}
+
+/** The At a glance section on the Details tab: a Type row, then three
+ * developer-relevant rows (what it's based on, how it's set up). */
+export function GlanceSection({ obj, model, onGo }: { obj: FmObject; model: SolutionModel; onGo: OnGo }) {
   const rows = glanceRows(obj, model, onGo);
   return (
-    <section className="op-glance" aria-label="At a glance">
-      <div className="op-glance-head">
-        <h1 className="op-glance-name" title={objectLabel(obj)}>
-          {renderWithBrokenPlaceholders(objectLabel(obj))}
-        </h1>
-        {actions}
-      </div>
+    <Section title="At a glance">
       <dl className="op-glance-kv">
         {rows.map((r) => (
           <div key={r.label} className="op-glance-row">
@@ -402,15 +414,6 @@ export function Glance({
           </div>
         ))}
       </dl>
-      {facts.length > 0 && (
-        <div className="op-facts">
-          {facts.map((fact, i) => (
-            <span key={`${i}-${fact.label}`} className={`op-fact${fact.tone ? ` tone-${fact.tone}` : ""}`} title={fact.title}>
-              {fact.label}
-            </span>
-          ))}
-        </div>
-      )}
-    </section>
+    </Section>
   );
 }

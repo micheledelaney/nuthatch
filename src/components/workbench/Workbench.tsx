@@ -5,8 +5,6 @@ import { Pane } from "./Pane";
 import { PinShelf } from "./PinShelf";
 import { ShortcutsOverlay } from "./Shortcuts";
 import { Welcome } from "./Welcome";
-import { MOD_LABEL } from "./objectInfo";
-import "./workbench.css";
 
 /** True when a key event comes from somewhere the user is typing text. */
 function isTyping(target: EventTarget | null): boolean {
@@ -61,7 +59,6 @@ export function Workbench() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openPalette = useCallback(() => setPaletteOpen(true), []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
   const closeHelp = useCallback(() => setHelpOpen(false), []);
 
@@ -69,11 +66,7 @@ export function Workbench() {
     <div className="wb">
       <div className="wb-bar">
         <PinShelf />
-        <button type="button" className="wb-search-btn" onClick={openPalette}>
-          Search <kbd>{MOD_LABEL}</kbd>
-          <kbd>K</kbd>
-        </button>
-        <button type="button" className="wb-icon-btn" title="Keyboard shortcuts (?)" onClick={() => setHelpOpen(true)}>
+        <button type="button" className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>
           ?
         </button>
       </div>
@@ -83,7 +76,7 @@ export function Workbench() {
           {split && <Pane side="secondary" isSplit isActive={activeSide === "secondary"} onActivate={setActivePane} />}
         </div>
       ) : (
-        <Welcome onOpenPalette={openPalette} />
+        <Welcome />
       )}
       {paletteOpen && <CommandPalette onClose={closePalette} />}
       {helpOpen && <ShortcutsOverlay onClose={closeHelp} />}

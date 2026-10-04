@@ -1,8 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "@/state/store";
 import { objectLabel, type FmObject } from "@/types/ddr";
 import { TypePill } from "@/components/TypePill";
+import { useModalFocus } from "@/components/a11y";
 import { refStatsFor } from "@/components/browseA/refStats";
 import { runQuery, tokenize, tokenLabel, type Token } from "./query";
 import { parentContext } from "./objectInfo";
@@ -31,6 +32,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState("");
   const [sel, setSel] = useState(0);
   const deferredText = useDeferredValue(text);
+  const dialogRef = useModalFocus<HTMLDivElement>();
+  const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -91,14 +94,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div className="modal-overlay wb-overlay" onMouseDown={onClose}>
-      <div className="wb-palette" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKeyDown}>
+      <div className="popover wb-palette" role="dialog" aria-modal="true" aria-label="Search objects" ref={dialogRef} onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKeyDown}>
         <div className="wb-palette-input" onClick={() => inputRef.current?.focus()}>
           <SearchIcon />
           {chips.map((c, i) => (
-            <span key={`${c.raw}-${i}`} className={`wb-chip wb-chip-${c.kind}`}>
+            <span key={`${c.raw}-${i}`} className={`chip active wb-chip wb-chip-${c.kind}`}>
               {tokenLabel(c)}
               <button
                 type="button"
+                className="glyph-btn"
                 aria-label={`Remove ${tokenLabel(c)}`}
                 onClick={() => setChips((prev) => prev.filter((_, j) => j !== i))}
               >
@@ -113,13 +117,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             placeholder={chips.length ? "" : "Search objects…  try type:script is:unreferenced"}
             spellCheck={false}
             autoComplete="off"
+            role="combobox"
+            aria-label="Search objects"
+            aria-autocomplete="list"
+            aria-expanded={rows.length > 0}
+            aria-controls={listId}
+            aria-activedescendant={rows[sel] ? `${listId}-${sel}` : undefined}
           />
         </div>
-        <div className="wb-palette-meta">
+        <div className="head wb-palette-meta" role="status">
           {isRecent ? "Recently opened" : `${total.toLocaleString()} match${total === 1 ? "" : "es"}`}
           {!isRecent && total > rows.length && ` · showing ${rows.length}`}
         </div>
-        <div className="wb-palette-results" ref={listRef}>
+        <div className="wb-palette-results" ref={listRef} id={listId} role={rows.length > 0 ? "listbox" : undefined} aria-label="Results">
           {rows.length === 0 && (
             <div className="wb-palette-empty">{isRecent ? "Nothing opened yet. Start typing." : "No matches."}</div>
           )}
@@ -129,7 +139,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               <div
                 key={obj.uid}
                 data-index={i}
-                className={`wb-result${i === sel ? " active" : ""}`}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === sel}
+                className={`row wb-result${i === sel ? " active" : ""}`}
                 onMouseMove={() => i !== sel && setSel(i)}
                 onClick={(e) => open(obj, e.shiftKey)}
               >
@@ -160,7 +173,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SearchIcon() {
+export function SearchIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" className="wb-search-icon">
       <circle cx="7" cy="7" r="4.5" />

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { createPortal } from "react-dom";
+import { useModalFocus } from "@/components/a11y";
 import { SHORTCUTS } from "./objectInfo";
 
 /** The shortcut table, shared by the ? overlay and the welcome screen. */
@@ -27,6 +28,8 @@ export function ShortcutList() {
 
 /** "?" overlay listing every Browse shortcut. */
 export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
+  const titleId = useId();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "?") {
@@ -41,11 +44,11 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div className="modal-overlay wb-overlay" onMouseDown={onClose}>
-      <div className="modal wb-help" onMouseDown={(e) => e.stopPropagation()}>
-        <h3>Keyboard shortcuts</h3>
+      <div className="popover modal wb-help" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 id={titleId}>Keyboard shortcuts</h3>
         <ShortcutList />
         <div className="modal-actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose}>
             Close
           </button>
         </div>

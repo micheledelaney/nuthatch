@@ -72,23 +72,25 @@ export function Pane({
       <HistoryBar side={side} isActive={isActive}>
         <button
           type="button"
-          className={`wb-icon-btn${pinned ? " on" : ""}`}
+          className={`icon-btn${pinned ? " active" : ""}`}
           title={pinned ? "Unpin" : "Pin to shelf"}
+          aria-label="Pin to shelf"
+          aria-pressed={pinned}
           onClick={() => togglePin(uid)}
         >
-          {pinned ? "★" : "☆"}
+          <StarIcon filled={pinned} />
         </button>
         {isSplit ? (
-          <button type="button" className="wb-icon-btn" title="Swap panes" onClick={swapPanes}>
+          <button type="button" className="icon-btn" title="Swap panes" aria-label="Swap panes" onClick={swapPanes}>
             ⇄
           </button>
         ) : (
-          <button type="button" className="wb-icon-btn" title="Open in split pane" onClick={() => openInPane("secondary", uid)}>
+          <button type="button" className="icon-btn" title="Open in split pane" aria-label="Open in split pane" onClick={() => openInPane("secondary", uid)}>
             ◫
           </button>
         )}
-        <button type="button" className="wb-icon-btn" title="Close pane" onClick={() => closePane(side)}>
-          ×
+        <button type="button" className="icon-btn" title="Close pane" aria-label="Close pane" onClick={() => closePane(side)}>
+          <CloseIcon />
         </button>
       </HistoryBar>
       <div className="wb-pane-body">
@@ -97,5 +99,34 @@ export function Pane({
         </PaneNavContext.Provider>
       </div>
     </div>
+  );
+}
+
+/** The pin star, drawn rather than typed: the ☆/★ glyphs come from a fallback
+ * font whose metrics leave them off-centre in a round button. */
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 1.6l1.95 4.1 4.45.55-3.28 3.08.85 4.42L8 11.58l-3.97 2.17.85-4.42L1.6 6.25l4.45-.55z" />
+    </svg>
+  );
+}
+
+/** The close cross, drawn at the star's weight so the pane's buttons read
+ * as one set. */
+function CloseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+      <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+    </svg>
   );
 }

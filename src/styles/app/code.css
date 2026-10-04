@@ -1,0 +1,212 @@
+/* Script steps, calculations, syntax colours and code blocks. */
+
+/* Script Workspace — FileMaker-style step list */
+/* Script steps: Power's step list — rounded rows in the well, a dim number
+   column, broken steps tinted red with a bar on the left. */
+.sw {
+  margin: 4px 0 0;
+  /* The right side leaves room for the copy button. */
+  padding: 8px 34px 8px 0;
+  background: var(--code-bg);
+  border-radius: var(--nh-radius-soft);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 26px;
+  color: var(--nh-ink-soft);
+}
+
+.sw-line {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 0 calc(var(--section-title-indent, 15px) + 14px);
+  border-radius: var(--radius);
+  position: relative;
+}
+
+.sw-line.disabled {
+  opacity: 0.4;
+}
+
+.sw-line.hit {
+  background: var(--nh-danger-soft);
+  box-shadow: inset 3px 0 0 var(--high);
+  border-radius: var(--radius);
+}
+
+.sw-ln {
+  position: absolute;
+  /* Right-aligned, so every number ends the same distance before its text.
+     The column holds four digits (a box that is too narrow would let the text
+     overflow to the right, into the step); its right edge is at indent + 18px. */
+  left: calc(var(--section-title-indent, 15px) - 14px);
+  width: 32px;
+  top: 0;
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.sw-step {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sw-name {
+  color: var(--nh-ink-soft);
+}
+
+.sw-params {
+  color: var(--nh-ink-soft);
+}
+
+.sw-comment {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* The expand glyph and its empty stand-in are narrow here, so the text sits
+   close to the step number. */
+.sw .lo-chevron-space,
+.sw .lo-chevron {
+  width: 12px;
+  min-width: 12px;
+  padding: 0;
+}
+
+/* Step name colour categories */
+.sw-name.sw-flow   { color: var(--syn-kw); }     /* purple: if/loop/transaction */
+
+.sw-name.sw-nav    { color: var(--ok); }           /* green:  navigation/window */
+
+.sw-name.sw-exit   { color: var(--nh-syn-exit); }  /* pink:   halt/exit script/app */
+
+.sw-name.sw-delete { color: var(--high); }
+
+/* Syntax highlighting */
+.syn-comment {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.syn-string {
+  color: var(--syn-string);
+}
+
+.syn-var {
+  color: var(--syn-var);
+}
+
+/* The two halves of an unlinked `TO::Field` reference: the occurrence keeps the
+   table color, the field is grey to signal it is external / not clickable. */
+.syn-to {
+  color: var(--type-table);
+}
+
+.syn-field {
+  color: var(--text-dim);
+}
+
+.syn-func {
+  color: var(--syn-func);
+}
+
+.syn-kw {
+  color: var(--syn-kw);
+}
+
+.syn-num {
+  color: var(--syn-num);
+}
+
+.syn-op {
+  color: var(--syn-op);
+}
+
+/* A deleted reference placeholder ("<Field Missing>" etc.) — flagged red like a
+   broken reference in the references list. */
+.syn-missing {
+  color: var(--high);
+  font-weight: 600;
+}
+
+/* A code block with its copy button: discreet in the upper right corner, a
+   little clearer on hover or focus. */
+.code-box {
+  position: relative;
+}
+.code-box .copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  opacity: 0.35;
+  transition: opacity var(--nh-dur) var(--nh-ease);
+}
+.code-box:hover .copy-btn,
+.code-box .copy-btn:focus-visible {
+  opacity: 1;
+}
+
+/* Like the script steps, a code box starts at the section's edge, and its text
+   at the title text. */
+.detail-widget-body:not(.flush) > .code-box {
+  margin-left: calc(-1 * var(--section-title-indent));
+}
+
+/* Calculation body */
+.signature {
+  font-family: var(--font-mono);
+  font-style: italic;
+  margin: 6px 0;
+  word-break: break-word;
+}
+
+.to-rel {
+  margin-top: 28px;
+}
+
+.rel-name {
+  margin: 6px 0 0;
+}
+
+pre.code {
+  background: var(--code-bg);
+  border: 0;
+  border-radius: var(--nh-radius-soft);
+  /* The right side leaves room for the copy button. */
+  /* The text starts where the section's title text starts. */
+  padding: 14px 40px 14px var(--section-title-indent, 15px);
+  line-height: 1.6;
+  overflow: auto;
+  white-space: pre-wrap;
+  /* Grows with a taller window, with a sane floor for short windows. */
+  max-height: max(360px, 55vh);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+pre.lo-text-content {
+  background: var(--nh-deep);
+  border: 0;
+  border-radius: var(--nh-radius-soft);
+  padding: 14px 18px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Value list custom values */
+ol.value-list {
+  margin: 6px 0;
+  padding-left: 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+ol.value-list li {
+  padding: 1px 0;
+  word-break: break-word;
+}

@@ -6,15 +6,17 @@ export function typeColor(type: ObjectType): string {
     case "file":
       return "var(--type-file)";
     case "table":
-    case "tableOccurrence":
       return "var(--type-table)";
+    case "tableOccurrence":
+      return "var(--type-table-occurrence)";
     case "field":
       return "var(--type-field)";
     case "script":
       return "var(--type-script)";
     case "layout":
-    case "layoutObject":
       return "var(--type-layout)";
+    case "layoutObject":
+      return "var(--type-layout-object)";
     case "relationship":
       return "var(--type-relationship)";
     case "valueList":

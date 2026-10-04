@@ -37,10 +37,18 @@ export function ObjLink({
   );
 }
 
-/** A small uppercase chip ("EXTERNAL", "BROKEN") to qualify the row in the
- * margin — matches the chip the references list already uses. */
+const STATUS_CHIP: Record<"external" | "broken" | "unused", { label: string; tone?: "high" | "warn" }> = {
+  external: { label: "External" },
+  broken: { label: "Broken", tone: "high" },
+  unused: { label: "Unused", tone: "warn" },
+};
+
+/** A status tag ("External", "Broken", "Unused") right after a reference's
+ * name — the same tag as an object's flags (Broken in red, Unused in the
+ * warning tone, like Unreferenced). */
 export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused" }) {
-  return <span className="ref-external-tag">{kind}</span>;
+  const { label, tone } = STATUS_CHIP[kind];
+  return <span className={`tag ref-external-tag${tone ? ` tone-${tone}` : ""}`}>{label}</span>;
 }
 
 /**

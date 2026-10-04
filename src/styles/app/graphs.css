@@ -1,0 +1,420 @@
+/* Relationship ERD and relationship graph. */
+
+/* Diagram container (relationship ERD) — left-aligned with its section's text,
+ * with room above and below. An oversized diagram scrolls horizontally. */
+.graph-wrap {
+  display: flex;
+  overflow: auto;
+  margin: 0 0 4px;
+  padding: 4px 0 24px;
+}
+
+.graph-wrap > svg {
+  margin: 0;
+  /* Keep the SVG at its intrinsic size; without this the flex item shrinks to
+     the container width and the diagram gets clipped instead of scrolling. */
+  flex: none;
+}
+
+/* Relationship ERD */
+.erd-box {
+  fill: var(--nh-pane);
+  stroke: var(--border);
+}
+
+/* Title bar fill for a table box — a lighter pane band, so the box reads as
+   a card header rather than competing with genuine accent links. */
+.erd-titlebar {
+  fill: var(--nh-pane-2);
+}
+
+/* Hairline between a table box's title bar and its field rows. */
+.erd-divider {
+  stroke: var(--nh-deep);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.erd-node.clickable {
+  cursor: pointer;
+}
+
+/* Hover: one step lighter, like every clickable item. */
+.erd-node.clickable,
+.erd-field-label.clickable {
+  transition: filter var(--nh-dur) var(--nh-ease);
+}
+
+.erd-node.clickable:hover,
+.erd-field-label.clickable:hover {
+  filter: brightness(var(--hover-lift));
+}
+
+/* The relationship line: the same dimmed main text as a plain line in the
+   relationship graph. */
+.erd-link {
+  stroke: var(--fmg-edge);
+  stroke-width: 1;
+}
+
+/* Keyboard focus on a diagram part: the box or pill takes the accent outline. */
+.erd-node:focus-visible,
+.erd-field-label:focus-visible,
+.fmg-node:focus-visible {
+  outline: none;
+}
+
+.erd-node:focus-visible .erd-box,
+.erd-field-label:focus-visible .erd-field-hit {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.fmg-node:focus-visible .fmg-box.fmg-outline {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.erd-title {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.erd-field {
+  fill: var(--text);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+/* A clickable predicate field: an invisible pill behind the label, so the
+   whole width of the box is the click target. */
+.erd-field-hit {
+  fill: transparent;
+}
+
+.erd-field-label.clickable {
+  cursor: pointer;
+}
+
+.erd-op {
+  fill: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.erd-empty {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Per-side cascade/sort notes, under their box */
+.erd-note {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+/* FileMaker relationship graph (re-drawn from stored coordinates) */
+.erd-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Everything on the title row shares one centre line: the panel's default
+   heading margin and height would lift the title above the rest. */
+.erd-head {
+  flex-wrap: wrap;
+}
+
+.erd-head h2 {
+  margin: 0;
+  min-height: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.erd-head .subtle {
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.fmg-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* The graph needs the room: less above the title than the other panels. */
+  padding-top: 12px;
+  /* Level with the first view tab's label (32px header padding + 14px tab padding). */
+  padding-left: calc(32px + 14px);
+  padding-right: calc(32px + 14px);
+}
+
+.fmg-file-select {
+  width: auto;
+}
+
+/* Zoom: on the title's row, at the far right. */
+.fmg-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.fmg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+  /* A fixed row height: the selection's Clear button appears in this row and
+     must not make it taller, which would push everything below it down. */
+  height: var(--icon-btn);
+}
+
+.fmg-zoom-pct {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.fmg-selinfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.fmg-selinfo strong {
+  color: var(--accent);
+}
+
+/* Search: the navigator's field (.nav-search), kept open and 200px wide. */
+.fmg-toolbar .nav-search,
+.fmg-toolbar .nav-search.has-query {
+  flex: 0 0 200px;
+  margin-left: 0;
+}
+
+.fmg-canvas-wrap {
+  /* Hug the diagram's height (so there's no empty band below it), capped to the
+     viewport with internal scrolling for tall graphs. */
+  flex: 0 1 auto;
+  min-height: 240px;
+  max-height: 78vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--nh-radius-card);
+  background: var(--nh-deep);
+}
+
+.fmg-canvas {
+  display: block;
+}
+
+/* Subtle dotted-grid backdrop for depth. */
+.fmg-bg {
+  pointer-events: none;
+}
+
+.fmg-dot {
+  fill: var(--nh-line);
+}
+
+.fmg-edge {
+  stroke: var(--fmg-edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+  transition: stroke 0.12s ease, opacity 0.12s ease, stroke-width 0.12s ease;
+}
+
+/* Invisible wide hit target so ⌘/Ctrl-click on a relationship line is forgiving. */
+.fmg-edge-hit {
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
+}
+
+/* Cascade coloring (toggle): delete = red + bold, create = green, sort = blue. */
+.fmg-edge.cas-del {
+  stroke: var(--fmg-edge-del);
+  stroke-width: 3;
+}
+
+.fmg-edge.cas-create {
+  stroke: var(--fmg-edge-create);
+  stroke-width: 2.5;
+}
+
+.fmg-edge.cas-sort {
+  stroke: var(--fmg-edge-sort);
+  stroke-width: 2.5;
+}
+
+.fmg-canvas.selecting .fmg-edge:not(.hot) {
+  stroke: var(--fmg-edge-dim);
+  opacity: 1;
+}
+
+.fmg-canvas.selecting .fmg-edge.cas-del:not(.hot) {
+  stroke: var(--fmg-edge-del-dim);
+  opacity: 1;
+}
+
+.fmg-canvas.selecting .fmg-edge.cas-create:not(.hot) {
+  stroke: var(--fmg-edge-create-dim);
+  opacity: 1;
+}
+
+.fmg-canvas.selecting .fmg-edge.cas-sort:not(.hot) {
+  stroke: var(--fmg-edge-sort-dim);
+  opacity: 1;
+}
+
+/* Hover highlight: thicker and brighter, but NOT recolored — so it never clashes
+   with the cascade colors. Last, so its width wins over the cascade rules. */
+.fmg-edge.hot {
+  stroke-width: 5;
+  opacity: 1;
+  filter: brightness(1.9);
+}
+
+.fmg-node {
+  cursor: pointer;
+  transition: opacity 0.12s ease, filter var(--nh-dur) var(--nh-ease);
+}
+
+.fmg-node.dim {
+  opacity: 0.3;
+}
+
+.fmg-edge.dim {
+  stroke: color-mix(in srgb, var(--fmg-edge-dim) 35%, var(--nh-deep));
+}
+
+/* Hover: one step lighter, like every clickable item (no dimming of the
+   rest, so sweeping across boxes doesn't strobe). */
+.fmg-node:hover {
+  filter: brightness(var(--hover-lift));
+}
+
+/* The actually-clicked one stands out further: a tinted fill and accent glow, so
+   it's distinguishable from its (also-highlighted) siblings. */
+.fmg-node.sel .fmg-box {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  fill: color-mix(in srgb, var(--accent) 10%, var(--nh-deep));
+}
+
+/* Flat pane boxes on the dotted well (Power has no shadows). */
+.fmg-box {
+  fill: var(--nh-deep);
+  /* Outline in the occurrence's own hue, toned like a tag's (set per node via --toc). */
+  stroke: var(--toc, var(--border));
+  stroke-width: 1;
+  transition: stroke 0.12s ease;
+}
+
+.fmg-node .fmg-box.fmg-outline {
+  fill: none;
+  filter: none;
+  pointer-events: none;
+}
+
+/* Hairline between an expanded box's title bar and its field rows. */
+.fmg-divider {
+  stroke: var(--nh-deep);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.fmg-label {
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.fmg-field {
+  font-size: 11px;
+  fill: var(--text-dim);
+  pointer-events: none;
+}
+
+.fmg-field.more {
+  font-style: italic;
+}
+
+/* Per-rule cascade-color toggles + legend in the toolbar. */
+.fmg-cascade-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.fmg-cascade-toggle:not(.active) .fmg-swatch {
+  background: var(--fmg-edge-dim);
+}
+
+/* ⓘ info button + popover explaining the cascade colors. */
+.fmg-info-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Invisible full-viewport catcher: any click outside the popover closes it. */
+.fmg-info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+}
+
+.fmg-info-pop {
+  position: absolute;
+  top: calc(var(--icon-btn) + 6px);
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  padding: 12px 16px;
+  font-size: 12.5px;
+}
+
+.fmg-info-title {
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.fmg-info-gap {
+  margin-top: 12px;
+}
+
+.fmg-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.fmg-swatch {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.fmg-swatch.cas-del {
+  background: var(--high);
+  height: 4px;
+}
+
+.fmg-swatch.cas-create {
+  background: var(--ok);
+}
+
+.fmg-swatch.cas-sort {
+  background: var(--info);
+}
+

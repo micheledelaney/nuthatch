@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type FmObject, type ScriptStep, type SolutionModel } from "@/types/ddr";
 import { Highlight, LinkedCode } from "./Highlight";
+import { CodeBox } from "./CodeBox";
 
 const INDENT_PX = 18;
 const PARAMS_COLLAPSE_THRESHOLD = 120;
@@ -97,6 +98,7 @@ export function ScriptWorkspace({
   }, [scrollIndex]);
 
   return (
+    <CodeBox text={scriptText(lines)}>
     <div className="sw">
       {lines.map(({ step, depth, isComment }) => {
         const hit = brokenSteps?.has(step.index) ?? false;
@@ -114,7 +116,7 @@ export function ScriptWorkspace({
             className={`sw-line${isComment ? " comment" : ""}${step.enabled ? "" : " disabled"}${hit ? " hit" : ""}`}
           >
             {long ? (
-              <button type="button" className="lo-chevron" onClick={() => toggleExpanded(step.index)}>
+              <button type="button" className="glyph-btn lo-chevron" onClick={() => toggleExpanded(step.index)}>
                 <span className={`fchevron${isExpanded ? " open" : ""}`}>›</span>
               </button>
             ) : (
@@ -147,7 +149,19 @@ export function ScriptWorkspace({
         );
       })}
     </div>
+    </CodeBox>
   );
+}
+
+/** The script as plain text: one step per line, blocks indented, comments as `# ...`. */
+function scriptText(lines: Line[]): string {
+  return lines
+    .map(({ step, depth, isComment }) => {
+      const indent = "  ".repeat(depth);
+      if (isComment) return `${indent}# ${step.params}`;
+      return `${indent}${step.name}${step.params ? ` ${step.params}` : ""}`;
+    })
+    .join("\n");
 }
 
 /** Assign an indent depth to each step based on block open/close steps. */

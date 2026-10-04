@@ -491,9 +491,20 @@ export interface ReportCard {
   riskFlags: RiskFlag[];
 }
 
+export type RiskFlagKind =
+  | "broken"
+  | "noPassword"
+  | "unreferenced"
+  | "unstored"
+  | "unusedChain"
+  | "globalVariables";
+
+/** A report-card risk: which check it is, how serious, and how many objects
+ * (or, for global variables, names) it covers. The UI owns the wording. */
 export interface RiskFlag {
+  kind: RiskFlagKind;
   severity: "info" | "warn" | "high";
-  message: string;
+  count: number;
 }
 
 /** The fully-resolved, indexed solution the UI renders. */

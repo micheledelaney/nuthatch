@@ -1,0 +1,370 @@
+/* ==========================================================================
+   nuthatch — "Power" theme
+   Indigo night ground · monospace everything · condensed uppercase headlines
+   · one orange accent · pill controls · square bordered cards.
+   Single theme (dark by design). No light mode.
+
+   Fonts (add to <head>):
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+   ========================================================================== */
+
+/* ==========================================================================
+   1. TOKENS
+   ========================================================================== */
+:root {
+  /* surfaces (darkest → lightest) */
+  --nh-deep:    #1b1b2e;  /* window chrome, wells, tracks, code, inputs */
+  --nh-bg:      #23233a;  /* app background, panes */
+  --nh-pane:    #242439;  /* cards */
+  --nh-pane-2:  #31314f;  /* hover fill, selected pill, menus */
+  --nh-line:    #2f2f4c;  /* card borders, dividers */
+  --nh-line-2:  #4a4a6e;  /* control outlines (pills, round buttons) */
+
+  /* text */
+  --nh-ink:       #f3efe8; /* headings, values, primary text (warm off-white) */
+  --nh-ink-soft:  #dcd8d0; /* list rows, body in dense areas */
+  --nh-ink-muted: #a9a6bd; /* secondary text, labels */
+  --nh-ink-dim:   #7f7d99; /* section labels, counts, line numbers, hints */
+
+  /* the one accent */
+  --nh-accent:      #f28a45; /* orange: primary buttons, active tabs, selected text, highlights */
+  --nh-accent-2:    #f6b58b; /* light orange: code references, primary hover */
+  --nh-accent-deep: #3a2418; /* orange-on-dark chips: logo tile, word tags, SCRIPT pill */
+  --nh-on-accent:   #1b1b2e; /* text on orange */
+
+  /* status (only colour besides orange) */
+  --nh-danger:      #ff6b6b;
+  --nh-danger-soft: #3b2333;
+  --nh-warning:     #f6c453;
+
+  /* object types — glyphs in the sidebar and type tags only */
+  --nh-t-file:   #c9a2f2;  /* F    */
+  --nh-t-table:  #7fb4ff;  /* T    */
+  --nh-t-field:  #6fd0f0;  /* Fld  */
+  --nh-t-to:     #9aaeff;  /* TO   */
+  --nh-t-rel:    #e6ad73;  /* Rel  */
+  --nh-t-layout: #f2cc5c;  /* L    */
+  --nh-t-object: #f59a62;  /* Obj  */
+  --nh-t-script: #79dca4;  /* S    */
+  --nh-t-vl:     #ef93cf;  /* VL   */
+  --nh-t-cf:     #6fdccb;  /* CF   */
+  --nh-t-acct:   #f6ae63;  /* Acct */
+  --nh-t-ps:     #f59384;  /* PS   */
+  --nh-t-menu:   #b8bfd0;  /* M    */
+
+  /* type */
+  --nh-font-mono:    "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --nh-font-display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+
+  /* shape */
+  --nh-radius-pill: 999px;  /* every button, tab, chip, row highlight */
+  --nh-radius-card: 0px;    /* cards and tile strips are square */
+  --nh-radius-soft: 12px;   /* wells inside cards: code samples, step lists */
+  --nh-radius-tile: 9px;    /* small squares: type glyphs, checkboxes, keycaps */
+  --nh-radius-window: 14px; /* outer app window, palette, menus */
+
+  /* motion */
+  --nh-ease: cubic-bezier(.2, .7, .3, 1);
+  --nh-dur: 150ms;
+
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   2. BASE
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; background: var(--nh-bg); }
+body {
+  color: var(--nh-ink);
+  font-family: var(--nh-font-mono);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p, dl, dd { margin: 0; }
+a { color: inherit; text-decoration: none; cursor: pointer; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--nh-accent); outline-offset: 3px; }
+[disabled], .is-disabled { opacity: .35; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+
+/* Text roles */
+.nh-display { font-family: var(--nh-font-display); font-weight: 700; text-transform: uppercase; letter-spacing: .005em; }
+.nh-eyebrow { font-size: 13px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--nh-accent); }
+.nh-section-label { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--nh-ink-dim); margin: 0 0 14px; }
+.nh-label { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--nh-ink-dim); margin: 0 0 10px; }
+.nh-muted { color: var(--nh-ink-muted); }
+.nh-num { font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   3. SURFACES
+   Cards are square with a 1px border. Controls are pills. Nothing has a shadow.
+   ========================================================================== */
+.nh-card  { background: var(--nh-pane); border: 1px solid var(--nh-line); border-radius: var(--nh-radius-card); }
+.nh-well  { background: var(--nh-deep); border: 1px solid var(--nh-line); border-radius: var(--nh-radius-soft); }
+.nh-track { background: var(--nh-deep); border: 1px solid var(--nh-line); border-radius: var(--nh-radius-pill); }
+
+/* ==========================================================================
+   4. INTERACTION
+   Hover = lighter fill (pane-2) and a lighter outline. Press = scale .97.
+   Selected = orange text on a pane-2 pill (lists) or a solid orange pill (tabs).
+   ========================================================================== */
+.nh-hover { transition: background var(--nh-dur) var(--nh-ease), color var(--nh-dur), border-color var(--nh-dur), transform var(--nh-dur) var(--nh-ease); }
+.nh-hover:hover { background: var(--nh-pane-2); color: var(--nh-ink); }
+.nh-hover:active { transform: scale(.97); }
+
+/* ==========================================================================
+   5. COMPONENTS
+   ========================================================================== */
+
+/* 5.1 App window + header ------------------------------------------------ */
+.nh-app     { background: var(--nh-bg); min-height: 100vh; }
+.nh-header  { display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; border-bottom: 1px solid var(--nh-line); }
+.nh-wordmark { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 22px; letter-spacing: .16em; text-transform: uppercase; }
+.nh-wordmark__mark { width: 44px; height: 44px; border-radius: 50%; background: var(--nh-accent-deep); display: grid; place-items: center; }
+/* put the real nuthatch logo inside .nh-wordmark__mark, drawn in --nh-accent */
+
+/* 5.2 Tab bar (Report Card / Browse / ERD) and detail tabs -------------- */
+.nh-tabbar  { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-bottom: 1px solid var(--nh-line); }
+.nh-tabbar__file { color: var(--nh-ink-muted); }
+.nh-tabbar__file::before { content: "file: "; color: var(--nh-ink-dim); }
+.nh-tabs    { display: inline-flex; gap: 4px; padding: 5px; } /* + .nh-track */
+.nh-tab     { padding: 7px 22px; border-radius: var(--nh-radius-pill); color: var(--nh-ink-soft); } /* + .nh-hover */
+.nh-tab.is-active { background: var(--nh-accent); color: var(--nh-on-accent); font-weight: 600; }
+.nh-tab.is-active:hover { background: var(--nh-accent-2); color: var(--nh-on-accent); }
+.nh-tab small { opacity: .65; margin-left: 6px; }
+
+/* 5.3 Buttons ------------------------------------------------------------- */
+.nh-btn-primary {                         /* one per screen */
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--nh-accent); color: var(--nh-on-accent);
+  border-radius: var(--nh-radius-pill); padding: 10px 26px; font-weight: 600;
+  transition: background var(--nh-dur), transform var(--nh-dur) var(--nh-ease);
+}
+.nh-btn-primary:hover  { background: var(--nh-accent-2); }
+.nh-btn-primary:active { transform: scale(.97); }
+.nh-btn {                                 /* secondary: outlined pill. + .nh-hover */
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--nh-line-2); border-radius: var(--nh-radius-pill);
+  padding: 9px 22px; font-weight: 500;
+}
+.nh-btn:hover { border-color: var(--nh-ink-muted); }
+.nh-icon-btn {                            /* round outlined icon button. + .nh-hover */
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid var(--nh-line-2);
+  display: inline-grid; place-items: center; color: var(--nh-ink-soft); font-size: 15px;
+}
+.nh-icon-btn:hover { border-color: var(--nh-ink-muted); }
+.nh-icon-btn.is-on { color: var(--nh-accent); border-color: var(--nh-accent); }   /* pinned star etc. */
+.nh-kebab { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--nh-line-2); display: inline-flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; }
+.nh-kebab i { width: 14px; height: 1.5px; border-radius: 2px; background: var(--nh-ink-soft); }
+.nh-keycap { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 6px; display: inline-grid; place-items: center; font-size: 11px; background: var(--nh-deep); border: 1px solid var(--nh-line); }
+
+/* 5.4 Tags ---------------------------------------------------------------- */
+.nh-type {                                /* type glyph: S, F, TO, L … coloured by .nh-k-* */
+  display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 6px;
+  border-radius: 6px; border: 1px solid currentColor; background: var(--nh-deep);
+  font-size: 11px; font-weight: 600; line-height: 1; color: var(--nh-ink-soft);
+}
+.nh-chip {                                /* orange word chip: "Fields", "SCRIPT", "Editor's pick" style */
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px;
+  border-radius: var(--nh-radius-pill); background: var(--nh-accent-deep); color: var(--nh-accent);
+  font-size: 12.5px; font-weight: 500;
+}
+a.nh-chip { transition: background var(--nh-dur), color var(--nh-dur); }
+a.nh-chip:hover { background: var(--nh-accent); color: var(--nh-on-accent); }
+.nh-chip--caps { font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 2px 12px; }
+.nh-chip--danger { background: var(--nh-danger-soft); color: var(--nh-danger); font-weight: 600; }
+.nh-chip--quiet  { background: var(--nh-pane); color: var(--nh-ink-muted); }
+.nh-badge {                               /* count badge: orange circle */
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  background: var(--nh-accent); color: var(--nh-on-accent); font-size: 12px; font-weight: 700;
+  display: inline-grid; place-items: center;
+}
+.nh-k-F    { color: var(--nh-t-file)   !important; }
+.nh-k-T    { color: var(--nh-t-table)  !important; }
+.nh-k-Fld  { color: var(--nh-t-field)  !important; }
+.nh-k-TO   { color: var(--nh-t-to)     !important; }
+.nh-k-Rel  { color: var(--nh-t-rel)    !important; }
+.nh-k-L    { color: var(--nh-t-layout) !important; }
+.nh-k-Obj  { color: var(--nh-t-object) !important; }
+.nh-k-S    { color: var(--nh-t-script) !important; }
+.nh-k-VL   { color: var(--nh-t-vl)     !important; }
+.nh-k-CF   { color: var(--nh-t-cf)     !important; }
+.nh-k-Acct { color: var(--nh-t-acct)   !important; }
+.nh-k-PS   { color: var(--nh-t-ps)     !important; }
+.nh-k-M    { color: var(--nh-t-menu)   !important; }
+
+/* 5.5 Notice ---------------------------------------------------------------- */
+.nh-notice { display: flex; gap: 14px; align-items: center; padding: 14px 22px; border-radius: 18px; background: var(--nh-deep); border: 1px solid var(--nh-line); }
+.nh-notice__icon { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--nh-accent-deep); color: var(--nh-accent); font-weight: 700; }
+.nh-notice p { color: var(--nh-ink-muted); font-size: 13px; }
+.nh-notice strong { color: var(--nh-accent); font-weight: 600; }
+
+/* 5.6 Tile strip (Health, Object inventory) ------------------------------ */
+/* One card per section. Tiles are cells joined by 1px dividers, not separate cards. */
+.nh-tiles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); } /* + .nh-card */
+.nh-tile {
+  position: relative; display: flex; flex-direction: column; gap: 8px;
+  min-height: 132px; padding: 18px 18px 22px; text-align: left;
+  border-right: 1px solid var(--nh-line); border-bottom: 1px solid var(--nh-line);
+  transition: background var(--nh-dur);
+}
+.nh-tile:nth-child(8n) { border-right: 0; }
+.nh-tile:hover { background: var(--nh-pane-2); }
+.nh-tile__value { font-family: var(--nh-font-display); font-size: 40px; line-height: 44px; font-weight: 700; }
+.nh-tile__label { color: var(--nh-ink-muted); font-size: 12.5px; line-height: 18px; }
+.nh-tile.is-active { background: var(--nh-pane-2); }
+.nh-tile.is-active .nh-tile__label { color: var(--nh-accent); }
+.nh-tile.is-active::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: 12px; height: 4px; border-radius: 4px; background: var(--nh-accent); }
+.nh-val-danger  { color: var(--nh-danger); }
+.nh-val-warning { color: var(--nh-warning); }
+.nh-val-accent  { color: var(--nh-accent); }
+
+/* 5.7 Risk flags: two cards side by side ---------------------------------- */
+.nh-risk { display: grid; grid-template-columns: 7fr 5fr; gap: 20px; align-items: stretch; }
+.nh-issue { padding: 30px 32px 32px; display: flex; flex-direction: column; gap: 22px; } /* + .nh-card */
+.nh-issue__title { font-size: 13px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--nh-accent); }
+.nh-issue__big   { display: flex; align-items: flex-end; gap: 24px; }
+.nh-issue__num   { font-family: var(--nh-font-display); font-size: 150px; line-height: .78; font-weight: 700; color: var(--nh-ink); }
+.nh-issue__what  { font-family: var(--nh-font-display); font-size: 30px; line-height: 34px; font-weight: 700; text-transform: uppercase; max-width: 360px; }
+.nh-issue__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.nh-issue__actions { display: flex; gap: 12px; margin-top: auto; }
+.nh-code-sample { padding: 14px 18px; font-size: 13px; line-height: 24px; } /* + .nh-well */
+.nh-code-sample i { font-style: normal; color: var(--nh-ink-dim); display: inline-block; width: 32px; }
+
+.nh-flags { padding: 10px; display: flex; flex-direction: column; gap: 6px; } /* + .nh-card */
+.nh-flag {
+  flex: 1; display: grid; grid-template-columns: 56px 1fr 18px; gap: 14px; align-items: center;
+  padding: 14px 16px; border-radius: 14px; transition: background var(--nh-dur);
+}
+.nh-flag:hover { background: var(--nh-pane-2); }
+.nh-flag__value { font-family: var(--nh-font-display); font-size: 36px; line-height: 38px; font-weight: 700; text-align: right; }
+.nh-flag strong { display: block; font-weight: 600; }
+.nh-flag small  { display: block; color: var(--nh-ink-muted); font-size: 12.5px; line-height: 18px; }
+.nh-flag__go    { font-style: normal; color: var(--nh-ink-dim); transition: transform .2s var(--nh-ease), color var(--nh-dur); }
+.nh-flag:hover .nh-flag__go { color: var(--nh-accent); transform: translateX(3px); }
+
+/* 5.8 Browse ---------------------------------------------------------------- */
+.nh-browse { display: grid; grid-template-columns: 76px 330px minmax(0, 1fr); align-items: stretch; min-height: 760px; }
+
+/* Sidebar: icon only. Full type colours. Selected = solid tile in its own colour. */
+.nh-rail { padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--nh-line); }
+.nh-rail__item { position: relative; display: grid; place-items: center; padding: 9px 4px; border-radius: 14px; transition: background var(--nh-dur); }
+.nh-rail__item:hover { background: var(--nh-pane-2); }
+.nh-rail__glyph {
+  width: 38px; height: 30px; border-radius: var(--nh-radius-tile);
+  display: grid; place-items: center; background: var(--nh-deep);
+  border: 1.5px solid currentColor; font-size: 11px; font-weight: 600; color: var(--nh-ink-soft);
+}
+.nh-rail__item.is-active { background: var(--nh-pane-2); }
+.nh-rail__item.is-active .nh-rail__glyph {
+  background: currentColor; border-color: currentColor;
+  -webkit-text-fill-color: var(--nh-deep); font-weight: 700;
+}
+.nh-dot { position: absolute; top: 4px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--nh-accent); box-shadow: 0 0 0 2px var(--nh-bg); }
+
+/* Panes */
+.nh-pane { display: flex; flex-direction: column; min-height: 0; }
+.nh-pane--index { border-right: 1px solid var(--nh-line); }
+.nh-pane__head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 14px 22px; border-bottom: 1px solid var(--nh-line); font-weight: 600; }
+.nh-pane__head small { color: var(--nh-accent); margin-left: 10px; font-weight: 500; }
+
+/* Object tree */
+.nh-tree { padding: 10px 10px 16px; font-size: 13px; overflow: auto; color: var(--nh-ink-soft); }
+.nh-tree__file  { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-weight: 600; color: var(--nh-ink); }
+.nh-tree__group { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; color: var(--nh-ink-dim); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; user-select: none; transition: background var(--nh-dur), color var(--nh-dur); }
+.nh-tree__group:hover { background: var(--nh-pane); color: var(--nh-ink); }
+.nh-tree__group.is-open { color: var(--nh-ink-muted); }
+.nh-tree__chev { display: inline-block; width: 10px; transition: transform .2s var(--nh-ease); }
+.nh-tree__group.is-open .nh-tree__chev { transform: rotate(90deg); }
+.nh-tree__folder { padding: 4px 12px 4px 28px; color: var(--nh-ink-dim); font-size: 11.5px; letter-spacing: .12em; }
+.nh-tree__row { display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 32px; margin: 2px 0; border-radius: var(--nh-radius-pill); cursor: pointer; transition: background var(--nh-dur), color var(--nh-dur); }
+.nh-tree__row:hover { background: var(--nh-pane); }
+.nh-tree__row.is-dim { color: var(--nh-ink-dim); }                 /* unreferenced */
+.nh-tree__row.is-active { background: var(--nh-pane-2); color: var(--nh-accent); font-weight: 600; }
+.nh-count { margin-left: auto; font-size: 11px; color: var(--nh-ink-dim); }
+.nh-broken-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--nh-danger); margin-right: 6px; }
+
+/* Pin bar + search */
+.nh-pinbar { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 28px; border-bottom: 1px solid var(--nh-line); color: var(--nh-ink-dim); font-size: 13px; }
+.nh-search-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 18px; border-radius: var(--nh-radius-pill); border: 1px solid var(--nh-line-2); } /* + .nh-hover */
+
+/* Breadcrumb */
+.nh-crumb { display: flex; align-items: center; gap: 12px; padding: 14px 28px; border-bottom: 1px solid var(--nh-line); }
+.nh-crumb__nav { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--nh-line-2); display: grid; place-items: center; color: var(--nh-ink-soft); } /* + .nh-hover */
+.nh-crumb__chip { display: inline-flex; align-items: center; gap: 8px; color: var(--nh-ink-muted); transition: color var(--nh-dur); }
+.nh-crumb__chip:hover { color: var(--nh-ink); }
+.nh-crumb__chip.is-current { color: var(--nh-ink); font-weight: 600; }
+.nh-crumb__actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* Detail */
+.nh-detail { padding: 30px 28px 36px; }
+.nh-detail__title { font-family: var(--nh-font-display); font-size: 30px; line-height: 36px; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; margin-bottom: 22px; }
+.nh-kv { display: grid; grid-template-columns: 200px 1fr; row-gap: 8px; padding: 16px 20px; margin-bottom: 22px; } /* + .nh-card */
+.nh-kv dt { color: var(--nh-ink-dim); }
+
+/* Script steps */
+.nh-steps { padding: 14px 12px; } /* + .nh-well */
+.nh-steps__head { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--nh-ink-dim); padding: 2px 6px 10px; }
+.nh-step { display: flex; font-size: 13px; line-height: 26px; padding: 0 8px; border-radius: 8px; color: var(--nh-ink-soft); }
+.nh-step__no { width: 36px; flex: none; color: var(--nh-ink-dim); }
+.nh-step.is-broken   { background: var(--nh-danger-soft); box-shadow: inset 3px 0 0 var(--nh-danger); }
+.nh-step.is-disabled { color: var(--nh-ink-dim); }
+.nh-code-ref     { color: var(--nh-accent-2); }
+.nh-code-unknown { color: var(--nh-danger); }
+.nh-code-comment { color: var(--nh-ink-dim); font-style: italic; }
+
+/* Lists (Referenced by / References / Call chain / search results / menus) */
+.nh-list-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--nh-radius-pill); color: var(--nh-ink-soft); transition: background var(--nh-dur), color var(--nh-dur); }
+.nh-list-row:hover, .nh-list-row.is-highlighted { background: var(--nh-pane-2); color: var(--nh-accent); }
+.nh-list-row small { margin-left: auto; color: var(--nh-ink-dim); }
+
+/* 5.9 Projects ------------------------------------------------------------- */
+.nh-projects { padding: 48px 32px 56px; }
+.nh-projects__top { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 40px; }
+.nh-page-title { font-family: var(--nh-font-display); font-size: 72px; line-height: 72px; font-weight: 700; text-transform: uppercase; margin: 12px 0 18px; }
+.nh-projects__intro { color: var(--nh-ink-muted); max-width: 640px; font-size: 15px; line-height: 26px; }
+.nh-group { margin-bottom: 24px; } /* + .nh-card */
+.nh-group__head { display: flex; align-items: center; gap: 16px; padding: 18px 20px 18px 24px; font-weight: 600; font-size: 16px; cursor: pointer; }
+.nh-group__chev { width: 16px; display: inline-block; color: var(--nh-ink-dim); transition: transform .2s var(--nh-ease); }
+.nh-group.is-closed .nh-group__chev { transform: rotate(-90deg); }
+.nh-group.is-closed .nh-group__rows { display: none; }
+.nh-group__head .nh-kebab { margin-left: auto; }
+.nh-project-row { display: flex; align-items: center; gap: 22px; padding: 16px 20px 16px 24px; border-top: 1px solid var(--nh-line); cursor: pointer; transition: background var(--nh-dur); }
+.nh-project-row:hover { background: var(--nh-pane-2); }
+.nh-project-row strong { display: block; font-weight: 600; transition: color var(--nh-dur); }
+.nh-project-row:hover strong { color: var(--nh-accent); }
+.nh-project-row small { color: var(--nh-ink-dim); font-size: 12px; }
+.nh-project-row__date { margin-left: auto; color: var(--nh-ink-muted); font-size: 13px; }
+
+/* Checkbox */
+.nh-check { width: 20px; height: 20px; flex: none; border-radius: 6px; background: var(--nh-deep); border: 1px solid var(--nh-line-2); display: grid; place-items: center; transition: border-color var(--nh-dur), background var(--nh-dur); }
+.nh-check:hover { border-color: var(--nh-accent); }
+.nh-check.is-on { background: var(--nh-accent); border-color: var(--nh-accent); }
+.nh-check.is-on::after { content: ""; width: 10px; height: 5px; border-left: 2px solid var(--nh-on-accent); border-bottom: 2px solid var(--nh-on-accent); transform: rotate(-45deg) translate(1px, -1px); }
+
+/* 5.10 Overlays ------------------------------------------------------------ */
+.nh-menu { position: absolute; z-index: 20; min-width: 210px; padding: 6px; display: flex; flex-direction: column; background: var(--nh-pane-2); border: 1px solid var(--nh-line-2); border-radius: var(--nh-radius-window); }
+.nh-menu .nh-list-row { font-size: 13px; padding: 9px 14px; border-radius: 10px; }
+.nh-menu .nh-list-row:hover { background: var(--nh-pane); }
+.nh-menu .is-danger:hover { color: var(--nh-danger); }
+.nh-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(15, 15, 28, .7); display: grid; place-items: start center; padding-top: 12vh; }
+.nh-palette { width: min(560px, 92vw); padding: 14px; background: var(--nh-pane); border: 1px solid var(--nh-line-2); border-radius: 20px; }
+.nh-input { width: 100%; outline: 0; padding: 12px 18px; border-radius: var(--nh-radius-pill); background: var(--nh-deep); border: 1px solid var(--nh-line-2); }
+.nh-input:focus { border-color: var(--nh-accent); }
+.nh-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 60; padding: 10px 22px; border-radius: var(--nh-radius-pill); background: var(--nh-ink); color: var(--nh-deep); font-size: 13px; }
+.nh-tooltip { position: absolute; z-index: 30; max-width: 260px; padding: 12px 16px; font-size: 12.5px; color: var(--nh-ink-muted); background: var(--nh-pane-2); border: 1px solid var(--nh-line-2); border-radius: 16px; }
+
+/* 5.11 ERD ----------------------------------------------------------------- */
+.nh-erd { position: relative; min-height: 560px; overflow: hidden; background: var(--nh-deep); border: 1px solid var(--nh-line); background-image: radial-gradient(var(--nh-line) 1px, transparent 1px); background-size: 18px 18px; }
+.nh-erd__to { position: absolute; width: 200px; padding: 12px 16px 14px; background: var(--nh-pane); border: 1px solid var(--nh-line); transition: border-color var(--nh-dur), background var(--nh-dur); }
+.nh-erd__to:hover { border-color: var(--nh-accent); background: var(--nh-pane-2); }
+.nh-erd__to h4 { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.nh-erd__to div { font-size: 12px; line-height: 20px; color: var(--nh-ink-muted); }
+.nh-erd svg path { fill: none; stroke: var(--nh-accent); stroke-width: 1.5; }
+.nh-erd svg path.is-external { stroke: var(--nh-warning); stroke-dasharray: 5 5; }

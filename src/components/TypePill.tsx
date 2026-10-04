@@ -26,24 +26,27 @@ export const SHORT_LABEL: Record<ObjectType, string> = {
 };
 
 /** A small colored pill labeling an object's type. `short` renders a compact
- * code (S, T, TO, …) for use in dense lists; otherwise the full label. */
+ * code (S, T, TO, …) for use in dense lists; otherwise the full label.
+ * `filled` fills it with the type's colour (pinned objects). */
 export function TypePill({
   type,
   label,
   short,
+  filled,
   color: colorOverride,
 }: {
   type: ObjectType;
   label?: string;
   short?: boolean;
+  filled?: boolean;
   color?: string;
 }) {
   const color = colorOverride ?? typeColor(type);
   const text = label ?? (short ? SHORT_LABEL[type] : OBJECT_TYPE_META[type].label);
   return (
     <span
-      className={`type-pill${short ? " short" : ""}`}
-      style={{ color, borderColor: color }}
+      className={`type-pill${short ? " short" : ""}${filled ? " filled" : ""}`}
+      style={{ "--tc": color } as React.CSSProperties}
       title={OBJECT_TYPE_META[type].label}
     >
       {text}

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/store";
+import { useModalFocus } from "./a11y";
 
 /**
  * Modal shown right after files are chosen and BEFORE parsing, collecting the
@@ -20,6 +21,8 @@ export function SaveAnalysisDialog() {
   const [project, setProject] = useState("");
   const [note, setNote] = useState("");
   const projectRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(!!pendingLoad);
+  const titleId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
 
   const locked = pendingLoad?.lockedProject ?? null;
@@ -52,15 +55,15 @@ export function SaveAnalysisDialog() {
 
   return (
     <div className="modal-overlay" onClick={cancelLoad}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>Save this analysis</h3>
+      <div className="popover modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef} onClick={(e) => e.stopPropagation()}>
+        <h3 id={titleId}>Save this analysis</h3>
         <p className="subtle">
           {locked
             ? "Name this analysis to add it to the project. Parsing starts once you continue."
             : "Group it under a project, name it, then continue to parse and open it."}
         </p>
 
-        <label className="field-label" htmlFor="save-project">
+        <label className="head field-label" htmlFor="save-project">
           Project
         </label>
         {locked ? (
@@ -91,7 +94,7 @@ export function SaveAnalysisDialog() {
           </>
         )}
 
-        <label className="field-label" htmlFor="save-name">
+        <label className="head field-label" htmlFor="save-name">
           Name
         </label>
         <input
@@ -110,7 +113,7 @@ export function SaveAnalysisDialog() {
           }}
         />
 
-        <label className="field-label" htmlFor="save-note">
+        <label className="head field-label" htmlFor="save-note">
           Note <span className="subtle">(optional)</span>
         </label>
         <textarea
@@ -130,10 +133,10 @@ export function SaveAnalysisDialog() {
         />
 
         <div className="modal-actions">
-          <button style={{ marginRight: "auto" }} onClick={cancelLoad}>
+          <button className="btn" style={{ marginRight: "auto" }} onClick={cancelLoad}>
             Cancel
           </button>
-          <button className="primary" onClick={save}>
+          <button className="btn btn-primary" onClick={save}>
             Save
           </button>
         </div>

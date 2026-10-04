@@ -5,6 +5,9 @@ import { TypePill } from "./TypePill";
 import { applyNavFilters, effectiveRefFilter, isInUnusedChain, isUnreferenced, type NavFilters } from "./browseA/filters";
 import { brokenSourcesFor, refStatsFor } from "./browseA/refStats";
 import { FilterMenu } from "./browseA/FilterChips";
+import { pressable } from "./a11y";
+import { search } from "@/core/search/search";
+import { SearchIcon } from "./workbench/CommandPalette";
 
 const GROUP_LIMIT = 500;
 const BASE_PAD = 12;
@@ -74,6 +77,11 @@ export function Navigator() {
   // to this type, so it re-applies when switching back to a compatible type.
   const effRefFilter = effectiveRefFilter(typeFilter, refFilter);
   const refFiltering = effRefFilter !== "all";
+  // Typing in the search box narrows the tree to matches, so groups open like
+  // they do under a reference filter.
+  const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
+  const narrowing = refFiltering || searching;
 
   const filters = useMemo<NavFilters>(
     () => ({
@@ -99,13 +107,13 @@ export function Navigator() {
     return model.objects.filter((o) => typeFilter === "all" || o.type === typeFilter);
   }, [model, typeFilter]);
 
-  const filteredObjects = useMemo<FmObject[]>(
-    () => (model ? applyNavFilters(model, baseObjects, typeFilter, filters) : []),
-    [model, baseObjects, typeFilter, filters],
-  );
-  // Title-row counts: separators are dividers, not objects.
-  const totalCount = useMemo(() => baseObjects.filter((o) => !o.isSeparator).length, [baseObjects]);
-  const shownCount = useMemo(() => filteredObjects.filter((o) => !o.isSeparator).length, [filteredObjects]);
+  const filteredObjects = useMemo<FmObject[]>(() => {
+    if (!model) return [];
+    const filtered = applyNavFilters(model, baseObjects, typeFilter, filters);
+    if (!searching) return filtered;
+    const hits = new Set(search(model, query, typeFilter).map((h) => h.object.uid));
+    return filtered.filter((o) => hits.has(o.uid));
+  }, [model, baseObjects, typeFilter, filters, searching, query]);
 
   const sections = useMemo<FileSection[]>(() => {
     if (!model) return [];
@@ -250,7 +258,7 @@ export function Navigator() {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !activeUid) return;
-    el.querySelector(".node.selected")?.scrollIntoView({ block: "nearest" });
+    el.querySelector(".node.active")?.scrollIntoView({ block: "nearest" });
   }, [activeUid, sections]);
 
   // Global arrow-key navigation: up/down through the visible list. (← for back
@@ -331,15 +339,15 @@ export function Navigator() {
       <div
         key={obj.uid}
         data-uid={obj.uid}
-        className={`node lib-row${obj.uid === activeUid ? " selected" : ""}${unref || chain ? " unref" : ""}`}
+        className={`row node lib-row${obj.uid === activeUid ? " active" : ""}${unref || chain ? " unref" : ""}`}
         style={{ paddingLeft: BASE_PAD + depth * INDENT }}
-        onClick={() => openObject(obj.uid)}
+        {...pressable(() => openObject(obj.uid), { current: obj.uid === activeUid })}
         title={hint}
       >
         {typeFilter === "all" && <TypePill type={obj.type} short />}
         <span className="ellipsis">{objectLabel(obj)}</span>
         <span className="lib-row-meta">
-          {broken && <span className="lib-broken-dot" aria-label="Has broken references" />}
+          {broken && <span className="lib-broken-dot" role="img" aria-label="Has broken references" />}
           <span className={`lib-count${stats.inbound === 0 ? " zero" : ""}`}>←{stats.inbound}</span>
           <span className={`lib-count${stats.outbound === 0 ? " zero" : ""}`}>→{stats.outbound}</span>
         </span>
@@ -350,13 +358,13 @@ export function Navigator() {
   const renderTree = (node: TreeNode, depth: number): React.ReactNode =>
     trimSeparators(node.children).map((child) => {
       if (isTreeNode(child)) {
-        const open = refFiltering || expanded.has(child.path);
+        const open = narrowing || expanded.has(child.path);
         return (
           <div key={`d-${child.path}`}>
             <div
-              className="folder-header clickable"
+              className="head clickable folder-header"
               style={{ paddingLeft: BASE_PAD + depth * INDENT }}
-              onClick={() => toggle(child.path)}
+              {...pressable(() => toggle(child.path), { expanded: open })}
               title={child.path}
             >
               <span className={`fchevron${open ? " open" : ""}`}>›</span>
@@ -403,17 +411,17 @@ export function Navigator() {
     const pad = BASE_PAD + (depthOffset + 1) * INDENT;
     return layoutGroups.map((lg) => {
       const key = `${fileUid ?? ""}:layoutObject:${lg.layoutUid}`;
-      const autoOpen = refFiltering || layoutObjectFiltering || lg.objects.some((o) => o.uid === activeUid);
+      const autoOpen = narrowing || layoutObjectFiltering || lg.objects.some((o) => o.uid === activeUid);
       const open = (autoOpen || openGroups.has(key)) && !collapsedGroups.has(key);
       return (
         <div key={key}>
-          <div className="group-header clickable nested" style={{ paddingLeft: pad }} onClick={() => toggleGroup(key, open)}>
+          <div className="head clickable group-header nested" style={{ paddingLeft: pad }} {...pressable(() => toggleGroup(key, open), { expanded: open })}>
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
             {lg.name} · {lg.objects.length}
           </div>
           {open && lg.objects.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && lg.objects.length > GROUP_LIMIT && (
-            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
+            <div className="row inert node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
               +{lg.objects.length - GROUP_LIMIT} more — narrow your search
             </div>
           )}
@@ -445,17 +453,17 @@ export function Navigator() {
     const pad = BASE_PAD + (depthOffset + 1) * INDENT;
     return tableGroups.map((tg) => {
       const key = `${fileUid ?? ""}:field:${tg.parentUid}`;
-      const autoOpen = fieldFiltering || refFiltering || tg.fields.some(f => f.uid === activeUid);
+      const autoOpen = fieldFiltering || narrowing || tg.fields.some(f => f.uid === activeUid);
       const open = (autoOpen || openGroups.has(key)) && !collapsedGroups.has(key);
       return (
         <div key={key}>
-          <div className="group-header clickable nested" style={{ paddingLeft: pad }} onClick={() => toggleGroup(key, open)}>
+          <div className="head clickable group-header nested" style={{ paddingLeft: pad }} {...pressable(() => toggleGroup(key, open), { expanded: open })}>
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
             {tg.name} · {tg.fields.length}
           </div>
           {open && tg.fields.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && tg.fields.length > GROUP_LIMIT && (
-            <div className="node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
+            <div className="row inert node" style={{ color: "var(--text-dim)", paddingLeft: pad + INDENT }}>
               +{tg.fields.length - GROUP_LIMIT} more — narrow your search
             </div>
           )}
@@ -473,7 +481,7 @@ export function Navigator() {
     const foldered = items.some((o) => o.folder);
     const key = `${fileUid ?? ""}:${type}`;
     const showHeader = typeFilter === "all";
-    const autoOpen = refFiltering || items.some(o => o.uid === activeUid);
+    const autoOpen = narrowing || items.some(o => o.uid === activeUid);
     const open = !showHeader || ((autoOpen || openGroups.has(key)) && !collapsedGroups.has(key));
     const pad = BASE_PAD + depthOffset * INDENT;
     // Depth the group's contents are laid out from (their parent's depth).
@@ -482,9 +490,9 @@ export function Navigator() {
       <div key={key}>
         {showHeader && (
           <div
-            className={`group-header clickable${depthOffset > 0 ? " nested" : ""}`}
+            className={`head clickable group-header${depthOffset > 0 ? " nested" : ""}`}
             style={{ paddingLeft: pad }}
-            onClick={() => toggleGroup(key, open)}
+            {...pressable(() => toggleGroup(key, open), { expanded: open })}
             data-nav-kind="type"
             data-type-key={key}
             data-open={open ? "1" : "0"}
@@ -502,7 +510,7 @@ export function Navigator() {
                 ? renderTree(buildTree(items), inner + 1)
                 : items.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, inner + 1)))}
         {open && !foldered && type !== "field" && type !== "layoutObject" && items.length > GROUP_LIMIT && (
-          <div className="node" style={{ color: "var(--text-dim)", paddingLeft: BASE_PAD + (inner + 1) * INDENT }}>
+          <div className="row inert node" style={{ color: "var(--text-dim)", paddingLeft: BASE_PAD + (inner + 1) * INDENT }}>
             +{items.length - GROUP_LIMIT} more — narrow your search
           </div>
         )}
@@ -515,11 +523,21 @@ export function Navigator() {
       <div className="controls">
         <div className="nav-title-row">
           <span className="nav-title">{typeFilter === "all" ? "All objects" : OBJECT_TYPE_META[typeFilter].plural}</span>
-          <span className="nav-title-count">
-            {shownCount === totalCount
-              ? totalCount.toLocaleString()
-              : `${shownCount.toLocaleString()} of ${totalCount.toLocaleString()}`}
-          </span>
+          <label className={`nav-search${searching ? " has-query" : ""}`} title="Search this list">
+            <SearchIcon />
+            <input
+              type="search"
+              value={query}
+              placeholder="Search"
+              aria-label="Search objects in the navigator"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Escape") return;
+                setQuery("");
+                e.currentTarget.blur();
+              }}
+            />
+          </label>
           <FilterMenu model={model} base={baseObjects} type={typeFilter} filters={filters} />
         </div>
       </div>
@@ -529,8 +547,8 @@ export function Navigator() {
           {pinnedFile && (
             <div className="floating-header" ref={floatRef}>
               <div
-                className="file-header"
-                onClick={() => toggleFile(pinnedFile.uid)}
+                className="row file-header"
+                {...pressable(() => toggleFile(pinnedFile.uid), { expanded: !collapsedFiles.has(pinnedFile.uid) })}
                 title={pinnedFile.name}
               >
                 <span className={`fchevron${!collapsedFiles.has(pinnedFile.uid) ? " open" : ""}`}>›</span>
@@ -539,13 +557,13 @@ export function Navigator() {
               </div>
               {pinnedType && pinned.typeKey && (() => {
                 const ptKey = pinned.typeKey!;
-                const ptAutoOpen = refFiltering || typeFilter !== "all" || (pinnedType.items.some(o => o.uid === activeUid));
+                const ptAutoOpen = narrowing || typeFilter !== "all" || (pinnedType.items.some(o => o.uid === activeUid));
                 const ptOpen = (ptAutoOpen || openGroups.has(ptKey)) && !collapsedGroups.has(ptKey);
                 return (
                 <div
-                  className="group-header clickable nested"
+                  className="head clickable group-header nested"
                   style={{ paddingLeft: BASE_PAD + INDENT }}
-                  onClick={() => toggleGroup(ptKey, ptOpen)}
+                  {...pressable(() => toggleGroup(ptKey, ptOpen), { expanded: ptOpen })}
                 >
                   <span className={`fchevron${ptOpen ? " open" : ""}`}>›</span>
                   {OBJECT_TYPE_META[pinnedType.type].plural} ·{" "}
@@ -555,7 +573,7 @@ export function Navigator() {
               })()}
             </div>
           )}
-          {sections.length === 0 && <div className="group-header">No matches</div>}
+          {sections.length === 0 && <div className="head group-header" role="status">No matches</div>}
           {sections.map((section) => {
             if (!section.file) {
               return section.groups.map((g) => renderGroup(g, null, 0));
@@ -568,8 +586,8 @@ export function Navigator() {
             return (
               <div key={f.uid}>
                 <div
-                  className="file-header"
-                  onClick={() => toggleFile(f.uid)}
+                  className="row file-header"
+                  {...pressable(() => toggleFile(f.uid), { expanded: open })}
                   title={f.name}
                   data-nav-kind="file"
                   data-file-uid={f.uid}

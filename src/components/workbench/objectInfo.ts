@@ -43,7 +43,7 @@ export interface Shortcut {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { combos: [[MOD_LABEL, "K"]], description: "Command palette: search all objects" },
+  { combos: [[MOD_LABEL, "K"]], description: "Command palette: search all objects (filters like type:script, is:unreferenced, refs>20)" },
   { combos: [["⇧", "↵"]], description: "In the palette: open in the split pane" },
   { combos: [["↑"], ["↓"]], description: "Open the previous / next navigator row" },
   { combos: [["←"], [MOD_LABEL, "["]], description: "Back in the active pane" },

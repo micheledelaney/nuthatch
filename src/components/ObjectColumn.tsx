@@ -22,10 +22,12 @@ import {
   type RefResolution,
 } from "@/core/model/refResolution";
 import { RelationshipERD } from "./RelationshipERD";
+import { CodeBox } from "./CodeBox";
 import { ScriptWorkspace } from "./ScriptWorkspace";
 import { Highlight, LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
 import { TypePill } from "./TypePill";
+import { pressable } from "./a11y";
 
 /** How many rows a References / Referenced By widget shows before "Show more". */
 const DETAIL_REF_PREVIEW_LIMIT = 10;
@@ -553,21 +555,24 @@ export function Section({
   title,
   count,
   defaultOpen = true,
+  flush = false,
   children,
 }: {
   title: string;
   count?: number;
   defaultOpen?: boolean;
+  /** Start the content at the section's edge instead of under the title text (script steps). */
+  flush?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="detail-widget">
-      <div className="detail-widget-header clickable" onClick={() => setOpen((v) => !v)}>
+    <div className={`detail-widget${open ? "" : " collapsed"}`}>
+      <div className="head clickable detail-widget-header" {...pressable(() => setOpen((v) => !v), { expanded: open })}>
         <span className={`fchevron${open ? " open" : ""}`}>›</span> {title}
         {count != null && ` · ${count}`}
       </div>
-      {open && <div className="detail-widget-body">{children}</div>}
+      {open && <div className={`detail-widget-body${flush ? " flush" : ""}`}>{children}</div>}
     </div>
   );
 }
@@ -592,7 +597,7 @@ export function Detail({
 
   if (detail.kind === "script") {
     return (
-      <Section title="Script steps" count={detail.steps.length}>
+      <Section title="Script steps" count={detail.steps.length} flush>
         {detail.steps.length === 0 ? (
           <div className="subtle indent">No steps.</div>
         ) : (
@@ -615,13 +620,15 @@ export function Detail({
     return (
       <Section title="Definition">
         {detail.signature && <div className="signature">{detail.signature}</div>}
-        <pre className="code">
-          {detail.body ? (
-            <LinkedCode text={detail.body} objects={refIndex.targets} onGo={onGo} model={model} fileUid={owner.fileUid} />
-          ) : (
-            "(empty)"
-          )}
-        </pre>
+        <CodeBox text={detail.body}>
+          <pre className="code">
+            {detail.body ? (
+              <LinkedCode text={detail.body} objects={refIndex.targets} onGo={onGo} model={model} fileUid={owner.fileUid} />
+            ) : (
+              "(empty)"
+            )}
+          </pre>
+        </CodeBox>
       </Section>
     );
   }
@@ -633,9 +640,11 @@ export function Detail({
       .filter((o): o is FmObject => o != null);
     return (
       <Section title="Definition">
-        <pre className="code">
-          <LinkedCode text={text} objects={fieldObjs} onGo={onGo} model={model} fileUid={owner.fileUid} />
-        </pre>
+        <CodeBox text={text}>
+          <pre className="code">
+            <LinkedCode text={text} objects={fieldObjs} onGo={onGo} model={model} fileUid={owner.fileUid} />
+          </pre>
+        </CodeBox>
       </Section>
     );
   }
@@ -787,13 +796,15 @@ function PrivilegeConditionCell({ label, condition }: { label: string; condition
   if (!condition) return <>{label}</>;
   return (
     <>
-      <button type="button" className="privilege-fields-toggle" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="link-btn privilege-fields-toggle" onClick={() => setOpen((v) => !v)}>
         <span className={`fchevron${open ? " open" : ""}`}>›</span> {label}
       </button>
       {open && (
-        <pre className="code privilege-condition">
-          <Highlight text={condition} />
-        </pre>
+        <CodeBox text={condition}>
+          <pre className="code privilege-condition">
+            <Highlight text={condition} />
+          </pre>
+        </CodeBox>
       )}
     </>
   );
@@ -804,7 +815,7 @@ function PrivilegeFieldsCell({ table }: { table: PrivilegeSetTableAccess }) {
   if (!table.fields || table.fields.length === 0) return <>{table.fieldsAccess}</>;
   return (
     <>
-      <button type="button" className="privilege-fields-toggle" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="link-btn privilege-fields-toggle" onClick={() => setOpen((v) => !v)}>
         <span className={`fchevron${open ? " open" : ""}`}>›</span> {table.fieldsAccess} ({table.fields.length})
       </button>
       {open && (
@@ -867,7 +878,8 @@ function LayoutDetail({
             <div className="layout-type-filter">
               <button
                 type="button"
-                className={`layout-type-chip${typeFilter === null ? " active" : ""}`}
+                className={`chip${typeFilter === null ? " active" : ""}`}
+                aria-pressed={typeFilter === null}
                 onClick={() => setTypeFilter(null)}
               >
                 All
@@ -876,19 +888,21 @@ function LayoutDetail({
                 <button
                   key={type}
                   type="button"
-                  className={`layout-type-chip${typeFilter === type ? " active" : ""}`}
+                  className={`chip${typeFilter === type ? " active" : ""}`}
+                  aria-pressed={typeFilter === type}
                   onClick={() => setTypeFilter(typeFilter === type ? null : type)}
                 >
-                  {type} <span className="count">{count}</span>
+                  {type} <span className="chip-count">{count}</span>
                 </button>
               ))}
               {triggerCount > 0 && (
                 <button
                   type="button"
-                  className={`layout-type-chip${typeFilter === "Has Triggers" ? " active" : ""}`}
+                  className={`chip${typeFilter === "Has Triggers" ? " active" : ""}`}
+                  aria-pressed={typeFilter === "Has Triggers"}
                   onClick={() => setTypeFilter(typeFilter === "Has Triggers" ? null : "Has Triggers")}
                 >
-                  Has Triggers <span className="count">{triggerCount}</span>
+                  Has Triggers <span className="chip-count">{triggerCount}</span>
                 </button>
               )}
             </div>
@@ -899,7 +913,7 @@ function LayoutDetail({
             const open = partOpen[i] ?? true;
             return (
               <div key={i} className="lo-part-section">
-                <div className="lo-part-divider clickable" onClick={() => togglePart(i)}>
+                <div className="head clickable lo-part-divider" {...pressable(() => togglePart(i), { expanded: open })}>
                   <span className={`fchevron${open ? " open" : ""}`}>›</span>
                   {part.type} · {objects.length}
                 </div>
@@ -921,7 +935,7 @@ function LayoutDetail({
             if (objects.length === 0) return null;
             return (
               <div className="lo-part-section">
-                <div className="lo-part-divider clickable" onClick={() => setOffLayoutOpen((v) => !v)}>
+                <div className="head clickable lo-part-divider" {...pressable(() => setOffLayoutOpen((v) => !v), { expanded: offLayoutOpen })}>
                   <span className={`fchevron${offLayoutOpen ? " open" : ""}`}>›</span>
                   Off-layout · {objects.length}
                 </div>
@@ -1012,14 +1026,14 @@ function LayoutTriggerRow({
       <dd title={title || undefined}>
         <div className="layout-obj-row">
           {target ? (
-            <button className="layout-obj-name layout-trigger-link" type="button" onClick={() => onGo(target.uid, rowKey)}>
+            <button className="layout-obj-name link-btn" type="button" onClick={() => onGo(target.uid, rowKey)}>
               {script}
             </button>
           ) : (
             <span className="layout-obj-name">{script}</span>
           )}
           {trigger.modes.map((mode) => (
-            <span className="layout-obj-type" key={mode}>
+            <span className="tag layout-obj-type" key={mode}>
               {mode}
             </span>
           ))}
@@ -1071,7 +1085,7 @@ function ActionStepSection({ name, params }: { name: string; params: string }) {
       <div className="sw">
         <div className="sw-line">
           {long ? (
-            <button type="button" className="lo-chevron" onClick={() => setExpanded((v) => !v)}>
+            <button type="button" className="glyph-btn lo-chevron" onClick={() => setExpanded((v) => !v)}>
               <span className={`fchevron${expanded ? " open" : ""}`}>›</span>
             </button>
           ) : (
@@ -1145,20 +1159,22 @@ function LayoutObjectColumnDetail({
 
       {detail.loType === "Web Viewer" && detail.info && (
         <Section title="Definition">
-          <pre className="code">
-            <LinkedCode
-              text={detail.info.replace(/^URL:\s*/, "")}
-              objects={refIndexFor(model, owner.uid).targets}
-              onGo={onGo}
-            />
-          </pre>
+          <CodeBox text={detail.info.replace(/^URL:\s*/, "")}>
+            <pre className="code">
+              <LinkedCode
+                text={detail.info.replace(/^URL:\s*/, "")}
+                objects={refIndexFor(model, owner.uid).targets}
+                onGo={onGo}
+              />
+            </pre>
+          </CodeBox>
         </Section>
       )}
 
       {detail.fieldRef && (
         <Section title="Field">
           <ul className="ref-list">
-            <li title={detail.fieldRef} className={fieldClassName}>
+            <li title={detail.fieldRef} className={`row${fieldClassName ? ` ${fieldClassName} inert` : ""}`}>
               <TypePill type="field" short />
               <span className="ellipsis">
                 <FieldRefLink qualified={detail.fieldRef} model={model} fileUid={fileUid} onGo={onGo} />
@@ -1176,13 +1192,15 @@ function LayoutObjectColumnDetail({
       {scriptName && (
         <Section title="Script">
           <ul className="ref-list">
-            <li
-              onClick={() => scriptObj && onGo(scriptObj.uid, `lo-script:${scriptObj.uid}`)}
-              title={scriptName}
-              className={scriptObj ? "" : "external"}
-            >
-              <TypePill type="script" short />
-              <span className="ellipsis">{scriptName}</span>
+            <li>
+              <div
+                {...pressable(() => scriptObj && onGo(scriptObj.uid, `lo-script:${scriptObj.uid}`), { inert: !scriptObj })}
+                title={scriptName}
+                className={scriptObj ? "row" : "row external inert"}
+              >
+                <TypePill type="script" short />
+                <span className="ellipsis">{scriptName}</span>
+              </div>
             </li>
           </ul>
         </Section>
@@ -1191,13 +1209,15 @@ function LayoutObjectColumnDetail({
       {valueListName && (
         <Section title="Value list">
           <ul className="ref-list">
-            <li
-              onClick={() => valueListObj && onGo(valueListObj.uid, `lo-vl:${valueListObj.uid}`)}
-              title={valueListName}
-              className={valueListObj ? "" : "external"}
-            >
-              <TypePill type="valueList" short />
-              <span className="ellipsis">{valueListName}</span>
+            <li>
+              <div
+                {...pressable(() => valueListObj && onGo(valueListObj.uid, `lo-vl:${valueListObj.uid}`), { inert: !valueListObj })}
+                title={valueListName}
+                className={valueListObj ? "row" : "row external inert"}
+              >
+                <TypePill type="valueList" short />
+                <span className="ellipsis">{valueListName}</span>
+              </div>
             </li>
           </ul>
         </Section>
@@ -1216,7 +1236,7 @@ function LayoutObjectColumnDetail({
                     <div className="layout-obj-row">
                       {target ? (
                         <button
-                          className="layout-obj-name layout-trigger-link"
+                          className="layout-obj-name link-btn"
                           type="button"
                           onClick={() => onGo(target.uid, `lo-trig:${target.uid}:${i}`)}
                         >
@@ -1226,7 +1246,7 @@ function LayoutObjectColumnDetail({
                         <span className="layout-obj-name">{sName}</span>
                       )}
                       {t.modes.map((mode) => (
-                        <span className="layout-obj-type" key={mode}>
+                        <span className="tag layout-obj-type" key={mode}>
                           {mode}
                         </span>
                       ))}
@@ -1243,9 +1263,11 @@ function LayoutObjectColumnDetail({
         <Section title="Contents" count={children.length}>
           <ul className="ref-list">
             {children.map((child) => (
-              <li key={child.uid} onClick={() => onGo(child.uid, child.uid)} title={child.name}>
+              <li key={child.uid}>
+              <div className="row" {...pressable(() => onGo(child.uid, child.uid))} title={child.name}>
                 <TypePill type="layoutObject" short />
                 <span className="ellipsis">{child.name}</span>
+              </div>
               </li>
             ))}
           </ul>
@@ -1254,7 +1276,9 @@ function LayoutObjectColumnDetail({
 
       {detail.style && (
         <Section title="Style" defaultOpen={false}>
-          <pre className="code">{detail.style}</pre>
+          <CodeBox text={detail.style}>
+            <pre className="code">{detail.style}</pre>
+          </CodeBox>
         </Section>
       )}
 
@@ -1325,7 +1349,7 @@ function LayoutObjectTree({
   return (
     <>
       <div
-        className={`lo-row${obj.uid && onGo ? " navigable" : ""}`}
+        className={`row lo-row${obj.uid && onGo ? " navigable" : " inert"}`}
         style={{ paddingLeft: indent }}
         title={[
           obj.fieldRef,
@@ -1337,7 +1361,7 @@ function LayoutObjectTree({
           .join("\n") || undefined}
       >
         {hasChildren ? (
-          <button type="button" className="lo-chevron" onClick={() => setOpen((v) => !v)}>
+          <button type="button" className="glyph-btn lo-chevron" onClick={() => setOpen((v) => !v)}>
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
           </button>
         ) : (
@@ -1345,7 +1369,7 @@ function LayoutObjectTree({
         )}
         <span
           className={`lo-label${dim ? " lo-label-dim" : ""}${obj.uid && onGo ? " lo-label-selectable" : ""}`}
-          onClick={obj.uid && onGo ? () => onGo(obj.uid!, `lo:${obj.uid}`) : undefined}
+          {...pressable(() => onGo?.(obj.uid!, `lo:${obj.uid}`), { inert: !(obj.uid && onGo) })}
         >{renderWithBrokenPlaceholders(text)}</span>
         {obj.scriptRef && (() => {
           const target = scriptTarget(obj.scriptRef.id);
@@ -1355,7 +1379,7 @@ function LayoutObjectTree({
               {target && onGo ? (
                 <button
                   type="button"
-                  className="layout-trigger-link lo-script-link"
+                  className="link-btn lo-script-link"
                   onClick={() => onGo(target.uid, "")}
                 >
                   → {sName}
@@ -1367,7 +1391,7 @@ function LayoutObjectTree({
           ) : null;
         })()}
         {(obj.triggers?.length ?? 0) > 0 && (
-          <span className="lo-trigger-badge" title={obj.triggers!.map((t) => t.action).join(", ")}>
+          <span className="tag lo-trigger-badge" title={obj.triggers!.map((t) => t.action).join(", ")}>
             {obj.triggers!.length}T
           </span>
         )}
@@ -1416,8 +1440,8 @@ function LayoutObjectGroup({
   return (
     <div className="layout-part">
       <div
-        className="group-header clickable"
-        onClick={() => setOpen((v) => !v)}
+        className="head clickable group-header"
+        {...pressable(() => setOpen((v) => !v), { expanded: open })}
         onMouseEnter={onHeaderEnter}
         onMouseLeave={onLeave}
       >
@@ -1475,7 +1499,7 @@ function LayoutObjectRow({
 
   return (
     <li
-      className={hoverable ? "hoverable" : ""}
+      className={`row inert${hoverable ? " hoverable" : ""}`}
       title={
         obj.bounds
           ? `${obj.bounds.left}, ${obj.bounds.top} → ${obj.bounds.right}, ${obj.bounds.bottom}`
@@ -1488,9 +1512,9 @@ function LayoutObjectRow({
         <span className={`layout-obj-name${named ? "" : " unnamed"}`}>
           {named ? obj.name : `unnamed ${obj.type.toLowerCase()}`}
         </span>
-        <span className="layout-obj-type">{obj.type}</span>
+        <span className="tag layout-obj-type">{obj.type}</span>
         {(obj.triggers?.length ?? 0) > 0 && (
-          <span className="layout-obj-type layout-obj-triggers-chip">
+          <span className="tag layout-obj-type layout-obj-triggers-chip">
             {obj.triggers!.length} trigger{obj.triggers!.length !== 1 ? "s" : ""}
           </span>
         )}
@@ -1789,7 +1813,7 @@ export function GroupedRefList({
     <>
       {groupEdgesByType(shown).map((group) => (
         <div className="ref-group" key={group.type}>
-          <div className="ref-group-label">
+          <div className="head ref-group-label">
             {OBJECT_TYPE_META[group.type].plural} · {totalCountByType.get(group.type) ?? group.edges.length}
           </div>
           <ul className="ref-list">
@@ -1823,16 +1847,17 @@ export function GroupedRefList({
                     ? `${label} — itself unused`
                     : label;
               return (
-                <li
-                  key={rowKey}
-                  className={broken ? "broken" : external ? "external" : ""}
-                  onClick={() => obj && onGo(obj.uid, rowKey)}
-                  title={title}
-                >
-                  <TypePill type={type} short />
-                  <span className="ellipsis">{label}</span>
-                  {external && <RefStatusChip kind="external" />}
-                  {unused && <RefStatusChip kind="unused" />}
+                <li key={rowKey}>
+                  <div
+                    className={`row${broken ? " broken inert" : external ? " external inert" : ""}`}
+                    {...pressable(() => obj && onGo(obj.uid, rowKey), { inert: broken || external || !obj })}
+                    title={title}
+                  >
+                    <TypePill type={type} short />
+                    <span className="ellipsis">{label}</span>
+                    {external && <RefStatusChip kind="external" />}
+                    {unused && <RefStatusChip kind="unused" />}
+                  </div>
                 </li>
               );
             })}
@@ -1840,7 +1865,7 @@ export function GroupedRefList({
         </div>
       ))}
       {remaining > 0 && (
-        <button type="button" className="ref-show-more" onClick={() => setExpanded(true)}>
+        <button type="button" className="link-btn ref-show-more" onClick={() => setExpanded(true)}>
           Show {remaining} more
         </button>
       )}
@@ -1869,16 +1894,15 @@ export function CallTreeNode({
   const rowKey = `call:${path}`;
   const clicked = !isRoot && rowKey === clickedKey;
   const unused = !isRoot && (isUnused?.(node.uid) ?? false);
-  const className = `call-node${isRoot ? " root" : ""}${node.broken ? " broken" : ""}${node.external ? " external" : ""}${unused ? " unused" : ""}${clicked ? " clicked" : ""}`;
+  const className = `row call-node${isRoot ? " root" : ""}${node.broken ? " broken" : ""}${node.external ? " external" : ""}${unused ? " unused" : ""}${clicked ? " active" : ""}${isRoot || node.broken || node.external ? " inert" : ""}`;
   const clickable = !node.broken && !node.external && !isRoot;
   return (
     <li>
       <span
         className={className}
-        onClick={() => clickable && onGo(node.uid, rowKey)}
+        {...pressable(() => onGo(node.uid, rowKey), { inert: !clickable })}
         title={unused ? "Used only by unused scripts" : undefined}
       >
-        <TypePill type="script" short />
         {node.name}
         {node.broken && " — missing"}
         {node.external && <RefStatusChip kind="external" />}

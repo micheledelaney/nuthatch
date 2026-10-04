@@ -52,7 +52,7 @@ export function FilterChips({
     <div className="chip-bar">
       {groups.map((g) => (
         <div className="chip-group" key={g.key}>
-          <span className="chip-group-label">{g.label}</span>
+          <span className="head chip-group-label">{g.label}</span>
           {g.options.map((opt) => {
             const active = filters[g.key] === opt.value;
             const n = counts.get(`${g.key}:${opt.value}`) ?? 0;
@@ -61,6 +61,7 @@ export function FilterChips({
                 key={opt.value}
                 type="button"
                 className={`chip${active ? " active" : ""}${opt.tone ? ` tone-${opt.tone}` : ""}${n === 0 && !active ? " empty" : ""}`}
+                aria-pressed={active}
                 onClick={() => setters[g.key](active ? "all" : opt.value)}
                 title={active ? `Clear “${opt.label}”` : `Show only ${opt.label.toLowerCase()}`}
               >
@@ -74,7 +75,7 @@ export function FilterChips({
       {anyActive && (
         <button
           type="button"
-          className="chip-clear"
+          className="btn chip-clear"
           onClick={() => groups.forEach((g) => setters[g.key]("all"))}
         >
           Clear filters
@@ -122,16 +123,16 @@ export function FilterMenu(props: {
     <div className="filter-menu" ref={rootRef}>
       <button
         type="button"
-        className={`filter-btn${activeCount > 0 ? " active" : ""}${open ? " open" : ""}`}
+        className={`icon-btn filter-btn${activeCount > 0 ? " active" : ""}${open ? " open" : ""}`}
         onClick={() => setOpen((v) => !v)}
         title={label}
         aria-label={label}
         aria-expanded={open}
       >
-        <FilterIcon />
+        <FilterIcon filled={activeCount > 0} />
       </button>
       {open && (
-        <div className="filter-popover" role="dialog" aria-label="Filters">
+        <div className="popover filter-popover" role="dialog" aria-label="Filters">
           <FilterChips {...props} />
         </div>
       )}
@@ -139,10 +140,17 @@ export function FilterMenu(props: {
   );
 }
 
-function FilterIcon() {
+/** The funnel; drawn filled while filters are active, like the pinned star. */
+function FilterIcon({ filled }: { filled: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path
+        d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

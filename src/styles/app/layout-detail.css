@@ -1,0 +1,204 @@
+/* A layout's map, parts and objects. */
+
+.layout-parts {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Proportional layout map */
+.layout-map {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.layout-map > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--nh-radius-card);
+  background: var(--nh-pane);
+}
+
+.layout-map-frame {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.layout-map-part {
+  fill: var(--nh-deep);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.layout-map-label {
+  fill: var(--text-dim);
+}
+
+.layout-map-obj {
+  fill: var(--accent-dim);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+/* Tree-style layout object view */
+.lo-part-section {
+  margin-bottom: 8px;
+}
+
+.lo-part-divider {
+  padding: 8px 2px 4px;
+}
+
+.lo-part-divider .fchevron {
+  font-size: 13px;
+  margin-right: 1px;
+}
+
+.lo-row {
+  gap: 4px;
+  padding-right: 6px;
+}
+
+.lo-chevron-space {
+  flex-shrink: 0;
+  width: 18px;
+}
+
+.lo-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--row-font);
+  color: var(--text);
+}
+
+.lo-label.lo-label-dim {
+  color: var(--text-dim);
+}
+
+.lo-script-ref {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  white-space: nowrap;
+}
+
+.lo-script-link {
+  font-size: 11px;
+}
+
+.lo-label-selectable {
+  cursor: pointer;
+}
+
+/* Layout contents (parts and the objects placed on each) */
+.layout-part {
+  margin-bottom: 4px;
+}
+
+.layout-part .group-header {
+  padding-left: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+ul.layout-objects {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.layout-obj-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.layout-obj-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-obj-name.unnamed {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.layout-obj-info {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+.layout-trigger-info {
+  margin-top: 3px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Layout type filter chip strip */
+.layout-type-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 6px;
+}
+
+.layout-type-filter + .lo-part-section > .lo-part-divider {
+  border-top: none;
+}
+
+/* Portal table occurrence / row count line */
+.layout-portal-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* Object-level trigger lines under a row */
+.layout-obj-trigger-lines {
+  margin-top: 3px;
+}
+
+.layout-obj-trigger-line {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Tooltip info line — same as layout-obj-info but slightly more muted */
+.layout-obj-tooltip {
+  opacity: 0.75;
+}
+
+/* Nested children container (portal fields, tab panels) */
+.layout-obj-children {
+  margin-top: 5px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.layout-obj-children .layout-part {
+  margin-bottom: 2px;
+}
+
+.layout-obj-children .group-header {
+  padding: 2px 0;
+}
+
+.layout-obj-children ul.layout-objects {
+  padding-left: 8px;
+}
+

@@ -1,0 +1,318 @@
+/* The app shell: toolbar, workspace grid, sidebar, view tabs, menus, dialogs, banner, loading. */
+
+/* Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 32px;
+  /* Fixed height so the bar doesn't shift when its contents differ (e.g. the
+     dashboard has no buttons while the analysing/comparison screens do). */
+  min-height: 44px;
+  background: var(--header-bg);
+}
+
+/* Wordmark: the bird, then the name in spaced caps. */
+.toolbar h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* The original bird artwork, in its own colours. */
+.brand-bird {
+  height: 22px;
+  flex: none;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Dashboards (saved analyses + comparison) have no navigable model, so the
+   sidebar is dropped entirely and the main area spans the full width. */
+.workspace.no-sidebar {
+  grid-template-columns: 1fr;
+}
+
+.sidebar {
+  position: relative;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Collapsed to 0: the type rail's border already draws the edge. */
+.sidebar.collapsed {
+  border-right: none;
+}
+
+/* Drag handle straddling the sidebar's right border, modelled on VS Code's
+   sash: a 4px accent line that fades in after a short hover delay, and
+   immediately while dragging. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+  /* Own compositing layer: in WebKit (the Tauri app) the navigator's sticky
+     floating header is composited inside its scroller and otherwise paints
+     over the left half of the accent line, despite the z-index. */
+  will-change: transform;
+}
+
+/* Grip: a gap in the divider line with three small dots stacked in it (⋮). */
+.sidebar-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 20px;
+  transform: translateY(-50%);
+  background: radial-gradient(circle, var(--text-dim) 1px, transparent 1.5px) center 1px / 6px 6px repeat-y,
+    var(--bg-panel);
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 4px;
+  background: transparent;
+  transition: background 0.1s ease-out;
+}
+
+.sidebar-resizer:hover::after {
+  background: var(--accent);
+  transition-delay: 0.3s;
+}
+
+.sidebar-resizer.dragging::after {
+  background: var(--accent);
+  transition-delay: 0s;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Grid items default to min-width:auto, so without this .main grows to fit
+     wide content and adds a second, page-wide scrollbar. Pinning it to 0 keeps
+     width in the 1fr track. */
+  min-width: 0;
+}
+
+/* Main header: the view tabs, with the open analysis's name on the right. */
+.main-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 32px 0;
+  background: var(--header-bg);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 75%, transparent);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.analysis-name {
+  min-width: 0;
+  padding-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.analysis-name::before {
+  content: "analysis: ";
+  color: var(--text-dim);
+}
+
+.panel {
+  overflow: auto;
+  flex: 1;
+  padding: 24px 32px;
+}
+
+.panel h2 {
+  margin: 0 0 4px;
+  min-height: 31px;
+}
+
+.panel .subtle {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 14px;
+  padding: 32px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Hamburger action menu */
+.menu {
+  position: relative;
+  flex: none;
+}
+
+/* Power's menu: a pane-2 panel; items are rounded rows. No shadow. */
+.menu-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  transform-origin: top right;
+  animation: spring-in 0.2s var(--ease-spring);
+}
+
+.note-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--nh-deep);
+  border: 1px solid var(--nh-line-2);
+  border-radius: var(--nh-radius-soft);
+  padding: 10px 16px;
+  width: 100%;
+  resize: vertical;
+}
+
+/* Save dialog */
+.field-label {
+  margin: 6px 0 -2px;
+}
+
+.modal .field-label .subtle {
+  font-size: inherit;
+  color: inherit;
+}
+
+.locked-field {
+  background: var(--nh-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--nh-radius-pill);
+  padding: 8px 18px;
+  color: var(--text-muted);
+}
+
+/* Power's scrim and palette box. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  padding: 26px 28px;
+  width: min(460px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: spring-in 0.22s var(--ease-spring);
+}
+
+.modal h3 {
+  margin: 0;
+  font-family: var(--nh-font-display);
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.modal .subtle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* Loading animation */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+}
+
+.loading-title {
+  font-family: var(--nh-font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.banner {
+  padding: 12px 32px;
+  background: var(--nh-danger-soft);
+  color: var(--high);
+  border-bottom: 1px solid var(--high);
+}
+
+.banner-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--nh-deep);
+  color: var(--text-muted);
+  border-bottom-color: var(--accent);
+}
+
+.banner-notice span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+

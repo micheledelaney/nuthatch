@@ -11,6 +11,7 @@ export interface MenuItem {
 export function Menu({ items, label = "Actions" }: { items: MenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -18,7 +19,9 @@ export function Menu({ items, label = "Actions" }: { items: MenuItem[]; label?: 
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
     }
     document.addEventListener("mousedown", onDocPointer);
     document.addEventListener("keydown", onKey);
@@ -28,10 +31,28 @@ export function Menu({ items, label = "Actions" }: { items: MenuItem[]; label?: 
     };
   }, [open]);
 
+  // Opening puts focus on the first item.
+  useEffect(() => {
+    if (open) ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+  }, [open]);
+
+  /** Arrow keys, Home and End move between items; Tab leaves the menu. */
+  function onMenuKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+    if (e.key === "Tab") return setOpen(false);
+    const entries = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    const at = entries.indexOf(document.activeElement as HTMLElement);
+    const last = entries.length - 1;
+    const next = e.key === "ArrowDown" ? (at + 1) % entries.length : e.key === "ArrowUp" ? (at + last) % entries.length : e.key === "Home" ? 0 : e.key === "End" ? last : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    entries[next]?.focus();
+  }
+
   return (
     <div className="menu" ref={ref}>
       <button
-        className="menu-trigger"
+        ref={triggerRef}
+        className="icon-btn"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -49,12 +70,12 @@ export function Menu({ items, label = "Actions" }: { items: MenuItem[]; label?: 
         </svg>
       </button>
       {open && (
-        <div className="menu-popup" role="menu" onClick={(e) => e.stopPropagation()}>
+        <div className="popover menu-popup" role="menu" onClick={(e) => e.stopPropagation()} onKeyDown={onMenuKeyDown}>
           {items.map((item) => (
             <button
               key={item.label}
               role="menuitem"
-              className={`menu-item${item.danger ? " danger" : ""}`}
+              className={`row${item.danger ? " danger" : ""}`}
               onClick={() => {
                 setOpen(false);
                 item.onSelect();

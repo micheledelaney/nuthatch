@@ -60,58 +60,25 @@ export function buildReportCard(
   return reportCard;
 }
 
+/** The risks worth flagging, most severe first (broken references, then
+ * accounts with no password, then the rest), so the report card can lead with
+ * the first. Checks that find nothing are left out. */
 function deriveRiskFlags(card: ReportCard): RiskFlag[] {
-  const flags: RiskFlag[] = [];
-  if (card.brokenReferenceCount > 0) {
-    flags.push({
-      severity: "high",
-      message: `${card.brokenReferenceCount} object${plural(card.brokenReferenceCount)} with broken references.`,
-    });
-  }
-  if (card.accountsNoPasswordCount > 0) {
-    flags.push({
-      severity: "high",
-      message: `${card.accountsNoPasswordCount} active account${plural(card.accountsNoPasswordCount)} with no password.`,
-    });
-  }
-  if (card.unreferencedCount > 0) {
-    flags.push({
-      severity: "warn",
-      message: `${card.unreferencedCount} potentially unreferenced object${plural(card.unreferencedCount)}.`,
-    });
-  }
-  // "info", not "warn": the saved-analyses trend counts warn flags, and this
-  // adds no new problem — it shows how far the unreferenced ones reach.
-  if (card.unusedChainCount > 0) {
-    flags.push({
-      severity: "info",
-      message: `${card.unusedChainCount} object${plural(card.unusedChainCount)} used only by unreferenced objects.`,
-    });
-  }
-  if (card.unstoredCalculationCount > 0) {
-    flags.push({
-      severity: "warn",
-      message: `${card.unstoredCalculationCount} unstored calculation${plural(card.unstoredCalculationCount)} — review for performance.`,
-    });
-  }
-  if (card.globalVariableCount > 0) {
-    flags.push({
-      severity: "info",
-      message: `${card.globalVariableCount} distinct global variable${plural(card.globalVariableCount)} in use.`,
-    });
-  }
-  if (flags.length === 0) {
-    flags.push({ severity: "info", message: "No structural risks detected." });
-  }
-  return flags;
+  const flags: RiskFlag[] = [
+    { kind: "broken", severity: "high", count: card.brokenReferenceCount },
+    { kind: "noPassword", severity: "high", count: card.accountsNoPasswordCount },
+    { kind: "unreferenced", severity: "warn", count: card.unreferencedCount },
+    { kind: "unstored", severity: "warn", count: card.unstoredCalculationCount },
+    // "info", not "warn": the saved-analyses trend counts warn flags, and this
+    // adds no new problem — it shows how far the unreferenced ones reach.
+    { kind: "unusedChain", severity: "info", count: card.unusedChainCount },
+    { kind: "globalVariables", severity: "info", count: card.globalVariableCount },
+  ];
+  return flags.filter((f) => f.count > 0);
 }
 
 function emptyCounts(): Record<ObjectType, number> {
   const counts = {} as Record<ObjectType, number>;
   for (const type of Object.keys(OBJECT_TYPE_META) as ObjectType[]) counts[type] = 0;
   return counts;
-}
-
-function plural(n: number): string {
-  return n === 1 ? "" : "s";
 }

@@ -13,6 +13,7 @@ import {
   type ObjectChange,
 } from "@/core/analysis/diff";
 import { TypePill } from "@/components/TypePill";
+import { pressable } from "./a11y";
 
 function formatSavedAt(ms: number): string {
   return new Date(ms).toLocaleString(undefined, {
@@ -196,7 +197,7 @@ export function ComparisonView() {
         </div>
       )}
 
-      <h3 className="comparison-section-title">By type</h3>
+      <h3 className="head comparison-section-title">By type</h3>
       <table className="comparison-table">
         <thead>
           <tr>
@@ -246,7 +247,7 @@ export function ComparisonView() {
 
       {filteredChanged.length > 0 && (
         <section className="changed-section" id="diff-section-changed">
-          <h3 className="comparison-section-title">
+          <h3 className="head comparison-section-title">
             Changed <span className="change-count">{filteredChanged.length}</span>
           </h3>
           <p className="subtle">Click an object to see exactly what changed (removed lines in red, added in green).</p>
@@ -299,7 +300,7 @@ function FileSummaryCard({
   const stat = (label: string, value: number, tone: "added" | "removed" | "changed") => (
     <button
       type="button"
-      className={`file-summary-stat file-summary-${tone}`}
+      className={`card file-summary-stat file-summary-${tone}`}
       disabled={value === 0}
       onClick={(e) => {
         e.stopPropagation();
@@ -312,8 +313,8 @@ function FileSummaryCard({
   );
   return (
     <div
-      className={`file-summary-card${active ? " file-summary-active" : ""}`}
-      onClick={onSelectFile}
+      className={`card file-summary-card${active ? " active" : ""}`}
+      {...pressable(onSelectFile, { current: active })}
       title={file.fileName}
     >
       <div className="file-summary-name ellipsis">{file.fileName}</div>
@@ -347,7 +348,7 @@ function ChangeList({
   if (items.length === 0) return null;
   return (
     <div className="change-group-block" id={id}>
-      <h3 className="comparison-section-title">
+      <h3 className="head comparison-section-title">
         {title} <span className="change-count">{items.length}</span>
       </h3>
       <section className={`change-group change-${tone}`}>
@@ -356,18 +357,18 @@ function ChangeList({
             renamed ? (
               // Two equal columns: the old name (baseline "a") then the new ("b").
               <li key={item.uid} className="change-rename">
-                <button className="change-name change-link" onClick={() => openIn(item.uid, "a")} title={item.previousName}>
+                <button className="row change-name change-link" onClick={() => openIn(item.uid, "a")} title={item.previousName}>
                   <TypePill type={item.type} short />
                   <span className="ellipsis">{item.previousName}</span>
                 </button>
                 <span className="change-rename-arrow" aria-hidden>→</span>
-                <button className="change-name change-link" onClick={() => openIn(item.uid, "b")} title={item.name}>
+                <button className="row change-name change-link" onClick={() => openIn(item.uid, "b")} title={item.name}>
                   <span className="ellipsis">{item.name}</span>
                 </button>
               </li>
             ) : (
               <li key={item.uid}>
-                <button className="change-name change-link" onClick={() => openIn(item.uid, side)} title={item.name}>
+                <button className="row change-name change-link" onClick={() => openIn(item.uid, side)} title={item.name}>
                   <TypePill
                     type={item.type}
                     short
@@ -394,7 +395,7 @@ function DiffSettingsPopover({ opts, onChange }: { opts: DiffOptions; onChange: 
   return (
     <div className="diff-settings-wrap">
       <button
-        className={`diff-settings-btn${!isDefault ? " diff-settings-active" : ""}`}
+        className={`btn diff-settings-btn${!isDefault ? " active" : ""}`}
         onClick={() => setOpen((v) => !v)}
         title="Diff options"
       >
@@ -411,8 +412,8 @@ function DiffSettingsPopover({ opts, onChange }: { opts: DiffOptions; onChange: 
       {open && (
         <>
           <div className="diff-settings-overlay" onClick={() => setOpen(false)} />
-          <div className="diff-settings-pop">
-            <div className="diff-settings-title">Include in comparison</div>
+          <div className="popover diff-settings-pop">
+            <div className="head diff-settings-title">Include in comparison</div>
             <label className="diff-settings-row">
               <input type="checkbox" checked={opts.includeHash} onChange={() => toggle("includeHash")} />
               <span>
@@ -442,7 +443,7 @@ function DiffSettingsPopover({ opts, onChange }: { opts: DiffOptions; onChange: 
                 <span className="diff-settings-hint"> — last modified by/account/timestamp</span>
               </span>
             </label>
-            <div className="diff-settings-title">Object types</div>
+            <div className="head diff-settings-title">Object types</div>
             <label className="diff-settings-row">
               <input type="checkbox" checked={opts.includeAccounts} onChange={() => toggle("includeAccounts")} />
               <span>
@@ -457,7 +458,7 @@ function DiffSettingsPopover({ opts, onChange }: { opts: DiffOptions; onChange: 
                 <span className="diff-settings-hint"> — when off, value lists are left out of the comparison</span>
               </span>
             </label>
-            <div className="diff-settings-title">Scope</div>
+            <div className="head diff-settings-title">Scope</div>
             <label className="diff-settings-row">
               <input type="checkbox" checked={opts.diffByFileId} onChange={() => toggle("diffByFileId")} />
               <span>
@@ -490,11 +491,11 @@ function ChangedItem({
 
   return (
     <div className="changed-item">
-      <div className="changed-item-head" onClick={() => setOpen((v) => !v)}>
+      <div className="row changed-item-head" {...pressable(() => setOpen((v) => !v), { expanded: open })}>
         <span className={`fchevron${open ? " open" : ""}`}>›</span>
         <TypePill type={item.type} short />
         <button
-          className="change-name change-link"
+          className="change-name"
           onClick={(e) => {
             e.stopPropagation();
             openIn(item.uid, "b");
@@ -505,7 +506,7 @@ function ChangedItem({
         </button>
         <span className="changed-item-sides">
           <button
-            className="changed-item-side"
+            className="chip"
             onClick={(e) => {
               e.stopPropagation();
               openIn(item.uid, "a");
@@ -515,7 +516,7 @@ function ChangedItem({
             A
           </button>
           <button
-            className="changed-item-side"
+            className="chip"
             onClick={(e) => {
               e.stopPropagation();
               openIn(item.uid, "b");

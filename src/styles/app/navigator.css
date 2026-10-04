@@ -1,0 +1,357 @@
+/* Browse, left side: the type rail, the navigator list, its filter popover and chips. */
+
+/* Navigator */
+.navigator {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Pane head: the type's title and count, with the round filter button. */
+.navigator .controls {
+  position: relative;
+  height: var(--bar-h);
+  padding: 0 10px 0 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Holds the scrolling list and the single floating context header that
+   replaces per-section sticky headers (which left a gap at file boundaries). */
+.navigator .nav-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Contain the floating header's z-index so it can't paint over the
+     sidebar resizer's accent line. */
+  isolation: isolate;
+}
+
+.navigator .results {
+  overflow: auto;
+  flex: 1;
+  /* No top padding: the floating header sticks at the padding edge, and a
+     gap above it would let scrolled rows show through. */
+  padding: 0 0 16px;
+}
+
+/* One overlay pinned to the top of the list, mirroring the file/group the
+   user is currently scrolled within. It sits inside the scroll container (so
+   it never overlaps the scrollbar) and overlays the rows beneath via a
+   negative margin set in JS. */
+.navigator .floating-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  overflow: hidden;
+  background: var(--bg-panel);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Type and folder headers (.head): inset like the rows beneath them. */
+.group-header {
+  padding: 5px 12px;
+  margin: 0 6px;
+}
+
+.folder-header {
+  padding: 4px 12px;
+  margin: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.folder-header .folder-icon {
+  flex: none;
+  opacity: 0.85;
+}
+
+.folder-header .folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The file row (.row): a full-width bar the height of the pane's breadcrumb
+   bar, so the two rows line up. */
+.file-header {
+  height: var(--subbar-h);
+  padding: 0 12px;
+  border-radius: 0;
+  font-weight: 600;
+}
+
+.file-header .fchevron {
+  color: var(--text-dim);
+}
+
+.file-header .file-icon {
+  flex: none;
+  color: var(--nh-t-file);
+}
+
+/* Object rows (.row). The indent is set inline per depth. */
+.node {
+  margin: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 22px;
+}
+
+.workspace.with-rail {
+  grid-template-columns: var(--rail-w) var(--sidebar-w) 1fr;
+}
+
+/* Type rail: icons only (the type name is the tooltip). Each entry is a
+   .tab; its glyph is a tile bordered in the type's colour, filled with it
+   when selected. Spacing is the original rail's. */
+.type-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  min-height: 0;
+}
+
+.rail-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.rail-glyph {
+  /* The type colour at one shared lightness, so no tile is brighter than another. */
+  --tc-even: oklch(from var(--tc) 0.74 c h);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid;
+  border-radius: var(--nh-radius-tile);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: var(--tc-even);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* The asterisk sits low in its line; lift it to the tile's centre. */
+.rail-glyph-all {
+  padding-bottom: 6px;
+}
+
+/* Unselected tiles sit a little dimmer; the selected one is full strength. */
+.rail-entry:not(.active) .rail-glyph {
+  opacity: 0.78;
+}
+
+/* The selected type is marked by its filled tile, not a background. */
+.rail-entry.active {
+  background: none;
+}
+/* The selected type's tile fills with its colour. */
+.rail-entry.active .rail-glyph {
+  /* The fill a little below the text colour's lightness, so it isn't glaring. */
+  --tc-fill: oklch(from var(--tc) 0.66 c h);
+  background: var(--tc-fill);
+  border-color: var(--tc-fill);
+  -webkit-text-fill-color: var(--nh-deep);
+  font-weight: 700;
+}
+
+/* Same red as the broken dot on a row. */
+.rail-broken-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--high);
+  box-shadow: 0 0 0 2px var(--bg-panel);
+}
+
+.rail-label {
+  display: none;
+}
+
+/* Title row (type title, search, filter button), and the filter popover */
+.navigator .controls .nav-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* The filter button's height — keeps the row steady for types with no filters. */
+  min-height: var(--icon-btn);
+}
+
+.nav-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    max-width 0.25s var(--nh-ease),
+    margin-right 0.25s var(--nh-ease),
+    opacity 0.25s var(--nh-ease);
+}
+/* The title makes way while the search is open (focused or holding a query). */
+.nav-title-row:has(.nav-search:where(:focus-within, .has-query)) .nav-title {
+  max-width: 0;
+  margin-right: -10px;
+  opacity: 0;
+}
+
+/* Search (the navigator's and the ERD's): the magnifier as a round icon button
+   at rest. Clicking it (or holding a query) grows it into a field. */
+.nav-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 var(--icon-btn);
+  min-width: 0;
+  height: var(--icon-btn);
+  margin-left: auto;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--nh-radius-pill);
+  cursor: pointer;
+  transition:
+    flex-grow 0.25s var(--nh-ease),
+    padding 0.25s var(--nh-ease),
+    border-color 0.25s var(--nh-ease);
+}
+.nav-search:where(:focus-within, .has-query) {
+  flex-grow: 1;
+  padding: 0 4px 0 8px;
+  border-color: var(--nh-line-2);
+  cursor: text;
+}
+.nav-search:focus-within {
+  border-color: var(--accent);
+}
+.nav-search .wb-search-icon {
+  color: var(--text);
+}
+.nav-search:not(:focus-within, .has-query):hover .wb-search-icon {
+  filter: brightness(var(--hover-lift));
+}
+.nav-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.25s var(--nh-ease);
+}
+.nav-search:where(:focus-within, .has-query) input {
+  opacity: 1;
+}
+.nav-search input:focus-visible {
+  outline: none;
+}
+
+.filter-menu {
+  flex: none;
+}
+
+/* Spans the pane head, so it never runs past the rail or the window. */
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 10px;
+  right: 10px;
+  z-index: 20;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* Filter chips */
+.chip-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-group-label {
+  width: 100%;
+}
+
+.chip-clear {
+  align-self: flex-start;
+}
+
+/* Rich list rows */
+.node.lib-row .ellipsis {
+  flex: 1 1 auto;
+}
+
+.lib-row-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.lib-count.zero {
+  opacity: 0.4;
+}
+
+.lib-broken-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--high);
+}
+
+/* Unreferenced: dim ink, like Power's dimmed tree row (orange once selected). */
+.node.lib-row.unref:not(.active) {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.node.lib-row.unref > .type-pill {
+  opacity: 0.5;
+}

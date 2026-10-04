@@ -1,0 +1,190 @@
+/* The Report Card: the main issue, then the Health figures. Laid out like the
+   Browse details: no boxes, no rules, mono figures. */
+.report-card {
+  overflow: auto;
+  flex: 1;
+  /* The left edge is the first view tab's label (32px header padding + 14px
+     tab padding), so the page hangs from the same line as the tabs. */
+  padding: 32px 32px 40px calc(32px + 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.report-card .head {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+
+/* No cards: the theme's .nh-card fill and outline come off. */
+.report-card .nh-card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Notices: an inline row, not a rounded pill. */
+.report-card .nh-notice {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.report-card .nh-notice + .nh-notice {
+  margin-top: -28px;
+}
+
+.report-card .nh-notice__icon {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+.report-card .nh-notice p {
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+/* ---- Main issue ---------------------------------------------------------- */
+.report-card .nh-risk {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.report-card .nh-issue {
+  --issue-tone: var(--accent);
+  padding: 0;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.report-card .nh-issue.tone-danger {
+  --issue-tone: var(--nh-danger);
+}
+
+.report-card .nh-issue.tone-warning {
+  --issue-tone: var(--nh-warning);
+}
+
+.report-card .nh-issue__title {
+  font-size: 12.5px;
+  color: var(--issue-tone);
+}
+
+/* The count and its sentence share one baseline: the count in the severity
+   colour, the sentence in plain text. */
+/* The statement (label, count, explanation) is one button, like the figures
+   below: it opens the list, and the hover is the app's one step lighter. */
+.report-card .nh-issue__main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+  transition: filter var(--nh-dur) var(--nh-ease);
+}
+
+.report-card .nh-issue__main:hover {
+  filter: brightness(var(--hover-lift));
+}
+
+.report-card .nh-issue__big {
+  align-items: baseline;
+  gap: 18px;
+}
+
+.report-card .nh-issue__num,
+.report-card .nh-issue__what {
+  font-family: var(--font-mono);
+}
+
+.report-card .nh-issue__num {
+  font-size: 56px;
+  line-height: 1;
+  color: var(--issue-tone);
+}
+
+.report-card .nh-issue__what {
+  max-width: none;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--text);
+}
+
+/* What the main issue means and what to do about it. */
+.report-card .nh-issue__detail {
+  max-width: 78ch;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--text-dim);
+}
+
+/* "Found in" and its chips share a line; the chips line up with the text
+   above them. */
+.report-card .nh-issue__found {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.report-card .nh-issue__found .head {
+  margin: 0;
+}
+
+.report-card .nh-issue__chips .glyph-btn {
+  padding: 0;
+}
+
+/* ---- Health figures ------------------------------------------------------ */
+/* A responsive grid of figures: the number in mono
+   (severity colour when it needs attention) and its label. */
+.report-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 36px 40px;
+}
+
+.report-card .nh-tile,
+.report-card .nh-tile:nth-child(8n) {
+  min-height: 0;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+}
+
+.report-card .nh-tile__value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 32px;
+}
+
+.report-card .nh-tile__label {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text);
+}
+
+.report-card .nh-tile__hint {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-dim);
+}
+
+/* Hover: the app's one step lighter instead of the theme's fill. Tiles that
+   aren't buttons don't react. */
+.report-card button.nh-tile {
+  transition: filter var(--nh-dur) var(--nh-ease);
+}
+
+.report-card .nh-tile:hover {
+  background: none;
+}
+
+.report-card button.nh-tile:hover {
+  filter: brightness(var(--hover-lift));
+}

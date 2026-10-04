@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useStore } from "@/state/store";
+import { useModalFocus } from "./a11y";
 
 /**
  * Modal for creating a project up front (before any analysis is loaded). The new
@@ -13,6 +14,8 @@ export function NewProjectDialog() {
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(!!pendingProject);
+  const titleId = useId();
 
   useEffect(() => {
     if (!pendingProject) return;
@@ -29,10 +32,10 @@ export function NewProjectDialog() {
 
   return (
     <div className="modal-overlay" onClick={cancelNewProject}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>New project</h3>
+      <div className="popover modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef} onClick={(e) => e.stopPropagation()}>
+        <h3 id={titleId}>New project</h3>
         <p className="subtle">Name a project to collect a file history of analyses over time.</p>
-        <label className="field-label" htmlFor="new-project-name">
+        <label className="head field-label" htmlFor="new-project-name">
           Project name
         </label>
         <input
@@ -50,7 +53,7 @@ export function NewProjectDialog() {
             if (e.key === "Escape") cancelNewProject();
           }}
         />
-        <label className="field-label" htmlFor="new-project-note">
+        <label className="head field-label" htmlFor="new-project-note">
           Note <span className="subtle">(optional)</span>
         </label>
         <textarea
@@ -69,8 +72,8 @@ export function NewProjectDialog() {
           }}
         />
         <div className="modal-actions">
-          <button onClick={cancelNewProject}>Cancel</button>
-          <button className="primary" onClick={create} disabled={!name.trim()}>
+          <button className="btn" onClick={cancelNewProject}>Cancel</button>
+          <button className="btn btn-primary" onClick={create} disabled={!name.trim()}>
             Create
           </button>
         </div>

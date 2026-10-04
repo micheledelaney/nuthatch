@@ -1,0 +1,327 @@
+/* Kinds. Every clickable thing in the app is one of these, and they all share
+   the states at the end of this file. Area files place and size elements;
+   they don't restyle a kind or its states.
+
+     .btn / .btn-primary   text button (outlined pill / the solid orange one)
+     .icon-btn             round icon button, no fill
+     .glyph-btn            bare glyph inside another control (× , chevron)
+     .link-btn             text-only link ("Show 12 more", "Clear filters")
+     .tabs > .tab          tab strip
+     .chip                 small toggle pill; .tag is the same pill, static
+     .type-pill            an object type's short code, in its colour
+     .row                  list item
+     .card                 clickable block
+     .popover              menu, popover, palette or dialog surface
+     .head                 small-caps label (.clickable to toggle a section)
+
+   States: .active (selected / on), .inert (a row that can't be clicked),
+   .tone-high / .tone-warn / .tone-ok (on chips and tags). Disabled and focus
+   come from the theme ([disabled], :focus-visible). */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Every text button is as tall as an icon button. */
+  height: var(--icon-btn);
+  padding: var(--btn-pad);
+  border: 1px solid var(--nh-line-2);
+  border-radius: var(--nh-radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--btn-font);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--nh-accent);
+  border-color: var(--nh-accent);
+  color: var(--nh-on-accent);
+  font-weight: 600;
+}
+
+.icon-btn {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-btn);
+  height: var(--icon-btn);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--icon-glyph);
+  line-height: 1;
+  cursor: pointer;
+  /* Kept on its own layer, so the hover lift doesn't redraw the icon half
+     a pixel off. */
+  will-change: filter;
+}
+.icon-btn.active {
+  background: none;
+}
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.glyph-btn {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: var(--nh-radius-pill);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Links take the colour of the text around them (no orange): they're
+   navigation, not syntax. The hover lift marks them. */
+.link-btn,
+.obj-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Underline tabs: a strip with a baseline; the active tab's accent underline
+   sits on it. The strip's container draws the baseline (.main-header,
+   .op-tabs) so the underline can cover it. Crumbs and rail entries are
+   plain .tab, outside a strip. */
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--nh-radius-pill);
+  background: none;
+  color: var(--nh-ink-soft);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip,
+.tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: var(--chip-pad);
+  border: 1px solid var(--nh-line-2);
+  border-radius: var(--nh-radius-pill);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--chip-font);
+  line-height: var(--chip-line);
+  white-space: nowrap;
+}
+.chip {
+  cursor: pointer;
+}
+.chip-count {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Type tag: the object type's short code, bordered and lettered in the
+   type's colour (--tc, set inline) toned toward the ground. 16px, like a
+   chip; short tags share one width so the names after them line up. */
+.type-pill {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--tc, var(--text-muted)) var(--tag-border), var(--nh-bg));
+  border-radius: var(--radius);
+  background: var(--nh-deep);
+  color: color-mix(in srgb, var(--tc, var(--text-muted)) var(--tag-text), var(--nh-bg));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.type-pill.short {
+  min-width: 36px;
+}
+.type-pill.filled {
+  /* The same toned-down fill as the selected tile in the type rail. */
+  --tc-fill: oklch(from var(--tc, var(--text-muted)) 0.66 c h);
+  background: var(--tc-fill);
+  border-color: var(--tc-fill);
+  color: var(--nh-deep);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: var(--row-pad-y) var(--row-pad-x);
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--row-font);
+  line-height: var(--row-line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--nh-radius-soft);
+  background: var(--nh-deep);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Popover: menus, the filter and settings popovers, the palette, dialogs.
+   The card colour, so a hovered row's grey fill shows inside it. */
+.popover {
+  background: var(--nh-pane);
+  border: 1px solid var(--nh-line-2);
+  border-radius: var(--nh-radius-window);
+}
+
+/* Small-caps label: section and group titles, filter group names, form
+   field labels. The theme's label style. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--row-radius);
+  color: var(--text-dim);
+  font-size: var(--label-font);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+  user-select: none;
+}
+.head.clickable {
+  cursor: pointer;
+}
+
+/* ---- States, one set for every kind ---------------------------------------
+   :where() keeps these at single-class weight, so a tone or a status rule
+   (a broken row's red) still wins. */
+
+/* Hover: one step lighter. A brightness lift lightens whatever the item is
+   drawn in (white or dim text, orange, outlines, type tags) by the same
+   step, with no fill or line added. Graph boxes and the Report Card's rows
+   use the same lift (--hover-lift). */
+:where(.btn, .icon-btn, .glyph-btn, .link-btn, .obj-link, .tab, .chip, .row, .card, .head.clickable, .type-pill, select, input[type="checkbox"]) {
+  transition: filter var(--nh-dur) var(--nh-ease);
+}
+:where(.btn, .icon-btn, .glyph-btn, .link-btn, .obj-link, .tab, .chip, .row, .card, .head.clickable, select, input[type="checkbox"]):where(:not(.inert)):hover,
+:where(.icon-btn, .chip).open {
+  filter: brightness(var(--hover-lift));
+}
+/* A type tag just before a link belongs to it, and lightens with it. */
+.type-pill:has(+ :where(.obj-link, .link-btn):hover) {
+  filter: brightness(var(--hover-lift));
+}
+/* A clickable inside a clickable (a chip in a row, a stat in a card, the ×
+   in a pin, a link in a row): only the inner one lightens. */
+:where(.btn, .chip, .row, .card):has(:where(.btn, .icon-btn, .glyph-btn, .link-btn, .obj-link, .chip, .row, .card):hover) {
+  filter: none;
+}
+/* Selected / on: the grey fill with orange text. */
+:where(.btn, .icon-btn, .glyph-btn, .tab, .chip, .row, .card).active {
+  background: var(--nh-pane-2);
+  color: var(--accent);
+  font-weight: 600;
+}
+/* A selected row is marked by its orange name, with no fill. */
+.row.active {
+  background: none;
+}
+.tabs > .tab {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+.tabs > .tab.active {
+  background: none;
+  border-bottom-color: var(--accent);
+}
+/* The brightness lift would lighten the active tab's underline; it is
+   already selected, so it doesn't react to hover. */
+.tabs > .tab.active:hover {
+  filter: none;
+}
+/* Keyboard focus: the theme's orange ring. Rows and tabs sit in scrolling or
+   clipped containers, so theirs is drawn just inside the edge. */
+:where(.row, .head.clickable, .card, .tab):focus-visible {
+  outline-offset: -2px;
+}
+/* A row that can't be opened (broken, external, the chain's own root). */
+.inert {
+  cursor: default;
+}
+/* Tones: an active chip and a static tag of the same tone look the same. */
+:where(.chip.active, .tag).tone-high {
+  background: var(--nh-danger-soft);
+  border-color: var(--high);
+  color: var(--high);
+}
+:where(.chip.active, .tag).tone-warn {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+:where(.tag).tone-ok {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+/* A filter with no matches: dimmed like a disabled control, still clickable. */
+:where(.chip).empty {
+  opacity: 0.35;
+}
+
+/* Forced colours (high contrast): fills and tints vanish, so give icon buttons
+   an edge and mark the selected item with a ring. */
+@media (forced-colors: active) {
+  .icon-btn {
+    border: 1px solid ButtonText;
+  }
+  :where(.btn, .icon-btn, .tab, .chip, .row, .card).active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

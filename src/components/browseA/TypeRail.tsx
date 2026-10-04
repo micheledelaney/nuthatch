@@ -101,10 +101,17 @@ function RailEntry({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className={`rail-entry${active ? " active" : ""}`} onClick={onClick} title={title}>
-      <span className="rail-glyph" style={{ color, borderColor: color }}>
+    <button
+      type="button"
+      className={`tab rail-entry${active ? " active" : ""}`}
+      onClick={onClick}
+      title={title}
+      aria-label={broken ? `${label} (has broken references)` : label}
+      aria-pressed={active}
+    >
+      <span className={`rail-glyph${glyph === "∗" ? " rail-glyph-all" : ""}`} style={{ "--tc": color } as React.CSSProperties}>
         {glyph}
-        {broken && <span className="rail-broken-dot" aria-label="Has broken references" />}
+        {broken && <span className="rail-broken-dot" aria-hidden="true" />}
       </span>
       <span className="rail-label">{label}</span>
     </button>
