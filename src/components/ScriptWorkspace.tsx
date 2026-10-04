@@ -115,14 +115,15 @@ export function ScriptWorkspace({
             ref={step.index === scrollIndex ? scrollRef : undefined}
             className={`sw-line${isComment ? " comment" : ""}${step.enabled ? "" : " disabled"}${hit ? " hit" : ""}`}
           >
-            {long ? (
-              <button type="button" className="glyph-btn lo-chevron" onClick={() => toggleExpanded(step.index)}>
-                <span className={`fchevron${isExpanded ? " open" : ""}`}>›</span>
-              </button>
-            ) : (
-              <span className="lo-chevron-space" />
-            )}
-            <span className="sw-ln">{step.index}</span>
+            <span className="lo-chevron-space" />
+            <span className="sw-ln">
+              {long && (
+                <button type="button" className="glyph-btn lo-chevron" onClick={() => toggleExpanded(step.index)}>
+                  <span className={`fchevron${isExpanded ? " open" : ""}`}>›</span>
+                </button>
+              )}
+              {step.index}
+            </span>
             <span className="sw-step" style={{ paddingLeft: depth * INDENT_PX }}>
               {isComment ? (
                 <span className="sw-comment"># {step.params}</span>

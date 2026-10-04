@@ -18,7 +18,7 @@
 .sw-line {
   display: flex;
   gap: 4px;
-  padding: 0 8px 0 calc(var(--section-title-indent, 15px) + 14px);
+  padding: 0 8px 0 calc(var(--section-title-indent, 15px) + 21px);
   border-radius: var(--radius);
   position: relative;
 }
@@ -36,14 +36,18 @@
 .sw-ln {
   position: absolute;
   /* Right-aligned, so every number ends the same distance before its text.
-     The column holds four digits (a box that is too narrow would let the text
-     overflow to the right, into the step); its right edge is at indent + 18px. */
-  left: calc(var(--section-title-indent, 15px) - 14px);
-  width: 32px;
+     The box is wide enough for a four-digit number with the expand glyph before
+     it (a box that is too narrow would let the content overflow to the right,
+     into the step). Its right edge is at indent + 25px. */
+  left: calc(var(--section-title-indent, 15px) - 19px);
+  width: 44px;
   top: 0;
   text-align: right;
-  color: var(--text-dim);
+  /* Well below the dim text: the numbers are a quiet margin. */
+  color: color-mix(in srgb, var(--text-dim) 50%, var(--code-bg));
   user-select: none;
+  /* The box reaches under neighbouring content; only the expand glyph takes clicks. */
+  pointer-events: none;
 }
 
 .sw-step {
@@ -64,13 +68,22 @@
   font-style: italic;
 }
 
-/* The expand glyph and its empty stand-in are narrow here, so the text sits
-   close to the step number. */
-.sw .lo-chevron-space,
+/* The empty stand-in is narrow here, so the text sits close to the step
+   number. The expand glyph of a collapsible step sits just before its number
+   (inside .sw-ln), the same distance from it whatever the number's width. */
+.sw .lo-chevron-space {
+  width: 12px;
+}
+
 .sw .lo-chevron {
+  position: relative;
+  top: -1px; /* the glyph sits a little low in its box; level it with the digits */
   width: 12px;
   min-width: 12px;
+  height: 100%;
+  margin-right: 2px;
   padding: 0;
+  pointer-events: auto;
 }
 
 /* Step name colour categories */
