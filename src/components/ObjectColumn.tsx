@@ -1136,7 +1136,7 @@ function LayoutTriggers({
       {triggers.length === 0 ? (
         <div className="subtle indent">No {title.toLowerCase()}.</div>
       ) : (
-        <dl className="kv compact layout-triggers">
+        <div className="layout-triggers">
           {triggers.map((trigger, i) => (
             <LayoutTriggerRow
               trigger={trigger}
@@ -1148,7 +1148,7 @@ function LayoutTriggers({
               key={`${trigger.id ?? trigger.action}:${i}`}
             />
           ))}
-        </dl>
+        </div>
       )}
     </Section>
   );
@@ -1175,36 +1175,39 @@ function LayoutTriggerRow({
   const title = [trigger.scriptUuid ? `UUID: ${trigger.scriptUuid}` : "", trigger.id ? `Trigger id: ${trigger.id}` : ""]
     .filter(Boolean)
     .join("\n");
+  const text =
+    `Perform Script [ “${script}”` +
+    (trigger.parameter ? ` ; Parameter: ${trigger.parameter}` : "") +
+    (trigger.parameterFieldName ? ` ; Parameter field: ${trigger.parameterFieldName}` : "") +
+    " ]";
+  const link = (code: string) => <LinkedCode text={code} objects={targets} onGo={onGo} model={model} owner={owner.uid} />;
   return (
-    <Fragment>
-      <dt>{trigger.action}</dt>
-      <dd title={title || undefined}>
-        <div className="layout-obj-row">
+    <div className="layout-trigger" title={title || undefined}>
+      <div className="layout-obj-row">
+        <span className="layout-obj-name">{trigger.action}</span>
+        {trigger.modes.map((mode) => (
+          <span className="tag layout-obj-type" key={mode}>
+            {mode}
+          </span>
+        ))}
+      </div>
+      {/* The trigger's script call, drawn as the Perform Script step it runs. */}
+      <CodeBox text={text}>
+        <pre className="code">
+          {"Perform Script [ "}
           {target ? (
-            <button className="layout-obj-name link-btn" type="button" onClick={() => onGo(target.uid, rowKey)}>
-              {script}
-            </button>
+            <ObjLink obj={target} onGo={(uid) => onGo(uid, rowKey)}>
+              “{script}”
+            </ObjLink>
           ) : (
-            <span className="layout-obj-name">{script}</span>
+            <span className="syn-field" title="This script isn't in the loaded files">“{script}”</span>
           )}
-          {trigger.modes.map((mode) => (
-            <span className="tag layout-obj-type" key={mode}>
-              {mode}
-            </span>
-          ))}
-        </div>
-        {trigger.parameterFieldName && (
-          <div className="layout-trigger-info">
-            Parameter field: <LinkedCode text={trigger.parameterFieldName} objects={targets} onGo={onGo} model={model} owner={owner.uid} />
-          </div>
-        )}
-        {trigger.parameter && (
-          <div className="layout-trigger-info">
-            Parameter: <LinkedCode text={trigger.parameter} objects={targets} onGo={onGo} model={model} owner={owner.uid} />
-          </div>
-        )}
-      </dd>
-    </Fragment>
+          {trigger.parameter && <>{" ; Parameter: "}{link(trigger.parameter)}</>}
+          {trigger.parameterFieldName && <>{" ; Parameter field: "}{link(trigger.parameterFieldName)}</>}
+          {" ]"}
+        </pre>
+      </CodeBox>
+    </div>
   );
 }
 

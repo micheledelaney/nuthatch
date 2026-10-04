@@ -156,11 +156,22 @@ ul.layout-objects {
   word-break: break-word;
 }
 
-.layout-trigger-info {
-  margin-top: 3px;
-  color: var(--text-dim);
-  white-space: pre-wrap;
-  word-break: break-word;
+/* Script triggers: the trigger's name and modes, its script call in a code
+   box below. Like other code boxes, the box starts at the section's edge and
+   its text at the title text. */
+.layout-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 8px 0;
+}
+
+.layout-trigger .code-box {
+  margin: 6px 0 0 calc(-1 * var(--section-title-indent));
+}
+
+.layout-trigger pre.code {
+  margin: 0;
 }
 
 /* Layout type filter chip strip */
