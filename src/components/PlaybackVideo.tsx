@@ -42,6 +42,7 @@ export function PlaybackVideo() {
   return (
     <video
       ref={ref}
+      className="bird-video"
       src={src}
       muted
       playsInline

@@ -185,6 +185,13 @@
   text-align: center;
 }
 
+/* Every bird clip (empty state, loading screen) is encoded on a backdrop just
+   below the page colour; lighten shows the page in its place, so there's no
+   box around the bird. */
+.bird-video {
+  mix-blend-mode: lighten;
+}
+
 /* Hamburger action menu */
 .menu {
   position: relative;
