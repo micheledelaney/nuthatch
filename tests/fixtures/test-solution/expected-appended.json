@@ -63,9 +63,10 @@
         "match": {"objectName": "obj_TriggerParam"},
         "expect": {"triggers": [{"action": "OnObjectEnter", "scriptName": "S_Trigger", "parameter": "TO_Main::f_Text & TO_Child::<Field Missing>"}]}
       },
-      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonStep"}, "expect": {"actionStep": "Set Field"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonParam"}, "expect": {"scriptRef": "S_Sub", "scriptParameter": "TO_Main::f_ID & TO_Child::<Field Missing>"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonStep"}, "expect": {"actionStep": "Set Field", "scriptParameter": {"absent": true}}},
       {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ExtGTRR"}, "expect": {"actionStep": "Go to Related Record"}},
-      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_Label"}, "expect": {"info": "\"Save\"", "scriptRef": "S_Sub"}}
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_Label"}, "expect": {"info": "\"Save\"", "scriptRef": "S_Sub", "scriptParameter": {"absent": true}}}
     ]
   },
   "sources": {

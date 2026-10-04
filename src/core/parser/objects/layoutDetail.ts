@@ -146,6 +146,7 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
     ...(kids ? { children: kids.map((kid) => kid.info) } : {}),
     ...fieldBinding(obj, index),
     ...(action.scriptRef ? { scriptRef: action.scriptRef } : {}),
+    ...(action.scriptParameter ? { scriptParameter: action.scriptParameter } : {}),
     ...(action.step ? { actionStep: { name: action.step.name, params: stepParams(action.step.node, action.step.name, index.stepTexts) } } : {}),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
@@ -240,10 +241,11 @@ function missingBinding(obj: Record<string, unknown>, index: FileIndex): string 
 }
 
 /** What a button (or grouped button — Group and Grouped Button share the
- * <GroupedButton> wrapper) does: the script it performs, or else its single
- * action step. */
+ * <GroupedButton> wrapper) does: the script it performs and the parameter it
+ * passes, or else its single action step. */
 interface ButtonAction {
   scriptRef?: LayoutObjectInfo["scriptRef"];
+  scriptParameter?: string;
   step?: { node: Record<string, unknown>; name: string };
 }
 
@@ -251,9 +253,13 @@ function buttonAction(obj: Record<string, unknown>): ButtonAction {
   const button = BUTTON_ACTION_TAGS.map((tag) => child(obj, tag)).find(isRecord);
   if (!button) return {};
   const scriptRef = extractScriptRef(button["action"]);
-  if (scriptRef) return { scriptRef };
+  // The parameter is the <Calculation> beside the <ScriptReference>. A deleted
+  // script loses its <ScriptReference> but keeps the parameter.
+  const scriptParameter = calcOf(asArray(button["action"])[0]);
+  const parameter = scriptParameter ? { scriptParameter } : {};
+  if (scriptRef) return { scriptRef, ...parameter };
   const step = actionStepOf(button["action"]);
-  return step ? { step } : {};
+  return step ? { step } : parameter;
 }
 
 /** Hide-object-when and conditional-formatting calculations:

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseDocuments } from "@/core/parser/parseDdr";
 import { buildModel } from "@/core/model/buildModel";
 import { buildDependencyView } from "@/core/analysis/dependencies";
+import { diffAnalyses } from "@/core/analysis/diff";
 import { brokenSourcesFor, refStatsFor } from "@/components/browseA/refStats";
 import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
 import { occurrencesBeforeMissingField } from "@/core/identifiers";
@@ -1323,6 +1324,41 @@ describe("a label, tooltip or title written as a formula", () => {
   it("gives an empty literal label no label", () => {
     expect(object(result, "F0:layoutObject:10.5").attributes.label).toBeUndefined();
     expect(object(result, "F0:layoutObject:10.5").name).toBe("b5");
+  });
+});
+
+describe("a button's script parameter", () => {
+  const calc = (formula: string): string => `<Calculation><Text><![CDATA[${formula}]]></Text></Calculation>`;
+  const button = (id: string, action: string): string =>
+    `<LayoutObject id="${id}" type="Button" name="b${id}"><Button><action><Options>4</Options>${action}</action></Button></LayoutObject>`;
+  const withParameter = (parameter: string) =>
+    parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}${layout(
+          button("1", `<ScriptReference id="1" name="S"></ScriptReference>${calc(parameter)}`) +
+            // As in SampleA and Images: the script was deleted, so FileMaker
+            // dropped the <ScriptReference> and kept the parameter.
+            button("2", calc(`"orphaned"`)),
+        )}</AddAction>`,
+      ),
+    );
+  const result = withParameter("T::a");
+
+  it("is read from beside the script reference", () => {
+    const obj = object(result, "F0:layoutObject:10.1");
+    expect(obj.attributes.scriptParameter).toBe("T::a");
+    expect(obj.detail).toMatchObject({ scriptRef: { name: "S" }, scriptParameter: "T::a" });
+    expect(obj.text).toContain("T::a");
+  });
+
+  it("is kept when the script was deleted", () => {
+    expect(object(result, "F0:layoutObject:10.2").attributes.scriptParameter).toBe(`"orphaned"`);
+  });
+
+  it("shows as a change when it's edited", () => {
+    const diff = diffAnalyses(result, withParameter("T::b"), 0, 0);
+    expect(diff.changed.map((c) => c.uid)).toEqual(["F0:layoutObject:10.1"]);
   });
 });
 

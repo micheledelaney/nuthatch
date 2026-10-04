@@ -145,6 +145,7 @@ const ATTR_LABELS: Record<string, string> = {
   objectName: "Object name",
   position: "Position",
   label: "Label",
+  scriptParameter: "Script parameter",
   tooltip: "Tooltip",
   hideWhen: "Hide object when",
   conditionalFormats: "Conditional formatting",
@@ -1384,6 +1385,7 @@ function LayoutObjectTree({
         style={{ paddingLeft: indent }}
         title={[
           obj.fieldRef,
+          obj.scriptParameter ? `Parameter: ${obj.scriptParameter}` : "",
           obj.tooltip ? `Tooltip: ${obj.tooltip}` : "",
           obj.hideWhen ? `Hide when: ${obj.hideWhen}` : "",
           obj.bounds ? `${obj.bounds.left}, ${obj.bounds.top} → ${obj.bounds.right}, ${obj.bounds.bottom}` : "",
@@ -1582,6 +1584,7 @@ function LayoutObjectRow({
           </div>
         );
       })()}
+      {obj.scriptParameter && <div className="layout-obj-info layout-obj-tooltip">Parameter: {obj.scriptParameter}</div>}
       {obj.tooltip && <div className="layout-obj-info layout-obj-tooltip">Tooltip: {obj.tooltip}</div>}
       {obj.hideWhen && (
         <div className="layout-obj-info layout-obj-tooltip">

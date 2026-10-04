@@ -222,7 +222,9 @@
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "TO_Child"}, "expect": {"portalRows": 5}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Portal", "portalTable": "<Table Missing>"}, "expect": {}},
       {"layout": "MAIN:layout:L_Start", "match": {"objectName": "obj_Named"}, "expect": {"info": {"contains": "$$MERGE_VAR"}}},
-      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Main"}, "expect": {}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Main"}, "expect": {"scriptParameter": "\"fromButton\""}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Grouped Button", "scriptRef": "S_Main"}, "expect": {"scriptParameter": "TO_Main::f_ID"}},
+      {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "scriptRef": "S_Sub"}, "expect": {"_note": "button bar segment 1", "scriptParameter": {"absent": true}}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": "Button", "actionStep": "Go to Layout"}, "expect": {}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Popover"}}, "expect": {"children": {"contains": "f_Created"}}},
       {"layout": "MAIN:layout:L_Start", "match": {"loType": {"contains": "Tab"}}, "expect": {"children": {"contains": "TO_Child"}}}

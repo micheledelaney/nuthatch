@@ -213,7 +213,7 @@ One JSON object per line:
 - \`detail\`: type-specific structure. Scripts: \`steps\` with \`index\`, \`name\`,
   \`enabled\`, and \`params\` (FileMaker's own step text). Calculated fields and
   custom functions: \`body\`. Layout objects: \`loType\`, \`fieldRef\`, \`scriptRef\`,
-  \`triggers\`, \`tooltip\`, \`hideWhen\`, \`conditionalFormats\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
+  \`scriptParameter\`, \`triggers\`, \`tooltip\`, \`hideWhen\`, \`conditionalFormats\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
 - \`text\`: readable content for types without a structured body.
 
 | type | label | count |

@@ -172,6 +172,8 @@ export type ObjectDetail =
       fieldRef?: string;
       /** Script called by a button or grouped button. */
       scriptRef?: { id?: string; name: string; uuid?: string };
+      /** Script parameter calculation the button passes to its script. */
+      scriptParameter?: string;
       /** Value list attached to a field object's format. */
       valueListRef?: { id?: string; name: string };
       /** Single-step action for buttons that don't call a script. */
@@ -381,6 +383,9 @@ export interface LayoutObjectInfo {
   fieldRef?: string;
   /** Script called by a button or grouped button — enables navigation to the script. */
   scriptRef?: { id?: string; name: string; uuid?: string };
+  /** Script parameter calculation the button passes to its script — kept when
+   * the script itself was deleted, as FileMaker keeps it. */
+  scriptParameter?: string;
   /** Value list attached to a field object's format (drop-down, checkbox set, …). */
   valueListRef?: { id?: string; name: string };
   /** Single-step action for buttons that don't call a script. */

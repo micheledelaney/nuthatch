@@ -243,6 +243,7 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
     const bare = stripOuterQuotes(lo.info);
     if (bare) a.label = bare;
   }
+  if (lo.scriptParameter) a.scriptParameter = lo.scriptParameter;
   if (lo.tooltip) a.tooltip = lo.tooltip;
   if (lo.hideWhen) a.hideWhen = lo.hideInFind ? `${lo.hideWhen} (also in Find mode)` : lo.hideWhen;
   if (lo.conditionalFormats) a.conditionalFormats = lo.conditionalFormats.join("\n");
@@ -291,15 +292,16 @@ function nameForLayoutObj(lo: LayoutObjectInfo): string {
 }
 
 /** The searchable text fragments of a single layout object — its name, field
- * binding, portal/script references, label/url info, tooltip, and trigger
- * scripts. Shared by the per-object search index and the layout's own compacted
- * text (compactLayoutText). */
+ * binding, portal/script references, script parameter, label/url info,
+ * tooltip, and trigger scripts. Shared by the per-object search index and the
+ * layout's own compacted text (compactLayoutText). */
 function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
   return [
     lo.name,
     lo.fieldRef,
     lo.portalTable,
     lo.scriptRef?.name,
+    lo.scriptParameter,
     lo.valueListRef?.name,
     lo.info,
     lo.tooltip,
