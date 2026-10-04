@@ -268,7 +268,6 @@ function AnalysisRow({
     <li ref={rowRef} className={`row snapshot${isNew ? " snapshot-new" : ""}`} onClick={() => void openSaved(item.id)}>
       <input
         type="checkbox"
-        className="snapshot-check"
         checked={checked}
         title="Select to compare"
         aria-label="Select to compare"

@@ -279,28 +279,6 @@
   white-space: nowrap;
 }
 
-/* Power's checkbox: a small sunk square that turns solid orange with a
-   dark tick. (A background tick, since WebKit draws no ::after on inputs.) */
-.snapshot-check {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  border-radius: var(--radius);
-  background: var(--nh-deep) center / 12px 12px no-repeat;
-  border: 1px solid var(--nh-line-2);
-  cursor: pointer;
-  flex: none;
-  transition: border-color var(--nh-dur), background-color var(--nh-dur);
-}
-
-.snapshot-check:checked {
-  background-color: var(--accent);
-  border-color: var(--accent);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 6.2 5 8.6l4.6-5' fill='none' stroke='%231b1b2e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-}
-
 /* Compare action bar */
 .compare-bar {
   position: sticky;
