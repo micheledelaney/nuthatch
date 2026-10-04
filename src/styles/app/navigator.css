@@ -323,6 +323,8 @@
 
 .chip-clear {
   align-self: flex-start;
+  /* Sets the button off from the last chip group (20px with the bar's gap). */
+  margin-top: 10px;
 }
 
 /* Rich list rows */
