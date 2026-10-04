@@ -1,4 +1,5 @@
-import type { ParseResult, ReportCard } from "@/types/ddr";
+import type { ParseResult, ReportCard, UsageMark } from "@/types/ddr";
+import { mergeMarks } from "@/core/analysis/usageMarks";
 
 /**
  * Local persistence for analyses, backed by IndexedDB so it works identically
@@ -33,6 +34,8 @@ export interface ProjectRecord {
   note?: string;
   /** Whether the project's health comparison graphs are shown. */
   showHealthGraphs: boolean;
+  /** Objects marked as used, for every analysis in the project. */
+  usageMarks?: UsageMark[];
 }
 
 /** Lightweight summary shown in the dashboard list. */
@@ -214,6 +217,18 @@ export async function listProjects(): Promise<ProjectRecord[]> {
   return projects.sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** Write a project's record with `patch` applied, materializing an implicit
+ * project if needed. Fields the patch doesn't set (its usage marks, …) are kept. */
+async function updateProject(name: string, now: number, patch: Partial<Omit<ProjectRecord, "name">>): Promise<void> {
+  const projects = await listProjects();
+  const existing = projects.find((p) => p.name === name);
+  const record: ProjectRecord = { createdAt: now, showHealthGraphs: false, ...existing, ...patch, name };
+  const db = await openDb();
+  const tx = db.transaction(PROJECT_STORE, "readwrite");
+  tx.objectStore(PROJECT_STORE).put(record);
+  await awaitTx(tx);
+}
+
 /** Create (or touch) a project so it appears on the dashboard with no analyses. */
 export async function createProject(
   name: string,
@@ -221,17 +236,12 @@ export async function createProject(
   note?: string,
   showHealthGraphs = false,
 ): Promise<void> {
-  const db = await openDb();
-  const tx = db.transaction(PROJECT_STORE, "readwrite");
-  tx.objectStore(PROJECT_STORE).put({ name, createdAt, note, showHealthGraphs });
-  await awaitTx(tx);
+  await updateProject(name, createdAt, { createdAt, note, showHealthGraphs });
 }
 
 /** Set (or clear) a project's note, materializing an implicit project if needed. */
 export async function setProjectNote(name: string, note: string, now: number): Promise<void> {
-  const projects = await listProjects();
-  const existing = projects.find((p) => p.name === name);
-  await createProject(name, existing?.createdAt ?? now, note.trim() || undefined, existing?.showHealthGraphs);
+  await updateProject(name, now, { note: note.trim() || undefined });
 }
 
 /** Toggle a project's health-graph visibility, materializing it if implicit. */
@@ -240,21 +250,26 @@ export async function setProjectShowHealthGraphs(
   show: boolean,
   now: number,
 ): Promise<void> {
-  const projects = await listProjects();
-  const existing = projects.find((p) => p.name === name);
-  await createProject(name, existing?.createdAt ?? now, existing?.note, show);
+  await updateProject(name, now, { showHealthGraphs: show });
+}
+
+/** Replace a project's usage marks, materializing it if implicit. */
+export async function setProjectUsageMarks(name: string, usageMarks: UsageMark[], now: number): Promise<void> {
+  await updateProject(name, now, { usageMarks });
 }
 
 /**
  * Rename a project, reassigning every analysis filed under it. Merges into the
- * target if a project with `newName` already exists (keeping the target's note).
+ * target if a project with `newName` already exists (keeping the target's note,
+ * and its mark where both projects mark the same object).
  */
 export async function renameProject(oldName: string, newName: string, now: number): Promise<void> {
   if (!newName || oldName === newName) return;
   const db = await openDb();
   const projects = await listProjects();
   const oldRec = projects.find((p) => p.name === oldName);
-  const targetExists = projects.some((p) => p.name === newName);
+  const target = projects.find((p) => p.name === newName);
+  const targetExists = target != null;
   const metas = await getAllMetas();
 
   const tx = db.transaction([META_STORE, PROJECT_STORE], "readwrite");
@@ -271,7 +286,10 @@ export async function renameProject(oldName: string, newName: string, now: numbe
       createdAt: oldRec?.createdAt ?? now,
       note: oldRec?.note,
       showHealthGraphs: oldRec?.showHealthGraphs ?? true,
+      usageMarks: oldRec?.usageMarks,
     });
+  } else if (oldRec?.usageMarks?.length) {
+    projStore.put({ ...target, usageMarks: mergeMarks(target.usageMarks ?? [], oldRec.usageMarks) });
   }
   if (oldRec) projStore.delete(oldName);
   await awaitTx(tx);

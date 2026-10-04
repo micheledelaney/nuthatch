@@ -10,12 +10,13 @@ import { OBJECT_TYPE_META } from "@/types/ddr";
 
 /** Compute the report-card metrics for the solution. */
 export function buildReportCard(
-  parsed: ParseResult,
+  parsed: Pick<ParseResult, "files" | "objects">,
   references: FmReference[],
   /** Objects with a broken reference (see brokenSources). */
   brokenSources: ReadonlySet<string>,
   unreferenced: FmObject[],
   unusedChain: FmObject[],
+  markedUsedCount: number,
 ): ReportCard {
   const countsByType = emptyCounts();
   for (const obj of parsed.objects) {
@@ -50,6 +51,7 @@ export function buildReportCard(
     brokenReferenceCount: brokenSources.size,
     unreferencedCount: unreferenced.length,
     unusedChainCount: unusedChain.length,
+    markedUsedCount,
     unstoredCalculationCount,
     deepCalcCount,
     globalVariableCount,

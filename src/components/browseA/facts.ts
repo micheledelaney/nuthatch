@@ -1,14 +1,23 @@
+import type { UsageMark } from "@/types/ddr";
+import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
+
 export interface Fact {
   label: string;
   tone?: "high" | "warn" | "ok";
   title?: string;
 }
 
-/** The flags shown as badges in an object's At a glance card: only problems —
- * broken references, nothing referencing it, or only unused objects using it.
- * Everything else (storage, step counts, triggers, …) lives in the card's rows
- * or the Metadata box. */
-export function factsFor(ctx: { brokenCount: number; unreferenced: boolean; unusedChain: boolean; selfBroken: boolean }): Fact[] {
+/** The flags shown as badges in an object's At a glance card: problems —
+ * broken references, nothing referencing it, or only unused objects using it —
+ * and a mark saying it's used anyway. Everything else (storage, step counts,
+ * triggers, …) lives in the card's rows or the Metadata box. */
+export function factsFor(ctx: {
+  brokenCount: number;
+  unreferenced: boolean;
+  unusedChain: boolean;
+  selfBroken: boolean;
+  mark: UsageMark | undefined;
+}): Fact[] {
   const facts: Fact[] = [];
   const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 
@@ -19,6 +28,10 @@ export function factsFor(ctx: { brokenCount: number; unreferenced: boolean; unus
   if (ctx.unreferenced) facts.push({ label: "Unreferenced", tone: "warn", title: "Nothing in the loaded files references this" });
   if (ctx.unusedChain) {
     facts.push({ label: "Unused chain", tone: "warn", title: "Everything that uses this is itself unused — see Used only by" });
+  }
+  if (ctx.mark) {
+    const reason = USAGE_REASON_LABELS[ctx.mark.reason];
+    facts.push({ label: "Marked as used", tone: "ok", title: ctx.mark.note ? `${reason} — ${ctx.mark.note}` : reason });
   }
   return facts;
 }

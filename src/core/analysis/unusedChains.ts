@@ -8,11 +8,12 @@ import { ORPHAN_CANDIDATE_TYPES, type FmObject, type FmReference, type SolutionM
  *
  * Found by walking forward from everything that runs or is used without a
  * reference — every type that's never flagged unreferenced (files, accounts,
- * relationships, custom menus, …) plus layouts and scripts people can open
- * from FileMaker's menus — through enabled references, and from a container
- * into the objects inside it (a layout's buttons only run while the layout is
- * in use). A candidate that walk never reaches is unused; the ones that aren't
- * already unreferenced make up the chains.
+ * relationships, custom menus, …), layouts and scripts people can open from
+ * FileMaker's menus, and objects someone marked as used — through enabled
+ * references, and from a container into the objects inside it (a layout's
+ * buttons only run while the layout is in use). A candidate that walk never
+ * reaches is unused; the ones that aren't already unreferenced make up the
+ * chains.
  *
  * An object referenced by anything in use is never flagged, whatever its
  * container: a chain only ever adds objects whose every use is unused.
@@ -31,25 +32,29 @@ function isCandidate(obj: FmObject): boolean {
   return !obj.isSeparator && ORPHAN_CANDIDATE_TYPES.has(obj.type);
 }
 
-/** In use without needing a reference to it (subject to its container). */
-function isStart(obj: FmObject): boolean {
-  return !isCandidate(obj) || isChainEntryPoint(obj);
-}
-
-/** The objects in unused chains — never including the unreferenced ones they hang from. */
+/** The objects in unused chains — never including the unreferenced ones they
+ * hang from. `marked` are objects someone marked as used. */
 export function findUnusedChains(
   objects: FmObject[],
   outbound: Map<string, FmReference[]>,
   byUid: Map<string, FmObject>,
   unreferenced: FmObject[],
+  marked: ReadonlySet<string> = new Set(),
 ): FmObject[] {
-  const live = findLive(objects, outbound, byUid);
+  // In use without needing a reference to it (subject to its container).
+  const isStart = (o: FmObject) => !isCandidate(o) || isChainEntryPoint(o) || marked.has(o.uid);
+  const live = findLive(objects, outbound, byUid, isStart);
   const unref = new Set(unreferenced.map((o) => o.uid));
   return objects.filter((o) => isCandidate(o) && !live.has(o.uid) && !unref.has(o.uid));
 }
 
 /** Every object reachable from the start objects. */
-function findLive(objects: FmObject[], outbound: Map<string, FmReference[]>, byUid: Map<string, FmObject>): Set<string> {
+function findLive(
+  objects: FmObject[],
+  outbound: Map<string, FmReference[]>,
+  byUid: Map<string, FmObject>,
+  isStart: (o: FmObject) => boolean,
+): Set<string> {
   const children = new Map<string, FmObject[]>();
   for (const o of objects) {
     if (!o.parentUid) continue;

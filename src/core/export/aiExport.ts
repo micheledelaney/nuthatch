@@ -2,6 +2,7 @@ import { version as NUTHATCH_VERSION } from "../../../package.json";
 import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { brokenSources } from "@/core/analysis/dependencies";
+import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -68,6 +69,7 @@ function exportObject(
 ): string {
   const chain = unusedChain.has(o.uid) ? chainTops(model, o.uid) : null;
   const usedOnlyBy = chain ? (chain.tops.length > 0 ? chain.tops : chain.loop) : [];
+  const mark = model.usageMarks.get(o.uid);
   return JSON.stringify({
     uid: o.uid,
     type: o.type,
@@ -83,6 +85,7 @@ function exportObject(
     unusedChain: chain ? true : undefined,
     unusedLoop: chain && chain.tops.length === 0 ? true : undefined,
     usedOnlyBy: usedOnlyBy.length > 0 ? usedOnlyBy.map((u) => u.uid) : undefined,
+    markedUsed: mark ? { reason: USAGE_REASON_LABELS[mark.reason], note: mark.note } : undefined,
     hasBrokenRefs: brokenFrom.has(o.uid) || undefined,
     relationshipDepth: o.relationshipDepth,
     // A layout object's attributes and text restate its detail (type, label,
@@ -210,6 +213,10 @@ One JSON object per line:
   it's in a loop of objects that only use each other, and \`usedOnlyBy\` lists the
   others. Layouts and scripts shown in FileMaker's menus count as in use, so they
   never start a chain.
+- \`markedUsed\`: someone marked it as used in nuthatch, with their \`reason\` (e.g.
+  "Server schedule") and \`note\`. That's their knowledge of something the XML
+  can't show, not a reference: it keeps the object, and everything it uses, out
+  of \`unreferenced\` and \`unusedChain\`.
 - \`hasBrokenRefs: true\`: it references something that no longer exists.
 - \`attributes\`: raw attributes from the XML element (field type, storage, …).
 - \`detail\`: type-specific structure. Scripts: \`steps\` with \`index\`, \`name\`,

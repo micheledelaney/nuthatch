@@ -63,9 +63,13 @@
   margin-top: 0;
 }
 
-/* "Show in graph" — sits at the far right of a table occurrence's title row. */
-.graph-jump-btn {
+/* The name row's buttons (Show in graph, Mark as used…), at its far right. */
+.op-glance-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+  flex: none;
   align-self: center;
 }
 

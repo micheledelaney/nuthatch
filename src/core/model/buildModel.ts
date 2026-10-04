@@ -5,11 +5,13 @@ import type {
   ParseResult,
   RawReference,
   SolutionModel,
+  UsageMark,
 } from "@/types/ddr";
 import { ORPHAN_CANDIDATE_TYPES, isBrokenTableOccurrence } from "@/types/ddr";
 import { buildReportCard } from "@/core/analysis/reportCard";
 import { brokenSources } from "@/core/analysis/dependencies";
 import { findUnusedChains } from "@/core/analysis/unusedChains";
+import { resolveMarks } from "@/core/analysis/usageMarks";
 import { longestPrefixName } from "@/core/identifiers";
 import { buildDataSourceIndex, type DataSourceIndex } from "./dataSources";
 
@@ -30,10 +32,11 @@ const RESOLVABLE: ReadonlySet<ObjectType> = new Set<ObjectType>([
 ]);
 
 /**
- * Turn a flat ParseResult into a fully indexed, analyzed SolutionModel.
- * Pure and synchronous — fast even for large solutions.
+ * Turn a flat ParseResult into a fully indexed, analyzed SolutionModel, with
+ * the project's usage marks applied. Pure and synchronous — fast even for
+ * large solutions.
  */
-export function buildModel(parsed: ParseResult): SolutionModel {
+export function buildModel(parsed: ParseResult, marks: readonly UsageMark[] = []): SolutionModel {
   const byUid = new Map<string, FmObject>();
   for (const obj of parsed.objects) byUid.set(obj.uid, obj);
 
@@ -49,23 +52,45 @@ export function buildModel(parsed: ParseResult): SolutionModel {
   annotateRelationshipDepths(parsed, byUid);
 
   const brokenReferences = references.filter((r) => r.broken);
-  const unreferenced = findUnreferenced(parsed.objects, inbound, byUid);
-  const unusedChain = findUnusedChains(parsed.objects, outbound, byUid, unreferenced);
-  const reportCard = buildReportCard(parsed, references, brokenSources({ outbound, brokenReferences, byUid }), unreferenced, unusedChain);
 
-  return {
-    files: parsed.files,
-    objects: parsed.objects,
-    byUid,
-    references,
-    outbound,
-    inbound,
-    brokenReferences,
+  return withUsageMarks(
+    {
+      files: parsed.files,
+      objects: parsed.objects,
+      byUid,
+      references,
+      outbound,
+      inbound,
+      brokenReferences,
+      parseErrors: parsed.errors,
+    },
+    marks,
+  );
+}
+
+/** A model before the parts that depend on usage marks. */
+type ResolvedModel = Omit<SolutionModel, "unreferenced" | "unusedChain" | "usageMarks" | "reportCard">;
+
+/**
+ * The model with `marks` applied: marked objects count as in use, so they and
+ * everything they reach leave the unreferenced list and the unused chains.
+ * Recomputes only what marks affect, so marking an object doesn't re-resolve
+ * the solution's references.
+ */
+export function withUsageMarks(model: ResolvedModel, marks: readonly UsageMark[]): SolutionModel {
+  const usageMarks = resolveMarks(model.objects, marks);
+  const marked = new Set(usageMarks.keys());
+  const unreferenced = findUnreferenced(model.objects, model.inbound, model.byUid).filter((o) => !marked.has(o.uid));
+  const unusedChain = findUnusedChains(model.objects, model.outbound, model.byUid, unreferenced, marked);
+  const reportCard = buildReportCard(
+    model,
+    model.references,
+    brokenSources(model),
     unreferenced,
     unusedChain,
-    reportCard,
-    parseErrors: parsed.errors,
-  };
+    marked.size,
+  );
+  return { ...model, unreferenced, unusedChain, usageMarks, reportCard };
 }
 
 /**

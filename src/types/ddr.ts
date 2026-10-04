@@ -591,6 +591,8 @@ export interface ReportCard {
   unreferencedCount: number;
   /** Objects used only by unreferenced objects (or by each other): the unused chains. */
   unusedChainCount: number;
+  /** Objects someone marked as used (see UsageMark). */
+  markedUsedCount: number;
   unstoredCalculationCount: number;
   /** Unstored calculation fields whose relationship depth is >= 2 (multi-hop). */
   deepCalcCount: number;
@@ -631,8 +633,33 @@ export interface SolutionModel {
   unreferenced: FmObject[];
   /** Objects whose every use is itself unused (see core/analysis/unusedChains). */
   unusedChain: FmObject[];
+  /** uid → the usage mark that applies to it; marked objects count as in use. */
+  usageMarks: ReadonlyMap<string, UsageMark>;
   reportCard: ReportCard;
   parseErrors: string[];
+}
+
+/** Why someone marked an object as used when nothing in the export uses it. */
+export type UsageReason = "serverSchedule" | "externalApp" | "otherFile" | "byName" | "keep" | "other";
+
+/**
+ * Someone's judgment that an object is in use although nothing in the export
+ * references it — run by a server schedule, the Data API, another file, … A
+ * marked object counts as in use, and so does everything it reaches. Stored
+ * per project and keyed by file name + object, since file uids follow load
+ * order while FileMaker's names and ids stay the same across exports.
+ */
+export interface UsageMark {
+  /** FileMaker file name (FmObject.fileName). */
+  fileName: string;
+  /** The object's uid without its file part, e.g. "script:12" or "field:3.7". */
+  ref: string;
+  /** The object's name when marked, for reading marks on their own. */
+  name: string;
+  reason: UsageReason;
+  note?: string;
+  /** Epoch millis. */
+  markedAt: number;
 }
 
 /** Serializable payload returned by the parse worker (no Maps). */

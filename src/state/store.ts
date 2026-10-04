@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { ObjectType, ParseResult, SolutionModel } from "@/types/ddr";
-import { buildModel } from "@/core/model/buildModel";
+import type { ObjectType, ParseResult, SolutionModel, UsageMark, UsageReason } from "@/types/ddr";
+import { buildModel, withUsageMarks } from "@/core/model/buildModel";
+import { createMark, withMark } from "@/core/analysis/usageMarks";
 import { diffAnalyses, DEFAULT_DIFF_OPTIONS, type AnalysisDiff, type DiffOptions } from "@/core/analysis/diff";
 import type { ParseRequest, ParseResponse } from "@/worker/parse.worker";
 import {
@@ -14,6 +15,7 @@ import {
   saveAnalysis,
   setProjectNote,
   setProjectShowHealthGraphs,
+  setProjectUsageMarks,
   updateAnalysis,
   UNGROUPED,
   type ProjectRecord,
@@ -71,8 +73,9 @@ export type PrivCapFilter = "all" | "create" | "edit" | "delete" | "readonly";
 
 /** Cross-cutting reference-health filter, applied to whatever type is selected:
  * objects nothing references (unreferenced), objects used only by unused ones
- * (unusedChain), or that have a broken outbound reference (broken). */
-export type RefFilter = "all" | "unreferenced" | "unusedChain" | "broken";
+ * (unusedChain), objects someone marked as used (markedUsed), or that have a
+ * broken outbound reference (broken). */
+export type RefFilter = "all" | "unreferenced" | "unusedChain" | "markedUsed" | "broken";
 
 /** Layout sub-filter (only meaningful when navType is "layout"). */
 export type LayoutFilter = "all" | "hasTriggers";
@@ -98,6 +101,11 @@ interface AppState {
   model: SolutionModel | null;
   /** Display name of the analysis currently open (shown in the main header). */
   analysisName: string | null;
+  /** Project the open analysis is saved under, whose usage marks apply to it.
+   * Null when it wasn't saved ("Don't save"): there's nowhere to keep marks. */
+  projectName: string | null;
+  /** uid of the object the "Mark as used" dialog is open for. */
+  markDialog: string | null;
   error: string | null;
   /** Informational banner (e.g. where an export was written), dismissible. */
   notice: string | null;
@@ -213,6 +221,13 @@ interface AppState {
   removeSaved: (id: string) => Promise<void>;
   /** Export a saved analysis as AI-readable files into a folder the user picks. */
   exportForAi: (id: string) => Promise<void>;
+  /** Open / close the "Mark as used" dialog for an object. */
+  openMarkDialog: (uid: string) => void;
+  cancelMarkDialog: () => void;
+  /** Mark an object as used (or remove its mark) in the open analysis's
+   * project; the flags it and its chain carry update at once. */
+  markUsed: (uid: string, reason: UsageReason, note?: string) => Promise<void>;
+  unmarkUsed: (uid: string) => Promise<void>;
   dismissNotice: () => void;
   /** Compare two saved analyses (ordered oldest → newest) and show the diff. */
   compareAnalyses: (idA: string, idB: string) => Promise<void>;
@@ -287,6 +302,28 @@ interface AppState {
 }
 
 type SetState = (partial: Partial<AppState>) => void;
+
+/** A project's usage marks. */
+function marksOf(projects: ProjectRecord[], name: string): UsageMark[] {
+  return projects.find((p) => p.name === name)?.usageMarks ?? [];
+}
+
+/** Persist the open project's marks as `change` rewrites them, then re-apply
+ * them to the open model (no re-parse, no reference re-resolution). */
+async function saveMarks(set: SetState, get: () => AppState, change: (marks: UsageMark[]) => UsageMark[]): Promise<void> {
+  const { model, projectName } = get();
+  if (!model || projectName == null) return;
+  try {
+    // Start from the stored marks, not the in-memory list, so nothing newer is overwritten.
+    const marks = change(marksOf(await listProjects(), projectName));
+    await setProjectUsageMarks(projectName, marks, Date.now());
+    const projects = await listProjects();
+    // Another analysis may have been opened while this was saving; leave it be.
+    set(get().model === model ? { model: withUsageMarks(model, marks), projects, markDialog: null } : { projects, markDialog: null });
+  } catch (err) {
+    set({ markDialog: null, error: `Couldn't save the mark: ${(err as Error).message}` });
+  }
+}
 
 /** Parse `docs` (showing the loading view), returning the result + resolved
  * model, or null if parsing failed (status/error are set in that case). */
@@ -376,6 +413,8 @@ export const useStore = create<AppState>((set, get) => ({
   status: "empty",
   model: null,
   analysisName: null,
+  projectName: null,
+  markDialog: null,
   error: null,
   notice: null,
   savedItems: [],
@@ -410,6 +449,7 @@ export const useStore = create<AppState>((set, get) => ({
       status: "empty",
       model: null,
       analysisName: null,
+      projectName: null,
       error: null,
       lastResult: null,
       pendingLoad: null,
@@ -439,7 +479,8 @@ export const useStore = create<AppState>((set, get) => ({
   removeProject: async (name) => {
     await deleteProject(name);
     const [savedItems, projects] = await Promise.all([listSaved(), listProjects()]);
-    set({ savedItems, projects });
+    // The open analysis went with it, so new marks would have nowhere to go.
+    set({ savedItems, projects, ...(get().projectName === name ? { projectName: null } : {}) });
   },
 
   setShowHealthGraphs: async (name, show) => {
@@ -457,6 +498,7 @@ export const useStore = create<AppState>((set, get) => ({
       switch (target.kind) {
         case "project-rename":
           await renameProject(target.name, value.trim(), Date.now());
+          if (value.trim() && get().projectName === target.name) set({ projectName: value.trim() });
           break;
         case "project-note":
           await setProjectNote(target.name, value, Date.now());
@@ -483,16 +525,22 @@ export const useStore = create<AppState>((set, get) => ({
     const parsed = await parseDocs(set, pendingLoad.docs);
     if (!parsed) return;
     const { result, model } = parsed;
+    const project = projectName.trim() || UNGROUPED;
+    // The saved summary (the dashboard's trend) keeps the counts without marks,
+    // so marking an object later doesn't make older analyses look different.
     const savedMeta = await saveAnalysis(
       name.trim() || "Untitled analysis",
-      projectName.trim() || UNGROUPED,
+      project,
       result,
       model.reportCard,
       Date.now(),
       note?.trim() || undefined,
     );
     const [savedItems, projects] = await Promise.all([listSaved(), listProjects()]);
-    set({ status: "ready", model, analysisName: name.trim() || "Untitled analysis", lastResult: result, savedItems, projects, showDashboard: true, recentlyAddedId: savedMeta.id });
+    set({
+      status: "ready", model: withUsageMarks(model, marksOf(projects, project)), analysisName: name.trim() || "Untitled analysis",
+      projectName: project, lastResult: result, savedItems, projects, showDashboard: true, recentlyAddedId: savedMeta.id,
+    });
   },
 
   // "Don't save" still opens the analysis — it just isn't filed under a project.
@@ -503,11 +551,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ pendingLoad: null });
     const parsed = await parseDocs(set, pendingLoad.docs);
     if (!parsed) return;
-    set({ status: "ready", model: parsed.model, analysisName: name, lastResult: parsed.result, showDashboard: false, recentlyAddedId: null });
+    set({ status: "ready", model: parsed.model, analysisName: name, projectName: null, lastResult: parsed.result, showDashboard: false, recentlyAddedId: null });
   },
 
   // Cancel before parsing: drop the chosen docs and return to the dashboard.
-  cancelLoad: () => set({ pendingLoad: null, status: "empty", model: null, lastResult: null }),
+  cancelLoad: () => set({ pendingLoad: null, status: "empty", model: null, projectName: null, lastResult: null }),
 
   openSaved: async (id) => {
     const { comparison, previousComparison } = get();
@@ -518,10 +566,12 @@ export const useStore = create<AppState>((set, get) => ({
         set({ status: "empty", error: "That saved analysis could not be found.", savedItems: await listSaved() });
         return;
       }
-      const model = buildModel(result);
-      const name = get().savedItems.find((i) => i.id === id)?.name ?? null;
+      const meta = get().savedItems.find((i) => i.id === id);
+      const projects = await listProjects();
+      const projectName = meta?.projectName ?? null;
+      const model = buildModel(result, projectName != null ? marksOf(projects, projectName) : []);
       set({
-        status: "ready", model, analysisName: name, lastResult: result,
+        status: "ready", model, analysisName: meta?.name ?? null, projectName, projects, lastResult: result,
         showDashboard: false, recentlyAddedId: null,
         comparison: null,
         previousComparison: comparison ?? previousComparison,
@@ -551,7 +601,7 @@ export const useStore = create<AppState>((set, get) => ({
         set({ error: "That saved analysis could not be found.", savedItems: await listSaved() });
         return;
       }
-      const files = buildAiExport(buildModel(result), {
+      const files = buildAiExport(buildModel(result, marksOf(await listProjects(), meta.projectName)), {
         analysisName: meta.name,
         projectName: meta.projectName,
         savedAt: meta.savedAt,
@@ -572,6 +622,19 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   dismissNotice: () => set({ notice: null }),
+
+  openMarkDialog: (uid) => set({ markDialog: uid }),
+  cancelMarkDialog: () => set({ markDialog: null }),
+  markUsed: async (uid, reason, note) => {
+    const obj = get().model?.byUid.get(uid);
+    if (!obj) return;
+    await saveMarks(set, get, (marks) => withMark(marks, obj, createMark(obj, reason, note?.trim() || undefined, Date.now())));
+  },
+  unmarkUsed: async (uid) => {
+    const obj = get().model?.byUid.get(uid);
+    if (!obj) return;
+    await saveMarks(set, get, (marks) => withMark(marks, obj, null));
+  },
 
   compareAnalyses: async (idA, idB) => {
     const { savedItems } = get();

@@ -3,6 +3,7 @@ import { useStore } from "@/state/store";
 import { OBJECT_TYPE_META, objectLabel, type FmFile, type FmObject, type ObjectType } from "@/types/ddr";
 import { TypePill } from "./TypePill";
 import { applyNavFilters, effectiveRefFilter, isInUnusedChain, isUnreferenced, type NavFilters } from "./browseA/filters";
+import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import { brokenSourcesFor, refStatsFor } from "./browseA/refStats";
 import { FilterMenu } from "./browseA/FilterChips";
 import { pressable } from "./a11y";
@@ -334,7 +335,8 @@ export function Navigator() {
     const broken = brokenSources.has(obj.uid);
     const unref = isUnreferenced(model, obj);
     const chain = !unref && isInUnusedChain(model, obj);
-    const hint = `${objectLabel(obj)}\n← referenced by ${stats.inbound} · references ${stats.outbound} →${broken ? `\n${stats.broken} broken reference${stats.broken === 1 ? "" : "s"}` : ""}${unref ? "\nUnreferenced" : ""}${chain ? "\nUsed only by unreferenced objects" : ""}`;
+    const mark = model.usageMarks.get(obj.uid);
+    const hint = `${objectLabel(obj)}\n← referenced by ${stats.inbound} · references ${stats.outbound} →${broken ? `\n${stats.broken} broken reference${stats.broken === 1 ? "" : "s"}` : ""}${unref ? "\nUnreferenced" : ""}${chain ? "\nUsed only by unreferenced objects" : ""}${mark ? `\nMarked as used: ${USAGE_REASON_LABELS[mark.reason]}` : ""}`;
     return (
       <div
         key={obj.uid}

@@ -10,6 +10,7 @@ import { SavedAnalysesDashboard } from "@/components/SavedAnalysesDashboard";
 import { SaveAnalysisDialog } from "@/components/SaveAnalysisDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { EditDialog } from "@/components/EditDialog";
+import { MarkUsedDialog } from "@/components/MarkUsedDialog";
 import { ComparisonView } from "@/components/ComparisonView";
 import { SidebarResizer, useSidebarWidth } from "@/components/SidebarResizer";
 import { onTabListKeyDown } from "./components/a11y";
@@ -64,6 +65,7 @@ export function App() {
       <SaveAnalysisDialog />
       <NewProjectDialog />
       <EditDialog />
+      <MarkUsedDialog />
     </div>
   );
 }

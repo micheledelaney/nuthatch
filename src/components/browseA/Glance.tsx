@@ -1,6 +1,7 @@
 import type React from "react";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
+import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders, Section } from "../ObjectColumn";
@@ -340,7 +341,19 @@ function glanceRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     ),
   };
   const chainRow = isInUnusedChain(model, obj) ? usedOnlyByRow(obj, model, onGo) : null;
-  return [typeRow, ...detailRows(obj, model, onGo), ...(chainRow ? [chainRow] : [])];
+  const mark = model.usageMarks.get(obj.uid);
+  const markRow: GlanceRow | null = mark
+    ? {
+        label: "Marked as used",
+        value: (
+          <span className="op-glance-list">
+            <span>{USAGE_REASON_LABELS[mark.reason]}</span>
+            {mark.note && <span className="op-glance-note">{mark.note}</span>}
+          </span>
+        ),
+      }
+    : null;
+  return [typeRow, ...detailRows(obj, model, onGo), ...(chainRow ? [chainRow] : []), ...(markRow ? [markRow] : [])];
 }
 
 /** For an object in an unused chain: the unreferenced objects it hangs from —

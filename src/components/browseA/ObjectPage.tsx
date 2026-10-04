@@ -37,6 +37,9 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   const highlight = useStore((s) => s.highlight);
   const navigateFrom = useStore((s) => s.navigateFrom);
   const showGraphFor = useStore((s) => s.showGraphFor);
+  const projectName = useStore((s) => s.projectName);
+  const openMarkDialog = useStore((s) => s.openMarkDialog);
+  const unmarkUsed = useStore((s) => s.unmarkUsed);
   // A workbench pane may take over navigation (e.g. ⇧-click → other pane).
   const paneGo = useContext(PaneNavContext);
   const panelId = useId();
@@ -60,11 +63,15 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   const callCount = chain?.children.length ?? 0;
   const isUnused = (u: string) => isUnusedSource(model, u);
 
+  const unreferenced = isUnreferenced(model, obj);
+  const unusedChain = isInUnusedChain(model, obj);
+  const mark = model.usageMarks.get(uid);
   const facts = factsFor({
     brokenCount,
-    unreferenced: isUnreferenced(model, obj),
-    unusedChain: isInUnusedChain(model, obj),
+    unreferenced,
+    unusedChain,
     selfBroken: isBrokenTableOccurrence(obj),
+    mark,
   });
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -82,16 +89,32 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
           model={model}
           facts={facts}
           actions={
-            obj.type === "tableOccurrence" && (
-              <button
-                className="icon-btn graph-jump-btn"
-                title="Show in relationship graph"
-                aria-label="Show in relationship graph"
-                onClick={() => showGraphFor(uid)}
-              >
-                <GraphIcon />
-              </button>
-            )
+            <div className="op-glance-actions">
+              {obj.type === "tableOccurrence" && (
+                <button
+                  className="icon-btn"
+                  title="Show in relationship graph"
+                  aria-label="Show in relationship graph"
+                  onClick={() => showGraphFor(uid)}
+                >
+                  <GraphIcon />
+                </button>
+              )}
+              {mark ? (
+                <button className="btn" title="Show it as unused again if nothing references it" onClick={() => void unmarkUsed(uid)}>
+                  Remove mark
+                </button>
+              ) : (
+                (unreferenced || unusedChain) && (
+                  // A disabled button shows no tooltip in some webviews, so the wrapper carries it.
+                  <span title={projectName != null ? "Used by something the export can't see: a server schedule, the Data API, another file, …" : "Save this analysis to a project to mark objects as used"}>
+                    <button className="btn" disabled={projectName == null} onClick={() => openMarkDialog(uid)}>
+                      Mark as used
+                    </button>
+                  </span>
+                )
+              )}
+            </div>
           }
         />
         <div className="tabs op-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabListKeyDown}>

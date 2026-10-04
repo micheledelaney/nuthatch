@@ -170,6 +170,11 @@ export function isInUnusedChain(model: SolutionModel, o: FmObject): boolean {
   return set.has(o.uid);
 }
 
+/** Whether someone marked the object as used (matched by the Marked used chip). */
+export function isMarkedUsed(model: SolutionModel, o: FmObject): boolean {
+  return model.usageMarks.has(o.uid);
+}
+
 /** Every navigator sub-filter, mirroring the `nav*` fields in the store. */
 export interface NavFilters {
   field: FieldFilter;
@@ -207,7 +212,7 @@ export const NO_FILTERS: NavFilters = {
 export function effectiveRefFilter(type: ObjectType | "all", ref: RefFilter): RefFilter {
   const canUnref = type === "all" || UNREF_ELIGIBLE.has(type);
   const canBroken = type === "all" || BROKEN_ELIGIBLE.has(type);
-  if ((ref === "unreferenced" || ref === "unusedChain") && !canUnref) return "all";
+  if ((ref === "unreferenced" || ref === "unusedChain" || ref === "markedUsed") && !canUnref) return "all";
   if (ref === "broken" && !canBroken) return "all";
   return ref;
 }
@@ -244,6 +249,8 @@ export function applyNavFilters(
     tests.push((o) => isUnreferenced(model, o));
   } else if (ref === "unusedChain") {
     tests.push((o) => isInUnusedChain(model, o));
+  } else if (ref === "markedUsed") {
+    tests.push((o) => isMarkedUsed(model, o));
   }
   if (tests.length === 0) return objects;
   return objects.filter((o) => tests.every((t) => t(o)));
@@ -281,6 +288,8 @@ export function chipGroupsFor(model: SolutionModel, type: ObjectType | "all"): C
   const health: ChipOption[] = [];
   if (canUnref) health.push({ value: "unreferenced", label: "Unreferenced", tone: "warn" });
   if (canUnref) health.push({ value: "unusedChain", label: "Unused chain", tone: "warn" });
+  // Only once something is marked, so the chip doesn't sit there empty.
+  if (canUnref && model.usageMarks.size > 0) health.push({ value: "markedUsed", label: "Marked used" });
   if (canBroken) health.push({ value: "broken", label: "Broken", tone: "high" });
   if (health.length) groups.push({ key: "ref", label: "Health", options: health });
 

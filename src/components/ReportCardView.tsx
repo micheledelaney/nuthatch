@@ -55,6 +55,11 @@ export function ReportCardView() {
     setNavType(type);
     setNavRefFilter("broken");
   };
+  const showMarkedUsed = () => {
+    showBrowse();
+    setNavType("all");
+    setNavRefFilter("markedUsed");
+  };
 
   // The main issue above already shows (and links) its own figure, so its tile
   // is left out rather than repeating the number.
@@ -106,6 +111,8 @@ export function ReportCardView() {
         <div className="nh-tiles nh-card report-tiles">
           {hero !== "unreferenced" && <Metric label="Unreferenced objects" hint="Scripts, fields, layouts, custom functions and other objects that no calculation, script, layout, button or relationship refers to." value={card.unreferencedCount} onClick={goTo.unreferenced} tone={card.unreferencedCount > 0 ? "warning" : undefined} />}
           {hero !== "unusedChain" && <Metric label="Used only by unreferenced objects" hint="Their only users are unreferenced themselves, so they are dead too. Deleting the unreferenced ones leaves them without a caller." value={card.unusedChainCount} onClick={goTo.unusedChain} tone={card.unusedChainCount > 0 ? "warning" : undefined} />}
+          {/* Only once something is marked: it explains why the two numbers beside it dropped. */}
+          {card.markedUsedCount > 0 && <Metric label="Marked as used" hint="Used by something the export can't see (a server schedule, the Data API, another file), so they and what they use don't count as unused." value={card.markedUsedCount} onClick={showMarkedUsed} />}
         </div>
       </section>
     </div>
