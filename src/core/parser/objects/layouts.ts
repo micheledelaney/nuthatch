@@ -44,6 +44,7 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   // only be replaced by its compact text.
   const base = makeObject(fp, layout, "layout", undefined, undefined, "");
   if (!base) return false;
+  recordThemeBase(fp, layout);
   // The layout's own objects and references, added to the file's at the end.
   const lp: FileParse = { ...fp, objects: [], references: [] };
   const uidCounts = new Map<string, number>();
@@ -58,6 +59,15 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   return true;
 }
 
+/** The base theme the layout's theme reference names, for its theme (see
+ * FileParse.themeBases). */
+function recordThemeBase(fp: FileParse, layout: unknown): void {
+  const ref = child(layout, "LayoutThemeReference");
+  const id = attr(ref, "id");
+  const base = textAttr(ref, "Base");
+  if (id != null && base && !fp.themeBases.has(id)) fp.themeBases.set(id, base);
+}
+
 /** The layout object, after its layout objects and its own references, with
  * the batch the text-based passes read: its objects, then itself. */
 function buildLayout(
@@ -66,14 +76,15 @@ function buildLayout(
   placed: FmObject,
   uidCounts: Map<string, number>,
 ): { layout: FmObject; scans: TextScan[] } {
-  if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout) }] };
+  if (placed.isSeparator) return { layout: placed, scans: [{ obj: placed, text: cdataText(layout), source: layout }] };
   const annotated = annotateLayout(layout, placed);
   const extracted = layoutDetail(layout, fp.index);
   const listedElements = extracted ? listedElementsOf(extracted) : new Set<unknown>();
   const cx: LayoutObjectsContext = { fp, listedElements, uidOfElement: new Map(), uidCounts, scans: [] };
   const obj = extracted ? { ...annotated, detail: addLayoutObjects(cx, extracted, annotated) } : annotated;
   // Its own settings, triggers and parts, and any object not listed on its own.
-  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(layout, listedElements), obj) });
+  const own = ownElement(layout, listedElements);
+  cx.scans.push({ obj, text: scanOwnElement(fp, own, obj), source: own });
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return { layout: obj, scans: cx.scans };
 }
@@ -95,13 +106,14 @@ function addObjectRefsToLayout(lp: FileParse, layoutUid: string): void {
 
 /** Record what an element holds for `owner` — its references and the globals
  * merged into its text — and return the text the placeholder pass reads for
- * it: after `listedText`, the terms a layout object lists (a field binding
- * whose <FieldReference> is gone shows only there). */
-function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): string {
+ * it: after `missingBinding`, the placeholder of a layout object's field
+ * binding whose field is gone, which shows nowhere in its element (see
+ * layoutDetail's missingBinding). */
+function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, missingBinding?: string): string {
   scanRefs(fp, own, owner);
   const literal = cdataText(own);
   addMergeVariableRefs(fp, owner.uid, literal);
-  return listedText ? `${listedText}\n${literal}` : literal;
+  return missingBinding ? `${missingBinding}\n${literal}` : literal;
 }
 
 /** Surface the table occurrence a layout shows records from (a nested
@@ -180,10 +192,15 @@ function addLayoutObject(cx: LayoutObjectsContext, node: LayoutObjectNode, paren
   // triggers, and the calcs behind its label, tooltip, hide condition,
   // conditional formatting, web viewer, and button action — but not what
   // the listed objects inside it use: each of those reports its own. The
-  // placeholder pass reads the same element, after the listed terms (which
-  // miss the calcs only the element holds: a portal filter, a button step,
-  // a trigger parameter).
-  cx.scans.push({ obj, text: scanOwnElement(fp, ownElement(element, cx.listedElements), obj, obj.text) });
+  // placeholder pass reads the same element, after the placeholder of a field
+  // binding whose field is gone, which the element doesn't show — then its
+  // button step's rendered text, where, as in a script's step, a target
+  // FileMaker blanked to `<FieldReference id="0">` still shows as a
+  // placeholder. Not its search text or labels: what it's found by or shown
+  // as isn't what it uses.
+  const own = ownElement(element, cx.listedElements);
+  const text = scanOwnElement(fp, own, obj, node.missingBinding);
+  cx.scans.push({ obj, text: node.actionText ? `${text}\n${node.actionText}` : text, source: own });
   return children.length ? { ...withUid, children: addLayoutObjectTree(cx, children, uid, chain ?? idChain) } : withUid;
 }
 
@@ -236,11 +253,17 @@ function layoutObjectAttributes(lo: LayoutObjectInfo): Record<string, string> {
     const bare = stripOuterQuotes(lo.info);
     if (bare) a.label = bare;
   }
+  if (lo.scriptParameter) a.scriptParameter = lo.scriptParameter;
   if (lo.tooltip) a.tooltip = lo.tooltip;
+  if (lo.placeholder) a.placeholder = lo.placeholderInFind ? `${lo.placeholder} (also in Find mode)` : lo.placeholder;
   if (lo.hideWhen) a.hideWhen = lo.hideInFind ? `${lo.hideWhen} (also in Find mode)` : lo.hideWhen;
   if (lo.conditionalFormats) a.conditionalFormats = lo.conditionalFormats.join("\n");
+  if (lo.popoverTitle) a.popoverTitle = lo.popoverTitle;
+  if (lo.chart?.type) a.chartType = lo.chart.type;
   if (lo.portalTable) a.portalOccurrence = lo.portalTable;
   if (lo.portalRows != null) a.portalRows = String(lo.portalRows);
+  if (lo.portalInitialRow != null) a.portalInitialRow = String(lo.portalInitialRow);
+  if (lo.portalFilter) a.portalFilter = lo.portalFilter;
   return a;
 }
 
@@ -284,22 +307,34 @@ function nameForLayoutObj(lo: LayoutObjectInfo): string {
 }
 
 /** The searchable text fragments of a single layout object — its name, field
- * binding, portal/script references, label/url info, tooltip, and trigger
- * scripts. Shared by the per-object search index and the layout's own compacted
- * text (compactLayoutText). */
+ * binding, portal/script references, script parameter, label/url info,
+ * tooltip, placeholder, conditions, portal filter, popover and chart titles,
+ * and trigger scripts. Shared by the per-object search index and the
+ * layout's own compacted text (compactLayoutText). */
 function layoutObjectTerms(lo: LayoutObjectInfo): string[] {
   return [
     lo.name,
     lo.fieldRef,
     lo.portalTable,
     lo.scriptRef?.name,
+    lo.scriptParameter,
     lo.valueListRef?.name,
     lo.info,
     lo.tooltip,
+    lo.placeholder,
     lo.hideWhen,
     ...(lo.conditionalFormats ?? []),
+    lo.portalFilter,
+    lo.popoverTitle,
+    ...chartTerms(lo.chart),
     ...(lo.triggers ?? []).map((t) => t.scriptName),
   ].filter((s): s is string => !!s);
+}
+
+/** A chart's titles and series formulas, for search. */
+function chartTerms(chart: LayoutObjectInfo["chart"]): (string | undefined)[] {
+  if (!chart) return [];
+  return [chart.title, chart.xAxisTitle, chart.yAxisTitle, ...chart.series.flatMap((s) => [s.title, s.value])];
 }
 
 /**

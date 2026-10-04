@@ -5,8 +5,10 @@ import { objectUid } from "../uid";
 import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { newObject } from "./catalogItems";
-import { isPerformScriptStep } from "../steps";
-import { calcOf, stripOuterQuotes } from "./common";
+import { isPerformScriptStep, stepNodes } from "../steps";
+import { calcOf } from "./common";
+import { literalText } from "../calcText";
+import { actionScanTexts } from "./stepText";
 
 const MENU_MODES: ReadonlyArray<readonly [string, string]> = [
   ["browseMode", "browse"],
@@ -34,6 +36,11 @@ export function annotateCustomMenu(node: Record<string, unknown>, obj: FmObject)
   if (modes.length) a.installsIn = modes.join(", ");
   const install = installCondition(node);
   if (install) a.installCondition = install;
+  // An overridden menu title is a calculation — <Options><Override><Title> (FM 22
+  // and later) or <Override><name> (FM 21) — shown like an item's title.
+  const override = child(options, "Override");
+  const title = calcOf(child(override, "Title")) || calcOf(child(override, "name"));
+  if (title) a.menuTitle = literalText(title) ?? title;
   return { ...obj, attributes: { ...obj.attributes, ...a } };
 }
 
@@ -75,17 +82,23 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
     const menuUid = objectUid(fp.file.uid, "customMenu", menuId);
     const menuName = textAttr(menu, "name") ?? "";
     let order = 0;
+    const indexCounts = new Map<string, number>();
     for (const item of children(list, "CustomMenuItem")) {
       if (!isRecord(item)) continue;
       // FileMaker writes an `index` on every item. One without goes by its
-      // position, kept apart from the indexes so it can't take another item's.
+      // position, kept apart from the indexes so it can't take another item's;
+      // one whose index another item already has gets a `#N` suffix, as a
+      // repeated layout-object uid does, so neither collapses onto the other.
       const index = attr(item, "index") ?? `pos${order}`;
+      const repeats = indexCounts.get(index) ?? 0;
+      indexCounts.set(index, repeats + 1);
+      const id = repeats > 0 ? `${index}#${repeats}` : index;
       const isSeparator = attr(item, "isSeparatorItem") === "True";
-      const uid = objectUid(fp.file.uid, "customMenuItem", `${menuId}.${index}`);
+      const uid = objectUid(fp.file.uid, "customMenuItem", `${menuId}.${id}`);
       const obj = newObject(fp.file, {
         uid,
         type: "customMenuItem",
-        id: index,
+        id,
         name: menuItemName(item),
         parentUid: menuUid,
         attributes: menuItemAttributes(item, menuName),
@@ -94,14 +107,17 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
         ...(isSeparator ? { isSeparator: true } : {}),
       });
       fp.objects.push(obj);
-      scans.push({ obj, text: cdataText(item) });
+      // Its action step's rendered text too: as in a script's step, a target
+      // FileMaker blanked to `<FieldReference id="0">` shows only there.
+      const stepText = actionScanTexts(menuItemSteps(item), fp.index.stepTexts);
+      scans.push({ obj, text: [cdataText(item), ...stepText].join("\n"), source: item });
       if (isSeparator) continue;
       // A menu item exists only as part of its menu, so the menu is what
       // "references" it — a containment edge (menu -> item) so the item lists
       // its menu under "Referenced by". toId mirrors the item's uid id part so
       // buildModel resolves it. The menu's view shows these in its dedicated
       // "Menu items" section, not its outbound list.
-      fp.references.push({ fromUid: menuUid, toType: "customMenuItem", toId: `${menuId}.${index}`, toName: obj.name, kind: "menuItem" });
+      fp.references.push({ fromUid: menuUid, toType: "customMenuItem", toId: `${menuId}.${id}`, toName: obj.name, kind: "menuItem" });
       // The script a menu item performs and the submenu it opens.
       scanRefs(fp, item, obj);
     }
@@ -130,8 +146,10 @@ function menuItemAttributes(item: Record<string, unknown>, menuName: string): Re
  * separator/item label. */
 function menuItemName(item: Record<string, unknown>): string {
   if (attr(item, "isSeparatorItem") === "True") return "—";
-  // A custom title (Override name) is a calculation, usually a quoted literal.
-  const title = stripOuterQuotes(calcOf(child(item, "Name")));
+  // A custom title (Override name) is a calculation, usually a quoted literal;
+  // a computed one shows as its formula.
+  const formula = calcOf(child(item, "Name"));
+  const title = literalText(formula) ?? formula;
   if (title) return title;
   const command = textAttr(child(item, "Command"), "name");
   if (command) return command;
@@ -147,14 +165,18 @@ function menuItemName(item: Record<string, unknown>): string {
 function menuItemKind(item: Record<string, unknown>): string {
   if (attr(item, "isSeparatorItem") === "True") return "Separator";
   if (attr(item, "isSubMenuItem") === "True" || item["CustomMenuReference"]) return "Submenu";
-  // By its action's step, so an item whose script was deleted still counts. FM
-  // 22 / 26 wrap the step in <action>; FM 21 puts it on the item itself.
-  const steps = [...children(child(item, "action"), "Step"), ...children(item, "Step")];
-  if (steps.some((step) => isPerformScriptStep(attr(step, "name") ?? ""))) return "Performs script";
+  // By its action's step, so an item whose script was deleted still counts.
+  if (menuItemSteps(item).some((step) => isPerformScriptStep(attr(step, "name") ?? ""))) return "Performs script";
   // A Perform Script or untitled custom item carries an empty <Command id="0">.
   const command = child(item, "Command");
   if (textAttr(command, "name") || (attr(command, "id") ?? "0") !== "0") return "Command";
   return "Custom";
+}
+
+/** A menu item's action steps: FM 22 / 26 wrap them in <action>, FM 21 puts
+ * them on the item itself. */
+function menuItemSteps(item: Record<string, unknown>): Record<string, unknown>[] {
+  return [...stepNodes(child(item, "action")), ...stepNodes(item)];
 }
 
 /** A menu item's keyboard shortcut, as the raw key/modifier codes FileMaker

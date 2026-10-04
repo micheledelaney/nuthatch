@@ -13,6 +13,7 @@ import { addFileRefs, makeFileObject } from "./objects/fileObject";
 import { parseLayoutsInTree, parseLayoutsStreaming, splitLayoutCatalog } from "./objects/layoutStream";
 import { parseCustomMenuItems } from "./objects/menus";
 import { parseScripts } from "./objects/scripts";
+import { addThemeBases } from "./objects/themes";
 
 interface SourceDoc {
   name: string;
@@ -168,13 +169,14 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     deferredLayoutTargets: deferredLayoutTargets(container.modifyAction),
     layoutObjectUidCounts: new Map(),
     withoutId: new Map(),
+    themeBases: new Map(),
     objects: [fileObject],
     references: [],
     errors,
   };
   // The catalog objects, each with the text the text-based passes read for it
   // — the file's own first: its triggers' parameters are calcs too.
-  const scans: TextScan[] = [{ obj: fileObject, text: cdataText(container.metadata) }];
+  const scans: TextScan[] = [{ obj: fileObject, text: cdataText(container.metadata), source: container.metadata }];
   addFileRefs(fp, node, container.metadata);
   parseTablesAndFields(fp, node, scans);
   parseScripts(fp, node, scans);
@@ -185,6 +187,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   addTextDerivedRefs(fp, scans);
   const nextOrder = layoutCatalog ? parseLayoutsStreaming(fp, layoutCatalog) : 0;
   parseLayoutsInTree(fp, node["LayoutCatalog"], nextOrder);
+  addThemeBases(fp);
   for (const [type, count] of fp.withoutId) {
     const { label, plural } = OBJECT_TYPE_META[type];
     const what = count === 1 ? `1 ${label.toLowerCase()} without an id was` : `${count} ${plural.toLowerCase()} without an id were`;
@@ -232,7 +235,9 @@ const IS_IDENTITY_FIELD: Readonly<Record<keyof RawReference, boolean>> = {
   byName: false,
   // Of a disabled and an enabled duplicate, the enabled one is kept.
   disabled: false,
-  // A forced-broken reference has a toId of its own (MISSING_REF_ID).
+  // A forced-broken reference never shares the identity fields with one that
+  // isn't: a placeholder's toId is MISSING_REF_ID, and an external value list
+  // (or its data source) whose data source is gone is only recorded broken.
   forceBroken: false,
 };
 

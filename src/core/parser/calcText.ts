@@ -1,4 +1,4 @@
-import { child, children, displayText, isRecord, ownText, textAttr } from "./xmlUtils";
+import { asArray, child, children, displayText, isElementKey, isRecord, ownText, textAttr } from "./xmlUtils";
 import { decodeEntities } from "./entities";
 import { isNameChar } from "@/core/identifiers";
 
@@ -11,6 +11,17 @@ export function calculationText(calc: unknown): string {
   if (calc["Text"] != null) return displayText(calc["Text"]);
   if (calc["Calculation"] != null) return calculationText(child(calc, "Calculation"));
   return ownText(calc).trim();
+}
+
+/** A formula that is nothing but one string literal (`"Save"`, with `\"` escapes). */
+const STRING_LITERAL_RE = /^"(?:[^"\\]|\\[\s\S])*"$/;
+
+/** The text of a formula that is one string literal — a static label, tooltip
+ * or title — with FileMaker's `\"`, `\\` and `\¶` escapes undone; undefined for
+ * a formula that computes its text (`"Total: " & $n` isn't `Total: " & $n`). */
+export function literalText(formula: string): string | undefined {
+  const f = formula.trim();
+  return STRING_LITERAL_RE.test(f) ? f.slice(1, -1).replace(/\\(["\\¶])/g, "$1") : undefined;
 }
 
 /**
@@ -103,31 +114,103 @@ function blankOut(text: string, literals: boolean): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
-    const c = text[i]!;
-    if (c === '"') {
-      let j = i + 1;
-      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
-      const end = Math.min(j + 1, text.length);
-      out += literals ? " ".repeat(end - i) : text.slice(i, end);
-      i = j + 1;
+    const end = inertEnd(text, i);
+    if (end === i) {
+      out += text[i];
+      i++;
       continue;
     }
-    if (c === "/" && text[i + 1] === "*") {
-      const end = text.indexOf("*/", i + 2);
-      const j = end === -1 ? text.length : end + 2;
-      out += " ".repeat(j - i);
-      i = j;
+    out += literals || text[i] !== '"' ? " ".repeat(end - i) : text.slice(i, end);
+    i = end;
+  }
+  return out;
+}
+
+/** Where the string literal ("…", with \" escapes) or comment (/* … *\/, or //
+ * to the end of the line) that starts at `i` ends — the end of the text when
+ * it isn't closed; `i` when none starts there. */
+function inertEnd(text: string, i: number): number {
+  if (text[i] === '"') {
+    let j = i + 1;
+    while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+    return Math.min(j + 1, text.length);
+  }
+  if (text[i] === "/" && text[i + 1] === "*") {
+    const end = text.indexOf("*/", i + 2);
+    return end === -1 ? text.length : end + 2;
+  }
+  if (text[i] === "/" && text[i + 1] === "/") {
+    let j = i;
+    while (j < text.length && text[j] !== "\r" && text[j] !== "\n") j++;
+    return j;
+  }
+  return i;
+}
+
+/** The string literals and comments of a formula that hold one of `tokens`, as
+ * written. They're text the developer typed, which FileMaker never rewrites:
+ * a placeholder in one (`"<Field Missing>"`) is no reference. */
+export function inertSpansWith(formula: string, tokens: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < formula.length; ) {
+    const end = inertEnd(formula, i);
+    if (end === i) {
+      i++;
       continue;
     }
-    if (c === "/" && text[i + 1] === "/") {
-      let j = i;
-      while (j < text.length && text[j] !== "\r" && text[j] !== "\n") j++;
-      out += " ".repeat(j - i);
-      i = j;
-      continue;
+    const span = formula.slice(i, end);
+    if (tokens.some((token) => span.includes(token))) out.push(span);
+    i = end;
+  }
+  return out;
+}
+
+/** The formula of every <Calculation> under `node` (a nested one's twice). */
+export function formulasUnder(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) formulasUnder(item, out);
+    return out;
+  }
+  if (!isRecord(node)) return out;
+  for (const [key, value] of Object.entries(node)) {
+    if (!isElementKey(key)) continue;
+    if (key === "Calculation") {
+      for (const calc of asArray(value)) {
+        const formula = calculationText(calc);
+        if (formula) out.push(formula);
+      }
     }
-    out += c;
-    i++;
+    formulasUnder(value, out);
+  }
+  return out;
+}
+
+const MERGE_CALC_OPEN = "<<ƒ:";
+
+/** The formulas of the merge calcs (`<<ƒ:…>>`) in a layout object's text. One
+ * ends at the first `>>` outside its string literals and block comments — the
+ * last two of a run (`<<ƒ:T::<Field Missing>>>` is `T::<Field Missing>`). */
+export function mergeFormulas(text: string): string[] {
+  const out: string[] = [];
+  let start = text.indexOf(MERGE_CALC_OPEN);
+  while (start !== -1) {
+    const from = start + MERGE_CALC_OPEN.length;
+    let i = from;
+    let end = -1;
+    while (i < text.length && end === -1) {
+      const skipTo = text[i] === '"' || text.startsWith("/*", i) ? inertEnd(text, i) : i;
+      if (skipTo > i) {
+        i = skipTo;
+      } else if (text.startsWith(">>", i)) {
+        while (text[i + 2] === ">") i++;
+        end = i;
+      } else {
+        i++;
+      }
+    }
+    if (end === -1) break;
+    out.push(text.slice(from, end));
+    start = text.indexOf(MERGE_CALC_OPEN, end + 2);
   }
   return out;
 }

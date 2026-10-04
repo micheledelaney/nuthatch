@@ -25,6 +25,9 @@ export interface FileParse {
   /** How many catalog items of each type had no `id`, so became no object
    * (see makeObject); reported once the file is read. */
   readonly withoutId: Map<ObjectType, number>;
+  /** Theme id → the base theme its layouts' <LayoutThemeReference Base> names,
+   * for a theme that doesn't name its own (see addThemeBases). */
+  readonly themeBases: Map<string, string>;
   readonly objects: FmObject[];
   readonly references: RawReference[];
   /** Shared with the whole parse: problems worth telling the user about. */
@@ -35,12 +38,22 @@ export interface FileParse {
  * with the text they read for it: the CDATA of what its element scan read — a
  * field without its switched-off auto-enter / validation calcs, a catalog
  * item's scanned part, a layout's or layout object's own element (what each
- * shows and uses itself) after a layout object's listed terms. Not its search
- * `text`, which can be empty (an unlabeled button) or hold decoded attribute
- * values. */
+ * shows and uses itself) after the placeholder of a layout object's field
+ * binding whose field is gone (read from the XML, see missingBinding) — plus,
+ * for a button or a custom menu item, its step's rendered text, as a script's
+ * steps are read. Not its search `text`, which can be empty (an unlabeled
+ * button) or hold decoded attribute values, nor any other text built for
+ * display. */
 export interface TextScan {
   obj: FmObject;
   text: string;
+  /** The XML the text was read from (a script's: its steps), whose formulas'
+   * string literals and comments the placeholder passes leave out. */
+  source?: unknown;
+  /** A script's steps as FileMaker rendered them, by position: what the
+   * placeholder passes read of each step — not the step list's display
+   * parameters, which add typed text (Insert Text's). */
+  renderedSteps?: readonly string[];
 }
 
 /** The lookups a file's reference scan resolves against. The name indexes come

@@ -2,6 +2,7 @@ import type { FmFile, FmObject, LayoutTriggerInfo } from "@/types/ddr";
 import type { FileParse } from "../context";
 import { attr, child, displayText, isRecord, textAttr } from "../xmlUtils";
 import { objectUid } from "../uid";
+import { catalogOrdering, collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { newObject } from "./catalogItems";
 import { scriptTriggers } from "./common";
@@ -15,6 +16,8 @@ const FILE_OPTION_FLAGS: ReadonlyArray<readonly [string, string, string]> = [
   // Sharing settings: the file is left out of these file lists.
   ["HideClientSharing", "enable", "hiddenInLaunchCenter"],
   ["HideWebDirectSharing", "enable", "hiddenOnWebDirectHomepage"],
+  // FM 26: new tables get FileMaker's default fields.
+  ["UseDefaultFields", "enable", "useDefaultFields"],
 ];
 
 /** The object standing for the file itself: its File Options, file-access
@@ -26,7 +29,13 @@ export function makeFileObject(file: FmFile, containerNode: unknown, metadata: u
     type: "file",
     id: file.uid,
     name: file.name,
-    attributes: { ...attributes, ...fileAccessOptions(containerNode), ...defaultMenuSet(containerNode) },
+    attributes: {
+      ...attributes,
+      ...fileAccessOptions(containerNode),
+      ...defaultMenuSet(containerNode),
+      ...containerSettings(containerNode),
+      ...catalogViewBy(containerNode),
+    },
     text: file.name,
     ...(triggers.length ? { detail: { kind: "file", triggers } } : {}),
   });
@@ -81,8 +90,76 @@ function fileMetadata(metadata: unknown): { attributes: Record<string, string>; 
       const value = attr(child(add, element), flag);
       if (value != null) attributes[key] = yesNo(value);
     }
+    const pageSetup = pageSetupText(child(add, "PageSetup"));
+    if (pageSetup) attributes.pageSetup = pageSetup;
   }
   return { attributes, triggers: scriptTriggers(isRecord(add) ? add["ScriptTriggers"] : undefined) };
+}
+
+/** The catalogs whose Manage dialog "View by" FM 26 records (<SortOrder>), with
+ * the file attribute each is shown as. A table's own field list is the table's
+ * (fieldsListedBy, see parseTablesAndFields). */
+const VIEW_BY_CATALOGS: ReadonlyArray<readonly [string, string]> = [
+  ["BaseTableCatalog", "tablesListedBy"],
+  ["TableOccurrenceCatalog", "tableOccurrencesListedBy"],
+  ["ValueListCatalog", "valueListsListedBy"],
+  ["CustomFunctionsCatalog", "customFunctionsListedBy"],
+  ["PrivilegeSetsCatalog", "privilegeSetsListedBy"],
+  ["ExternalDataSourceCatalog", "dataSourcesListedBy"],
+  ["CustomMenuCatalog", "customMenusListedBy"],
+  ["CustomMenuSetCatalog", "menuSetsListedBy"],
+];
+
+/** How each catalog is listed in its Manage dialog (see catalogOrdering). */
+function catalogViewBy(containerNode: unknown): Record<string, string> {
+  const a: Record<string, string> = {};
+  for (const [catalogKey, key] of VIEW_BY_CATALOGS) {
+    const viewBy = catalogOrdering(child(containerNode, catalogKey)).viewBy;
+    if (viewBy) a[key] = viewBy;
+  }
+  return a;
+}
+
+/** The file's page setup (<PageSetup>), e.g. "Portrait · 100% · 826.39 × 1169.44 pt";
+ * the size as FileMaker writes it (some exports use a decimal comma). */
+function pageSetupText(node: unknown): string {
+  if (!isRecord(node)) return "";
+  const orientation = textAttr(child(node, "Orientation"), "name");
+  const scale = attr(child(node, "scale"), "value");
+  const size = child(node, "size");
+  const width = attr(size, "width");
+  const height = attr(size, "height");
+  return [orientation, scale != null ? `${scale}%` : undefined, width != null && height != null ? `${width} × ${height} pt` : undefined]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Thumbnail settings of Manage ▸ Containers (<BaseDirectoryCatalog generate temporary>). */
+function thumbnails(catalog: unknown): string | undefined {
+  const generate = attr(catalog, "generate");
+  if (generate == null) return undefined;
+  if (generate !== "True") return "Off";
+  return attr(catalog, "temporary") === "True" ? "Temporary" : "Permanent";
+}
+
+/**
+ * Manage ▸ Containers: the base directories externally stored container fields
+ * use, and the thumbnail setting — the <BaseDirectoryCatalog> in <Structure>.
+ */
+function containerSettings(containerNode: unknown): Record<string, string> {
+  const catalog = child(containerNode, "BaseDirectoryCatalog");
+  if (!isRecord(catalog)) return {};
+  const directories = collectCatalogItems(catalog, "BaseDirectory")
+    .map((dir) => {
+      const name = textAttr(dir, "name") ?? "";
+      return name && attr(dir, "relativeTo") === "True" ? `${name} (relative to the file)` : name;
+    })
+    .filter(Boolean);
+  const thumbs = thumbnails(catalog);
+  return {
+    ...(directories.length ? { containerBaseDirectories: directories.join(", ") } : {}),
+    ...(thumbs ? { containerThumbnails: thumbs } : {}),
+  };
 }
 
 /**

@@ -4,16 +4,17 @@
  * Where it's used:
  *   - Value-list "Field" and "Also displays" rows
  *   - Layout-object "Field" row (the property panel)
+ *   - Lookups, sort orders, the At a glance rows
  *   - LinkedCode (when it spots a qualified ref inside calc / step text)
  *
- * Decision-making lives in `resolveQualifiedRef`; styling lives in
- * `RefStatusChip`; this component is just the glue that joins both halves
- * with `::` and lets each be independently linked.
+ * The decision — which field, and whether it's found, deleted, unverifiable or
+ * in another file — is the model's (core/model/refStatus); this component only
+ * shows it.
  */
 import type React from "react";
 import type { FmObject, SolutionModel } from "@/types/ddr";
 import { objectLabel } from "@/types/ddr";
-import { resolveQualifiedRef } from "@/core/model/refResolution";
+import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
 
 interface OnGoProps {
   onGo: (uid: string, rowKey: string) => void;
@@ -52,15 +53,14 @@ export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused"
 }
 
 /**
- * Render `TO::Field` as a single click target — clicking anywhere on the
- * qualified ref navigates to the field (or to the closest available target
- * when the field can't be reached):
- *   - resolved → one button wrapping the whole label, navigates to the field
- *   - external → one button wrapping the whole label, navigates to the TO
- *     (the field's file isn't loaded; the TO is the nearest navigable target)
- *   - field-missing → one button, navigates to the TO; the field half is
- *     rendered with `broken-value` so the missing field is still obvious
- *   - to-missing → plain text, both halves broken-styled, not clickable
+ * Render a `TO::Field` label from an object's detail as the field that object
+ * references (see ownFieldRef), in FileMaker's wording (refLabel) — one click
+ * target that goes to the field, or to its occurrence when the field itself
+ * can't be reached:
+ *   - found → links the field
+ *   - in another file / can't be verified → links the occurrence
+ *   - deleted → links the occurrence; the field half is `broken-value`
+ *   - the object has no such reference → the label as written, not linked
  *
  * `showChip` toggles the trailing EXTERNAL chip — useful in property-sheet
  * rows; inline (inside calc text) the chip just adds noise. The prop is named
@@ -69,46 +69,38 @@ export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused"
 export function FieldRefLink({
   qualified,
   model,
-  fileUid,
+  owner,
   onGo,
   showChip = false,
 }: {
   qualified: string;
   model: SolutionModel;
-  fileUid: string;
+  /** The object whose detail names the field: its own reference is shown. */
+  owner: string;
   showChip?: boolean;
 } & OnGoProps) {
-  const res = resolveQualifiedRef(qualified, model, fileUid);
-  if (!res) return <>{qualified}</>;
-  const sep = qualified.indexOf("::");
-  const toName = qualified.slice(0, sep);
-  const fieldName = qualified.slice(sep + 2);
-
-  // Inner content: a `field-missing` ref still flags the deleted field's name
-  // even though the click goes to the TO.
+  const ref = ownFieldRef(model, owner, qualified);
+  if (!ref) return <>{qualified}</>;
+  const status = refStatus(ref, model.byUid);
+  const label = refLabel(ref, model.byUid);
+  const sep = label.indexOf("::");
   const inner =
-    res.kind === "field-missing" ? (
+    status === "broken" ? (
       <>
-        {toName}
-        {"::"}
-        <span className="broken-value">{fieldName}</span>
+        {sep >= 0 && label.slice(0, sep + 2)}
+        <span className="broken-value">{label.slice(sep + 2)}</span>
       </>
     ) : (
-      `${toName}::${fieldName}`
+      label
     );
-
-  // Pick the navigation target. Field if we have one; otherwise the TO; if
-  // neither exists, render plain text (broken-styled).
-  if (res.kind === "to-missing") {
-    return <span className="broken-value">{qualified}</span>;
-  }
-  const target = res.kind === "resolved" ? res.field : res.to;
+  const target = (ref.toUid ? model.byUid.get(ref.toUid) : undefined) ?? (ref.viaUid ? model.byUid.get(ref.viaUid) : undefined);
+  if (!target) return <>{inner}</>;
   return (
     <>
       <ObjLink obj={target} onGo={onGo}>
         {inner}
       </ObjLink>
-      {showChip && res.kind === "external" && <RefStatusChip kind="external" />}
+      {showChip && (status === "external" || status === "unverifiable") && <RefStatusChip kind="external" />}
     </>
   );
 }

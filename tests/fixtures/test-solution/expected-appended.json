@@ -36,7 +36,11 @@
         "overrides": "Name, Shortcut",
         "shortcut": {"present": true}
       },
-      "MAIN:layoutObject:obj_PortalFilter": {"portalOccurrence": "TO_Child"},
+      "MAIN:layoutObject:obj_PortalFilter": {
+        "portalOccurrence": "TO_Child",
+        "portalInitialRow": "1",
+        "portalFilter": "TO_Child::c_Name = TO_Main::f_Text and TO_Child::<Field Missing> ≠ \"\""
+      },
       "MAIN:layoutObject:obj_Label": {"label": "Save"}
     },
     "folders": {"MAIN:layout:L_Calcs": "Layouts"},
@@ -47,7 +51,10 @@
       },
       "MAIN:valueList:VL_SecondOnly": {
         "kind": "valueList",
-        "field": {"primaryField": "TO_Child::c_Name", "secondaryField": "TO_Child::c_ID", "showOnlySecondary": true}
+        "field": {"primaryField": "TO_Child::c_Name", "secondaryField": "TO_Child::c_ID", "showOnlySecondary": true, "sort": false, "sortBySecondField": true}
+      },
+      "MAIN:layout:L_TableView": {
+        "tableView": [{"field": "TO_Main::f_Text", "width": 120, "hidden": false}, {"field": "TO_Main::f_TableViewOnly", "width": 120, "hidden": false}]
       },
       "MAIN:script:S_Main": {
         "steps": [
@@ -63,9 +70,11 @@
         "match": {"objectName": "obj_TriggerParam"},
         "expect": {"triggers": [{"action": "OnObjectEnter", "scriptName": "S_Trigger", "parameter": "TO_Main::f_Text & TO_Child::<Field Missing>"}]}
       },
-      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonStep"}, "expect": {"actionStep": "Set Field"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonParam"}, "expect": {"scriptRef": "S_Sub", "scriptParameter": "TO_Main::f_ID & TO_Child::<Field Missing>"}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_PortalFilter"}, "expect": {"portalFilter": "TO_Child::c_Name = TO_Main::f_Text and TO_Child::<Field Missing> ≠ \"\"", "portalInitialRow": 1}},
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ButtonStep"}, "expect": {"actionStep": "Set Field", "scriptParameter": {"absent": true}}},
       {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_ExtGTRR"}, "expect": {"actionStep": "Go to Related Record"}},
-      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_Label"}, "expect": {"info": "\"Save\"", "scriptRef": "S_Sub"}}
+      {"layout": "MAIN:layout:L_Calcs", "match": {"objectName": "obj_Label"}, "expect": {"info": "\"Save\"", "scriptRef": "S_Sub", "scriptParameter": {"absent": true}}}
     ]
   },
   "sources": {

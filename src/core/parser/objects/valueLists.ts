@@ -133,6 +133,8 @@ function fieldSource(node: unknown, index: FileIndex): ValueListFieldSource | un
   const secondaryWrap = child(node, "SecondaryField");
   const secondaryField = isRecord(secondaryWrap) ? qualifiedField(secondaryWrap["FieldReference"], index) : undefined;
   const showOnlySecondary = isRecord(secondaryWrap) && attr(secondaryWrap, "show") === "True";
+  // "Sort values using: Second field" moves the primary field's `sort` here.
+  const sortBySecondField = isRecord(secondaryWrap) && attr(secondaryWrap, "sort") === "True";
 
   const showRelated = child(node, "ShowRelated");
   const showRelatedFrom =
@@ -144,5 +146,6 @@ function fieldSource(node: unknown, index: FileIndex): ValueListFieldSource | un
     ...(secondaryField ? { secondaryField } : {}),
     ...(showOnlySecondary ? { showOnlySecondary } : {}),
     ...(showRelatedFrom ? { showRelatedFrom } : {}),
+    ...(sortBySecondField ? { sortBySecondField } : {}),
   };
 }

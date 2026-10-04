@@ -1,34 +1,63 @@
 import type { ScriptStep } from "@/types/ddr";
 import type { StepTexts } from "../context";
-import { INSERT_TEXT_STEP, renderedStepText, stepNodes } from "../steps";
+import { INSERT_TEXT_STEP, isCommentStep, renderedStepText, stepNodes } from "../steps";
 import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
 import { charForCode, decodeEntities } from "../entities";
 
-/** Build the ordered step list shown in a script's inspector. */
-export function scriptSteps(stepsContainer: unknown, stepTexts: StepTexts): ScriptStep[] {
-  return stepNodes(stepsContainer).map((step, i) => {
-    const name = textAttr(step, "name") ?? "(step)";
-    return {
-      index: i + 1,
-      name,
-      enabled: (attr(step, "enable") ?? "True") !== "False",
-      params: stepParams(step, name, stepTexts),
-    };
+/** Build the ordered step list shown in a script's inspector, and each step's
+ * rendered parameters (renderedParams, "" for a step without), by position. */
+export function scriptSteps(stepsContainer: unknown, stepTexts: StepTexts): { steps: ScriptStep[]; rendered: string[] } {
+  const nodes = stepNodes(stepsContainer);
+  const names = nodes.map((step) => textAttr(step, "name") ?? "(step)");
+  const rendered = nodes.map((step, i) => renderedParams(step, names[i]!, stepTexts));
+  const steps = nodes.map((step, i) => ({
+    index: i + 1,
+    name: names[i]!,
+    enabled: (attr(step, "enable") ?? "True") !== "False",
+    params: displayParams(step, names[i]!, rendered[i]),
+  }));
+  return { steps, rendered: rendered.map((params) => params ?? "") };
+}
+
+/** The step's display parameters: its rendered parameters (renderedParams),
+ * plus what FileMaker's rendering leaves out. */
+export function stepParams(step: Record<string, unknown>, name: string, stepTexts: StepTexts): string {
+  return displayParams(step, name, renderedParams(step, name, stepTexts));
+}
+
+/** The rendered parameters (renderedParams) of an action's steps — a button's
+ * or a custom menu item's — comment steps left out: what the text-based
+ * passes read of the action, as of a script's steps. */
+export function actionScanTexts(steps: readonly Record<string, unknown>[], stepTexts: StepTexts): string[] {
+  return steps.flatMap((step) => {
+    const name = textAttr(step, "name") ?? "";
+    return isCommentStep(name) ? [] : [renderedParams(step, name, stepTexts) ?? ""];
   });
 }
 
+/** Insert Text omits the text value from StepText — append it from
+ * ParameterValues. It's typed text, so only for display: the text-based
+ * passes read renderedParams. */
+function displayParams(step: Record<string, unknown>, name: string, rendered: string | undefined): string {
+  if (rendered == null) return "";
+  const text = name === INSERT_TEXT_STEP ? insertTextValue(step) : undefined;
+  if (!text) return rendered;
+  return rendered ? `${rendered} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
+}
+
 /**
- * The step's display parameters, taken from FileMaker's pre-rendered
- * <DDR_INFO><Script><ObjectList> StepText (located via the step's
- * <DDRREF kind="StepText"> pointer). The step name is already rendered into
- * that text, so strip the leading "Name " (or "# " for comment steps) — the UI
- * shows the name separately. CR/LF in the source (e.g. between Import Records
- * field mappings, or between a multi-bracket step's bracket groups) are kept
- * as newlines so the rendered step preserves FileMaker's layout.
+ * The step's parameters as FileMaker rendered them, taken from its
+ * pre-rendered <DDR_INFO><Script><ObjectList> StepText (located via the step's
+ * <DDRREF kind="StepText"> pointer); undefined when it has none. The step name
+ * is already rendered into that text, so strip the leading "Name " (or "# "
+ * for comment steps) — the UI shows the name separately. CR/LF in the source
+ * (e.g. between Import Records field mappings, or between a multi-bracket
+ * step's bracket groups) are kept as newlines so the rendered step preserves
+ * FileMaker's layout.
  */
-export function stepParams(step: Record<string, unknown>, name: string, stepTexts: StepTexts): string {
+function renderedParams(step: Record<string, unknown>, name: string, stepTexts: StepTexts): string | undefined {
   const raw = renderedStepText(stepTexts, step);
-  if (raw == null) return "";
+  if (raw == null) return undefined;
   // Normalise the raw StepText into just the bracketed parameters:
   //   1. CR/LF entities → real newlines (decodeEntities would otherwise collapse
   //      them to spaces, flattening Import Records' per-mapping layout).
@@ -49,14 +78,7 @@ export function stepParams(step: Record<string, unknown>, name: string, stepText
     : undisabled.startsWith(name)
       ? undisabled.slice(name.length).replace(/^\s+/, "")
       : undisabled;
-  const base = flattenNewlinesOutsideBrackets(stripped);
-
-  // Insert Text omits the text value from StepText — append it from ParameterValues.
-  if (name === INSERT_TEXT_STEP) {
-    const text = insertTextValue(step);
-    if (text) return base ? `${base} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
-  }
-  return base;
+  return flattenNewlinesOutsideBrackets(stripped);
 }
 
 /** Whether a step's rendered text starts with its name (`#`, for a comment),
@@ -94,29 +116,31 @@ function insertTextValue(step: Record<string, unknown>): string | undefined {
 /** Replace newlines (and surrounding whitespace) with a single space whenever
  * they sit at bracket depth 0 — i.e. between `]` and the next `[`, or before
  * the first `[`. Newlines inside `[ … ]` survive, so Import / Export Records'
- * per-mapping layout is preserved. */
+ * per-mapping layout is preserved. Joined once at the end: a string built a
+ * character at a time is a rope as long as nothing reads it, and the step
+ * list keeps it — several times the memory of the text. */
 function flattenNewlinesOutsideBrackets(text: string): string {
-  let out = "";
+  const out: string[] = [];
   let depth = 0;
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+    const c = text[i]!;
     if (c === "[") {
       depth++;
-      out += c;
+      out.push(c);
       continue;
     }
     if (c === "]") {
       depth = Math.max(0, depth - 1);
-      out += c;
+      out.push(c);
       continue;
     }
     if (depth === 0 && (c === "\n" || c === "\r")) {
       // Collapse a run of whitespace including the newline into one space.
       while (i + 1 < text.length && /\s/.test(text[i + 1]!)) i++;
-      if (out.length > 0 && out[out.length - 1] !== " ") out += " ";
+      if (out.length > 0 && out[out.length - 1] !== " ") out.push(" ");
       continue;
     }
-    out += c;
+    out.push(c);
   }
-  return out;
+  return out.join("");
 }

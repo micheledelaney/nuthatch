@@ -63,6 +63,14 @@ function uuidMeta(node: unknown): Record<string, string> {
   };
 }
 
+/** The object with its position in its catalog's custom order (see
+ * catalogOrdering), when the catalog lists it — an attribute, apart from
+ * `order`, which keeps lists in the order the app shows them. */
+export function withCustomOrder(obj: FmObject, positions: ReadonlyMap<string, number>): FmObject {
+  const position = positions.get(obj.id);
+  return position == null ? obj : { ...obj, attributes: { ...obj.attributes, customOrder: String(position) } };
+}
+
 /** Catalog workspace order and folder for an object built from a catalog list,
  * plus the separator flag: separator items are dividers the developer uses to
  * organize the list — kept (in order), but not real objects. */

@@ -22,7 +22,7 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
     const placed = placeInCatalog(base, order++, folder);
     if (placed.isSeparator) {
       fp.objects.push(placed);
-      scans.push({ obj: placed, text: cdataText(node) });
+      scans.push({ obj: placed, text: cdataText(node), source: node });
       continue;
     }
     const block = stepBlocks.get(placed.id);
@@ -32,10 +32,17 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
     // leading binding reference. (scanRefs also recovers the targets FileMaker
     // records only in a step's rendered text — see addStepTargetRefs.)
     if (block) scanRefs(fp, block["ObjectList"], script);
-    const obj = block ? withSteps(script, block["ObjectList"], fp.index.stepTexts) : script;
+    const stepped = block ? withSteps(script, block["ObjectList"], fp.index.stepTexts) : undefined;
+    const obj = stepped?.obj ?? script;
     fp.objects.push(obj);
-    // A script with steps is read per step (its rendered text), not by this text.
-    scans.push({ obj, text: cdataText(node) });
+    // A script with steps is read per step (its rendered text), not by this
+    // text — the steps hold its formulas.
+    scans.push({
+      obj,
+      text: cdataText(node),
+      source: block ? block["ObjectList"] : node,
+      ...(stepped ? { renderedSteps: stepped.rendered } : {}),
+    });
   }
   const orphans = stepBlocks.size - scriptsWithSteps.size;
   if (orphans > 0) {
@@ -79,15 +86,17 @@ function warnIfStepTextNotEnglish(fp: FileParse, blocks: Iterable<Record<string,
 }
 
 /** A script with its steps: their rendered text appended to its searchable
- * text, and the step list as its detail. */
-function withSteps(script: FmObject, steps: unknown, stepTexts: StepTexts): FmObject {
+ * text, and the step list as its detail — plus each step's rendered
+ * parameters, which the placeholder passes read (see TextScan.renderedSteps). */
+function withSteps(script: FmObject, steps: unknown, stepTexts: StepTexts): { obj: FmObject; rendered: string[] } {
   // The text is built from FileMaker's pre-rendered StepText (per step,
   // joined by newlines) rather than displayText(steps): the formatted text
-  // has real delimiters (`;`, `[`, `]`, …), so search and the placeholder
-  // passes see readable steps instead of the raw parameter tree.
-  const stepList = scriptSteps(steps, stepTexts);
+  // has real delimiters (`;`, `[`, `]`, …), so search sees readable steps
+  // instead of the raw parameter tree.
+  const { steps: stepList, rendered } = scriptSteps(steps, stepTexts);
   const stepText = stepList.map((s) => (s.params ? `${s.name} ${s.params}` : s.name)).join("\n");
-  return { ...script, text: script.text ? `${script.text}\n${stepText}` : stepText, detail: { kind: "script", steps: stepList } };
+  const obj: FmObject = { ...script, text: script.text ? `${script.text}\n${stepText}` : stepText, detail: { kind: "script", steps: stepList } };
+  return { obj, rendered };
 }
 
 /** Surface script run options nested under <Options> (e.g. "run with full

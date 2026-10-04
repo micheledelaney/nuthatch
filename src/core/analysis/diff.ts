@@ -251,7 +251,9 @@ function scopeAndAlignByFile(
  * - `id` / `name`: identity, not content (`name` is tracked separately as a rename)
  * - `uuid` / `baseTableUuid`: environment-specific identifiers */
 function buildNoise(opts: DiffOptions): Set<string> {
-  const s = new Set(["id", "name", "uuid", "baseTableUuid"]);
+  // `customOrder` (a position in a Manage dialog's custom order) shifts for every
+  // object after one that's added or moved, so it would read as a change to them all.
+  const s = new Set(["id", "name", "uuid", "baseTableUuid", "customOrder"]);
   if (!opts.includeHash) s.add("hash");
   // A serial field's next value is a live counter that advances as records are
   // created, so it diverges naturally between copies of a file — excluded unless
@@ -301,6 +303,16 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
     parts.push(d.body);
   } else if (d?.kind === "summary") {
     parts.push(`${d.operation} ${d.fields.join(", ")}`);
+    if (d.restartsEachGroup) parts.push("restarts for each sorted group");
+    if (d.sortedBy) parts.push(`when sorted by: ${d.sortedBy}`);
+    if (d.weightedBy) parts.push(`weighted by: ${d.weightedBy}`);
+    if (d.repetitions) parts.push(`repetitions: ${d.repetitions}`);
+  } else if (d?.kind === "lookup") {
+    parts.push(`looked up from: ${d.source}`);
+    if (d.startingFrom) parts.push(`starting with: ${d.startingFrom}`);
+    if (d.ifNoMatch) parts.push(`if no match: ${d.ifNoMatch}`);
+    if (d.skipEmpty != null) parts.push(`don't copy if empty: ${d.skipEmpty}`);
+    if (obj.text) parts.push(obj.text.replace(UUID_RE, ""));
   } else if (d?.kind === "relationship") {
     parts.push(...d.predicates.map((p) => `${p.leftField} ${p.operator} ${p.rightField}`));
     if (d.left)  parts.push(`left: create=${d.left.cascadeCreate} delete=${d.left.cascadeDelete} sorted=${d.left.sorted}`);
@@ -314,6 +326,7 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
       if (d.field.secondaryField)  parts.push(`display: ${d.field.secondaryField}`);
       if (d.field.showOnlySecondary) parts.push(`displayOnly: true`);
       if (d.field.showRelatedFrom) parts.push(`relatedFrom: ${d.field.showRelatedFrom}`);
+      if (d.field.sortBySecondField) parts.push(`sort: second field`);
     }
   } else if (d?.kind === "layout") {
     parts.push(`size: ${d.width}×${d.height}`);
@@ -323,16 +336,34 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
       const field = t.parameterFieldName ? ` paramField: ${t.parameterFieldName}` : "";
       parts.push(`trigger: ${t.action} → ${t.scriptName}${modes}${param}${field}`);
     }
+    for (const p of d.parts) if (p.breakField) parts.push(`part: ${p.type} by ${p.breakField}`);
+    for (const c of d.tableView ?? []) parts.push(`table view column: ${c.field} (${c.width} pt${c.hidden ? ", hidden" : ""})`);
   } else if (d?.kind === "layoutObject") {
     parts.push(`type: ${d.loType}`);
     if (d.fieldRef)    parts.push(`field: ${d.fieldRef}`);
     if (d.scriptRef)   parts.push(`script: ${d.scriptRef.name}`);
     if (d.actionStep)  parts.push(`action: ${d.actionStep.name}${d.actionStep.params ? ` [ ${d.actionStep.params} ]` : ""}`);
     if (d.portalTable) parts.push(`portal: ${d.portalTable}${d.portalRows != null ? ` (${d.portalRows} rows)` : ""}`);
+    if (d.portalInitialRow != null) parts.push(`initial row: ${d.portalInitialRow}`);
+    if (d.portalFilter) parts.push(`filter: ${d.portalFilter}`);
     if (d.info)        parts.push(`info: ${d.info}`);
     if (d.tooltip)     parts.push(`tooltip: ${d.tooltip}`);
+    if (d.placeholder) parts.push(`placeholder: ${d.placeholder}${d.placeholderInFind ? " (also in Find mode)" : ""}`);
     if (d.hideWhen)    parts.push(`hide when: ${d.hideWhen}${d.hideInFind ? " (also in Find mode)" : ""}`);
-    for (const c of d.conditionalFormats ?? []) parts.push(`conditional format: ${c}`);
+    (d.conditionalFormats ?? []).forEach((c, i) => {
+      parts.push(`conditional format: ${c}`);
+      const style = d.conditionalFormatStyles?.[i];
+      if (style) parts.push(...style.split("\n").map((l) => `  ${l}`));
+    });
+    if (d.popoverTitle) parts.push(`popover title: ${d.popoverTitle}`);
+    if (d.chart) {
+      const c = d.chart;
+      parts.push(`chart: ${c.type ?? ""}${c.dataSource ? ` from ${c.dataSource}` : ""}${c.groupsWhenSorted ? " (record groups when sorted)" : ""}`);
+      if (c.title) parts.push(`chart title: ${c.title}`);
+      if (c.xAxisTitle) parts.push(`x-axis title: ${c.xAxisTitle}`);
+      if (c.yAxisTitle) parts.push(`y-axis title: ${c.yAxisTitle}`);
+      for (const series of c.series) parts.push(`${series.axis} series: ${[series.title, series.value].filter(Boolean).join(" = ")}`);
+    }
     if (d.style)       parts.push("style:", ...d.style.split("\n").map((l) => `  ${l}`));
     for (const t of d.triggers ?? []) {
       parts.push(`trigger: ${t.action} → ${t.scriptName}${t.parameter ? ` param: ${t.parameter}` : ""}`);

@@ -147,17 +147,17 @@ export function LinkedCode({
   objects,
   onGo,
   model,
-  fileUid,
+  owner,
 }: {
   text: string;
   objects: FmObject[];
   onGo: (uid: string, rowKey: string) => void;
-  /** When passed, qualified `TO::Field` matches delegate to FieldRefLink so
-   * the field half goes through the same resolver the property sheets use —
-   * keeps external/missing rendering consistent everywhere. Optional for
-   * back-compat with callers that haven't been threaded through yet. */
+  /** When passed, qualified `TO::Field` matches delegate to FieldRefLink, which
+   * shows the owner's own reference to that field the way the property sheets
+   * do. Optional for callers that link names only. */
   model?: SolutionModel;
-  fileUid?: string;
+  /** The object the text belongs to (its uid). */
+  owner?: string;
 }) {
   // Unique candidates, longest name first so "DATA~MAIN" wins over "DATA" and
   // "Access.canEdit" wins over "Access".
@@ -171,15 +171,15 @@ export function LinkedCode({
   // by-name dedup above: in FileMaker a field, base table, and layout can all
   // share the occurrence's name (e.g. "Stock", "Stock_Batches"), and
   // whichever won the dedup would otherwise shadow the occurrence and break the
-  // `TO::Field` link. The field target is then resolved by id via the
-  // occurrence's base table (resolveQualifiedRef), not by name-matching.
+  // `TO::Field` link. The field shown is then the owner's own reference to it
+  // (ownFieldRef), with the model's verdict on it.
   const occCands = objects
     .filter((o) => o.type === "tableOccurrence" && o.name)
     .sort((a, b) => b.name.length - a.name.length);
 
   const comments = commentRanges(text);
   const inComment = (pos: number) => comments.some(([s, e]) => pos >= s && pos < e);
-  const canQualify = model != null && fileUid != null;
+  const canQualify = model != null && owner != null;
 
   const out: React.ReactNode[] = [];
   let plainStart = 0;
@@ -195,7 +195,7 @@ export function LinkedCode({
     // Detect the `TO::Field` shape first, using the occurrence-only candidates
     // for the `TO` half so a same-named field/table/layout can't shadow it.
     // The whole span renders through FieldRefLink (one source of truth for
-    // resolved / external / broken styling), which resolves the field by id.
+    // resolved / external / broken styling), which shows the owner's reference.
     let qualifiedLength = 0;
     if (canQualify) {
       const toCand = occCands.find(
@@ -232,7 +232,7 @@ export function LinkedCode({
     if (qualifiedLength > 0) {
       const span = text.slice(i, i + qualifiedLength);
       out.push(
-        <FieldRefLink key={`q${i}`} qualified={span} model={model!} fileUid={fileUid!} onGo={onGo} />,
+        <FieldRefLink key={`q${i}`} qualified={span} model={model!} owner={owner!} onGo={onGo} />,
       );
       i += qualifiedLength;
     } else if (hit) {

@@ -1,10 +1,10 @@
 import type { FmObject, ObjectType } from "@/types/ddr";
 import type { FileParse, TextScan } from "../context";
 import { cdataText, isRecord } from "../xmlUtils";
-import { collectCatalogItems } from "../catalogWalk";
+import { catalogOrdering, collectCatalogItems } from "../catalogWalk";
 import { occurrenceSource } from "../occurrences";
 import { scanRefs } from "../refs/scanRefs";
-import { makeObject } from "./catalogItems";
+import { makeObject, withCustomOrder } from "./catalogItems";
 import { addCustomFunctionCalcRefs, annotateCustomFunction, customFunctionCalcs, customFunctionScanText } from "./customFunctions";
 import { annotateExternalDataSource } from "./dataSources";
 import { annotateCustomMenu, annotateCustomMenuSet } from "./menus";
@@ -40,6 +40,8 @@ interface CatalogSpec {
    * of what `scan` reads (of the whole item, for "none"): a formula stored
    * apart from the item. */
   text?: (item: Item, obj: FmObject) => string;
+  /** The XML `text` reads, when it reaches outside the item. */
+  textSource?: (item: Item, obj: FmObject) => unknown;
   /** `annotate` sets the object's searchable text itself, so the item's full
    * text isn't built only to be replaced. */
   annotateSetsText?: true;
@@ -90,6 +92,7 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
       annotate: (item, obj) => annotateCustomFunction(item, obj, cfCalcs),
       addRefs: (_item, obj) => addCustomFunctionCalcRefs(fp, obj, cfCalcs),
       text: (item, obj) => customFunctionScanText(item, obj, cfCalcs),
+      textSource: (item, obj) => [item, cfCalcs.get(obj.id)],
     },
     {
       catalogKey: "ExtendedPrivilegesCatalog",
@@ -132,15 +135,16 @@ function catalogSpecs(fp: FileParse, containerNode: Record<string, unknown>): Ca
 /** Every object of the catalogs in catalogSpecs, with its references. */
 export function parseCatalogs(fp: FileParse, containerNode: Record<string, unknown>, scans: TextScan[]): void {
   for (const spec of catalogSpecs(fp, containerNode)) {
+    const customOrder = catalogOrdering(containerNode[spec.catalogKey]).positions;
     for (const item of collectCatalogItems(containerNode[spec.catalogKey], spec.itemTag)) {
       const base = makeObject(fp, item, spec.type, undefined, undefined, spec.annotateSetsText ? "" : undefined);
       if (!base || !isRecord(item)) continue;
-      const obj = spec.annotate ? spec.annotate(item, base) : base;
+      const obj = withCustomOrder(spec.annotate ? spec.annotate(item, base) : base, customOrder);
       fp.objects.push(obj);
       // The text passes read what the element scan reads, so a placeholder
       // in a part the scan leaves out flags nothing.
       const scanned = typeof spec.scan === "function" ? spec.scan(item) : item;
-      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(scanned) });
+      scans.push({ obj, text: spec.text ? spec.text(item, obj) : cdataText(scanned), source: spec.textSource ? spec.textSource(item, obj) : item });
       if (spec.scan !== "none") scanRefs(fp, scanned, obj);
       spec.addRefs?.(item, obj);
     }

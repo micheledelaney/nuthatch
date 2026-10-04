@@ -10,18 +10,20 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseDocuments } from "@/core/parser/parseDdr";
 import { buildModel } from "@/core/model/buildModel";
+import { splitLayoutCatalog } from "@/core/parser/objects/layoutStream";
 import { decodeFile } from "@/state/loadFiles";
 import type { ParseResult, PrivilegeSetFieldAccess } from "@/types/ddr";
 
 const DIR = fileURLToPath(new URL("./fixtures/test-solution/", import.meta.url));
 
+/** A fixture export decoded the way the app does it (FM 22 exports are UTF-16). */
+function read(file: string): string {
+  const bytes = readFileSync(DIR + file);
+  return decodeFile(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+}
+
 function parse(...files: string[]): ParseResult {
-  return parseDocuments(
-    files.map((f) => {
-      const bytes = readFileSync(DIR + f);
-      return { name: basename(f), content: decodeFile(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer) };
-    }),
-  );
+  return parseDocuments(files.map((f) => ({ name: basename(f), content: read(f) })));
 }
 
 describe("uids from the intact build to the final one", () => {
@@ -57,6 +59,29 @@ describe("the appended build's custom menu", () => {
     expect(brokenFrom(new Set([menu.uid]))).toEqual([]);
     const items = new Set(model.objects.filter((o) => o.parentUid === menu.uid).map((o) => o.uid));
     expect(brokenFrom(items)).toEqual(["Deleted script item", "TO_Main::f_Text & TO_Child::<Field Missing>"]);
+  });
+});
+
+describe("a layout catalog read in the parsed tree", () => {
+  // A <ModifyAction> ahead of the catalog keeps it from being cut out and
+  // streamed (findLayoutCatalogBounds), so the same export can be read both ways.
+  const inTree = (xml: string): string => {
+    const at = xml.indexOf("<LayoutCatalog", xml.indexOf("<Structure"));
+    return `${xml.slice(0, at)}<ModifyAction></ModifyAction>${xml.slice(at)}`;
+  };
+
+  it.each([
+    ["XML FM26/TEST_MAIN__intact.xml", "XML FM26/TEST_EXT__intact.xml"],
+    ["XML FM26/TEST_MAIN.xml", "XML FM26/TEST_EXT.xml"],
+    ["XML FM26/APPENDED TESTS/TEST_MAIN.xml", "XML FM26/APPENDED TESTS/TEST_EXT.xml"],
+    ["XML FM22/TEST_MAIN.xml", "XML FM22/TEST_EXT.xml"],
+    ["XML FM21/TEST_MAIN.xml", "XML FM21/TEST_EXT.xml"],
+  ])("reads the same as the streamed one: %s", (...files) => {
+    const streamed = files.map((f) => ({ name: basename(f), content: read(f) }));
+    const tree = streamed.map((d) => ({ ...d, content: inTree(d.content) }));
+    expect(tree.map((d) => splitLayoutCatalog(d.content).layoutCatalog)).toEqual(files.map(() => undefined));
+    expect(streamed.every((d) => splitLayoutCatalog(d.content).layoutCatalog != null)).toBe(true);
+    expect(parseDocuments(tree)).toEqual(parseDocuments(streamed));
   });
 });
 

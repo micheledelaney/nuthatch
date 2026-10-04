@@ -60,7 +60,7 @@ export function ScriptWorkspace({
   stepRefs,
   scriptGlobals,
   model,
-  fileUid,
+  owner,
   onGo,
 }: {
   steps: ScriptStep[];
@@ -70,9 +70,9 @@ export function ScriptWorkspace({
   stepRefs?: Map<number, FmObject[]>;
   /** Global variable objects used anywhere in the script — merged into every step. */
   scriptGlobals?: FmObject[];
-  /** Model + fileUid for LinkedCode's qualified-ref delegation. */
+  /** Model + the script's uid for LinkedCode's qualified-ref delegation. */
   model?: SolutionModel;
-  fileUid?: string;
+  owner?: string;
   onGo?: (uid: string, rowKey: string) => void;
 }) {
   const lines = layout(steps);
@@ -136,7 +136,7 @@ export function ScriptWorkspace({
                         // Link even while collapsed — the truncated preview still
                         // shows real references, and they should be clickable. A
                         // name cut off at the truncation boundary just won't match.
-                        <LinkedCode text={paramsText} objects={refs} onGo={onGo} model={model} fileUid={fileUid} />
+                        <LinkedCode text={paramsText} objects={refs} onGo={onGo} model={model} owner={owner} />
                       ) : (
                         <Highlight text={paramsText} />
                       )}

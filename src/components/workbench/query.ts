@@ -1,4 +1,4 @@
-import { OBJECT_TYPE_META, isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
+import { OBJECT_TYPE_META, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { isInUnusedChain, isUnreferenced, matchesFieldFilter } from "@/components/browseA/filters";
 import { brokenSourcesFor, refStatsFor } from "@/components/browseA/refStats";
 import { excerpt } from "@/core/search/search";
@@ -162,7 +162,7 @@ function matchesTable(model: SolutionModel, o: FmObject, value: string): boolean
 function matchesIs(model: SolutionModel, o: FmObject, flag: IsFlag): boolean {
   switch (flag) {
     case "broken":
-      return brokenSourcesFor(model).has(o.uid) || isBrokenTableOccurrence(o);
+      return brokenSourcesFor(model).has(o.uid);
     case "unreferenced":
       return isUnreferenced(model, o);
     case "chain":

@@ -1,6 +1,7 @@
 import { version as NUTHATCH_VERSION } from "../../../package.json";
 import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
+import { brokenSources } from "@/core/analysis/dependencies";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -44,7 +45,7 @@ const REF_COLUMNS = [
 ] as const;
 
 export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportFile[] {
-  const brokenFrom = new Set(model.brokenReferences.map((r) => r.fromUid));
+  const brokenFrom = brokenSources(model);
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
   const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
   return [
@@ -96,11 +97,12 @@ function exportObject(
  * calculation bodies, and layout (object) names and labels. */
 const TEXT_IN_DETAIL: ReadonlySet<string> = new Set(["script", "calculation", "layout", "layoutObject"]);
 
-/** Drop the display-only bulk (styling, drawn layout map) from the detail. */
+/** Drop the display-only bulk (styling — an object's own and its conditional
+ * formats' — and the drawn layout map) from the detail. */
 function slimDetail(detail: ObjectDetail | undefined): object | undefined {
   if (!detail) return undefined;
   if (detail.kind === "layoutObject") {
-    const { style: _style, ...rest } = detail;
+    const { style: _style, conditionalFormatStyles: _conditionalFormatStyles, ...rest } = detail;
     return rest;
   }
   if (detail.kind === "layout") {
@@ -111,7 +113,8 @@ function slimDetail(detail: ObjectDetail | undefined): object | undefined {
       width: detail.width,
       height: detail.height,
       triggers: detail.triggers,
-      parts: detail.parts.map((p) => ({ type: p.type, top: p.top, height: p.height })),
+      parts: detail.parts.map((p) => ({ type: p.type, top: p.top, height: p.height, ...(p.breakField ? { breakField: p.breakField } : {}) })),
+      ...(detail.tableView ? { tableView: detail.tableView } : {}),
     };
   }
   return detail;
@@ -172,7 +175,7 @@ dependency questions ("what uses X?", "can I delete X?") are a lookup in
 - **Analysis:** ${info.analysisName} (project: ${info.projectName})
 - **Analysis saved:** ${new Date(info.savedAt).toISOString()}
 - **Exported:** ${new Date(info.exportedAt).toISOString()}
-- **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length}
+- **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length} (in ${card.brokenReferenceCount} objects)
 - **Unreferenced objects:** ${card.unreferencedCount} · **Used only by unreferenced objects:** ${card.unusedChainCount}
 
 This is a snapshot. If the FileMaker solution has changed since the date
@@ -211,8 +214,12 @@ One JSON object per line:
 - \`attributes\`: raw attributes from the XML element (field type, storage, …).
 - \`detail\`: type-specific structure. Scripts: \`steps\` with \`index\`, \`name\`,
   \`enabled\`, and \`params\` (FileMaker's own step text). Calculated fields and
-  custom functions: \`body\`. Layout objects: \`loType\`, \`fieldRef\`, \`scriptRef\`,
-  \`triggers\`, \`tooltip\`, \`hideWhen\`, \`conditionalFormats\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
+  custom functions: \`body\`. Summary fields: \`operation\`, \`fields\`, \`sortedBy\`,
+  \`weightedBy\`, \`restartsEachGroup\`. Lookups: \`source\`, \`startingFrom\`,
+  \`ifNoMatch\`, \`skipEmpty\`. Layouts: \`parts\` (a sub-summary's \`breakField\`),
+  \`tableView\` columns. Layout objects: \`loType\`, \`fieldRef\`, \`scriptRef\`,
+  \`scriptParameter\`, \`triggers\`, \`tooltip\`, \`placeholder\`, \`hideWhen\`,
+  \`conditionalFormats\`, \`portalFilter\`, \`popoverTitle\`, \`chart\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
 - \`text\`: readable content for types without a structured body.
 
 | type | label | count |

@@ -16,6 +16,7 @@ import {
 import { TypePill } from "../TypePill";
 import { isInUnusedChain, isUnreferenced } from "./filters";
 import { factsFor } from "./facts";
+import { refStatsFor } from "./refStats";
 import { Glance, GlanceSection } from "./Glance";
 import { PaneNavContext } from "../workbench/paneNav";
 import { pressable, onTabListKeyDown } from "../a11y";
@@ -55,7 +56,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   // Menu->item containment edges show as the menu's children instead.
   const outbound = view.outbound.filter((e) => e.ref.kind !== "menuItem");
   const inbound = view.inbound;
-  const brokenCount = outbound.filter((e) => e.ref.broken).length;
+  const brokenCount = refStatsFor(model, uid).broken;
   const callCount = chain?.children.length ?? 0;
   const isUnused = (u: string) => isUnusedSource(model, u);
 
@@ -78,6 +79,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
       <header className="op-header">
         <Glance
           obj={obj}
+          model={model}
           facts={facts}
           actions={
             obj.type === "tableOccurrence" && (

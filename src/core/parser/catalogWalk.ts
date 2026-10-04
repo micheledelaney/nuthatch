@@ -2,8 +2,9 @@
  * Walking FileMaker's catalog lists: their leaf items, the folder markers that
  * organize them, and the blocks stored apart from the items they belong to.
  */
-import { asArray, attr, child, children, detach, isRecord } from "./xmlUtils";
+import { asArray, attr, child, children, detach, isRecord, ownText } from "./xmlUtils";
 import { decodeEntities } from "./entities";
+import { ownValue } from "./ownValue";
 
 /** What a catalog entry's `isFolder` flag makes it: "True" opens a folder and
  * "Marker" closes it — both organizational, not objects. Anything else is an
@@ -82,6 +83,34 @@ export function firstBlockByOwner(blocks: readonly unknown[], ownerRefTag: strin
     if (ownerId != null && !byOwner.has(ownerId)) byOwner.set(ownerId, block);
   }
   return byOwner;
+}
+
+/** How a catalog's Manage dialog lists it, as FM 26 records it: each item's
+ * 1-based position in the developer's custom order (<CustomOrderList>, keyed
+ * by item id) and the list's "View by" code (<SortOrder>). Empty for exports
+ * that have neither (FM 21, FM 22). */
+export interface CatalogOrdering {
+  positions: ReadonlyMap<string, number>;
+  viewBy?: string;
+}
+
+export function catalogOrdering(catalogNode: unknown): CatalogOrdering {
+  const positions = new Map<string, number>();
+  children(child(catalogNode, "CustomOrderList"), "key").forEach((key, i) => {
+    const id = ownText(key).trim();
+    if (id && !positions.has(id)) positions.set(id, i + 1);
+  });
+  const viewBy = viewByLabel(ownText(child(catalogNode, "SortOrder")).trim());
+  return { positions, ...(viewBy ? { viewBy } : {}) };
+}
+
+/** <SortOrder> codes as the Manage dialogs' "View by" names them. Inferred
+ * from the samples: 1 lists match creation order, 4 lists the custom order;
+ * unlisted codes show as written. */
+const VIEW_BY_LABELS: Readonly<Record<string, string>> = { "1": "Creation order", "2": "Name", "4": "Custom order" };
+
+function viewByLabel(code: string): string | undefined {
+  return code ? (ownValue(VIEW_BY_LABELS, code) ?? code) : undefined;
 }
 
 /** Each <FieldsForTables><FieldCatalog>, keyed back to its base table by a

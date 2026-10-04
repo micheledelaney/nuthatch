@@ -1,4 +1,4 @@
-import type { LayoutTriggerInfo } from "@/types/ddr";
+import type { LayoutTriggerInfo, SortField } from "@/types/ddr";
 import type { FileIndex } from "../context";
 import { asArray, attr, child, children, enabledLabels, isRecord, textAttr } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN, UNKNOWN_TARGET } from "../sentinels";
@@ -20,22 +20,48 @@ export function qualifiedField(wrapper: unknown, index: FileIndex): string {
   return to ? `${to}::${field}` : field;
 }
 
-/** The field a <FieldReference> names. FileMaker leaves the reference in place
- * with its `name` blank in two cases: the field was deleted — flagged the way
- * a broken reference reads anywhere else in the app — or it sits behind an
- * occurrence whose file wasn't available at export, which proves nothing; that
- * one reads by its id, like any other unnamed object. */
-export function fieldRefName(ref: unknown, index: FileIndex): string {
-  const name = textAttr(ref, "name");
-  if (name) return name;
-  const toId = attr(child(ref, "TableOccurrenceReference"), "id");
-  const unverifiable = toId != null && index.toById.get(toId)?.unresolved === true;
-  return unverifiable ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
+/** The fields a <SortSpecification> sorts by, in order; none when its "Sort
+ * records" box is off (FileMaker then writes no list). */
+export function sortFields(spec: unknown, index: FileIndex): SortField[] {
+  if (attr(spec, "value") !== "True") return [];
+  return children(child(spec, "SortList"), "Sort")
+    .filter(isRecord)
+    .map((sort) => {
+      const valueList = textAttr(child(sort, "ValueListReference"), "name");
+      const summaryField = qualifiedField(child(child(sort, "SummaryField"), "FieldReference"), index);
+      return {
+        field: qualifiedField(child(child(sort, "PrimaryField"), "FieldReference"), index),
+        order: attr(sort, "type") ?? "Ascending",
+        ...(valueList ? { valueList } : {}),
+        ...(summaryField ? { summaryField } : {}),
+      };
+    });
 }
 
-/** Strip a single layer of surrounding double-quotes (FileMaker wraps static
- * labels like `"Tab Name"` in quotes in the Calculation text, and a button's
- * label is shown quoted). */
+/** What a <FieldReference> says about its field. FileMaker leaves the reference
+ * in place with its `name` blank in two cases: the field was deleted, or it
+ * sits behind an occurrence whose file wasn't available at export, which
+ * proves nothing. */
+export type FieldRefState = "named" | "deleted" | "unverifiable";
+
+export function fieldRefState(ref: unknown, index: FileIndex): FieldRefState {
+  if (textAttr(ref, "name")) return "named";
+  const toId = attr(child(ref, "TableOccurrenceReference"), "id");
+  return toId != null && index.toById.get(toId)?.unresolved === true ? "unverifiable" : "deleted";
+}
+
+/** The field a <FieldReference> names (see fieldRefState): a deleted one is
+ * flagged the way a broken reference reads anywhere else in the app; an
+ * unverifiable one reads by its id, like any other unnamed object. */
+export function fieldRefName(ref: unknown, index: FileIndex): string {
+  const state = fieldRefState(ref, index);
+  if (state === "named") return textAttr(ref, "name") ?? "";
+  return state === "unverifiable" ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
+}
+
+/** A button's label without the quotes it's shown in (see behaviorLine). A
+ * formula's static text is literalText's to read: a computed formula can start
+ * and end with a quote too. */
 export function stripOuterQuotes(s: string): string {
   return s.startsWith('"') && s.endsWith('"') && s.length > 2 ? s.slice(1, -1) : s;
 }

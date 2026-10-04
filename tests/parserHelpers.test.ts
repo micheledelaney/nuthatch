@@ -7,8 +7,12 @@ import { xmlParser } from "@/core/parser/xmlParser";
 import {
   chunkListMatchesText,
   fieldNameCandidate,
+  formulasUnder,
   globalVariablesInText,
+  inertSpansWith,
+  literalText,
   longestNameAt,
+  mergeFormulas,
   makeNameIndex,
   quotedGlobalVariables,
   stripComments,
@@ -97,6 +101,59 @@ describe("names in a formula's text", () => {
 
   it("take what follows a `::` up to the next operator as a field name", () => {
     expect(fieldNameCandidate("T::Some Field & x", 3)).toBe("Some Field");
+  });
+});
+
+describe("typed text in a formula", () => {
+  const TOKENS = ["<Field Missing>", "<Table Missing>"];
+
+  it("is the string literals and comments that hold a placeholder, as written", () => {
+    const formula = `"<Field Missing>" & T::<Field Missing> & "x" /* <Table Missing> */ & "say \\"<Field Missing>\\"" // <Field Missing>\nT::a`;
+    expect(inertSpansWith(formula, TOKENS)).toEqual([`"<Field Missing>"`, `/* <Table Missing> */`, `"say \\"<Field Missing>\\""`, `// <Field Missing>`]);
+  });
+
+  it("runs to the end of an unclosed literal or comment", () => {
+    expect(inertSpansWith(`1 /* <Field Missing>`, TOKENS)).toEqual([`/* <Field Missing>`]);
+    expect(inertSpansWith(`"<Table Missing>`, TOKENS)).toEqual([`"<Table Missing>`]);
+  });
+
+  it("is read from every <Calculation> under a node — not from layout text", () => {
+    const node = xmlParser.parse(
+      `<Step><Calculation><Calculation><Text><![CDATA[1 + 2]]></Text></Calculation></Calculation>` +
+        `<Conditions><Install><Calculation><![CDATA[Get ( AccountName )]]></Calculation></Install></Conditions>` +
+        `<Text><StyledText><Data><![CDATA["<<T::a>>"]]></Data></StyledText></Text></Step>`,
+    );
+    expect([...new Set(formulasUnder(node))]).toEqual(["1 + 2", "Get ( AccountName )"]);
+  });
+});
+
+describe("mergeFormulas", () => {
+  it("reads each <<ƒ:…>> merge calc's formula", () => {
+    expect(mergeFormulas(`Total: <<ƒ:Sum ( T::a )>> of <<ƒ:Count ( T::a )>>`)).toEqual(["Sum ( T::a )", "Count ( T::a )"]);
+  });
+
+  it("ends one at the last `>>` of a run, outside its literals and comments", () => {
+    expect(mergeFormulas(`<<ƒ:T::<Field Missing>>>`)).toEqual(["T::<Field Missing>"]);
+    expect(mergeFormulas(`<<ƒ:">>" & /* >> */ T::a>> after`)).toEqual([`">>" & /* >> */ T::a`]);
+  });
+
+  it("reads none from text without one, or an unclosed one", () => {
+    expect(mergeFormulas(`<<T::a>> and <<$$x>>`)).toEqual([]);
+    expect(mergeFormulas(`<<ƒ:T::a`)).toEqual([]);
+  });
+});
+
+describe("literalText", () => {
+  it("reads a formula that is one string literal, undoing its escapes", () => {
+    expect(literalText(`"Save"`)).toBe("Save");
+    expect(literalText(` "Say \\"hi\\" \\\\ \\¶" `)).toBe(`Say "hi" \\ ¶`);
+    expect(literalText(`""`)).toBe("");
+  });
+
+  it("reads nothing from a formula that computes its text", () => {
+    expect(literalText(`"Feedback" & ¶ & "gelb"`)).toBeUndefined();
+    expect(literalText(`Get ( AccountName )`)).toBeUndefined();
+    expect(literalText(`"unclosed`)).toBeUndefined();
   });
 });
 

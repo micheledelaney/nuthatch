@@ -1,4 +1,5 @@
 import type { FmObject } from "@/types/ddr";
+import type { FileParse } from "../context";
 import { child, displayText, isRecord, textAttr, withoutKey } from "../xmlUtils";
 
 /**
@@ -44,4 +45,16 @@ function themeMetadata(metadata: unknown): Record<string, string> {
     if (swatches.length) a.palette = swatches.join(" ");
   }
   return a;
+}
+
+/** A built-in theme names no base theme of its own (a custom one has
+ * `baseName`); the layouts using it do, on their <LayoutThemeReference Base>
+ * (see FileParse.themeBases). Once the layouts are read, each such theme gets
+ * that base as its `baseName`. */
+export function addThemeBases(fp: FileParse): void {
+  if (fp.themeBases.size === 0) return;
+  fp.objects.forEach((obj, i) => {
+    const base = obj.type === "theme" && obj.attributes.baseName == null ? fp.themeBases.get(obj.id) : undefined;
+    if (base) fp.objects[i] = { ...obj, attributes: { ...obj.attributes, baseName: base } };
+  });
 }
