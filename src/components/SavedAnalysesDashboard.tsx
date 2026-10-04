@@ -105,10 +105,7 @@ export function SavedAnalysesDashboard() {
       <header className="dashboard-header">
         <div className="dashboard-heading">
           <h2>Projects</h2>
-          <p className="subtle">
-            Add analyses to a project to build its history — when adding, you can select several XML
-            files at once (hold ⌘ or Ctrl while clicking). Click one to reopen it, or tick two to compare.
-          </p>
+          <p className="subtle">A project keeps a history of analyses. Click one to open it, tick two to compare.</p>
         </div>
         <button className="btn btn-primary" onClick={startNewProject}>
           + New project
@@ -174,9 +171,10 @@ function ProjectRow({
   return (
     <section className="project">
       <div className="project-head">
-        <button className="row project-head-main" onClick={() => setExpanded((v) => !v)}>
+        <button className="row project-head-main" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
           <span className={`fchevron${expanded ? " open" : ""}`}>›</span>
           <span className="project-name">{project.name}</span>
+          {project.note && <span className="entity-note project-note">{project.note}</span>}
         </button>
         <input
           ref={inputRef}
@@ -186,10 +184,16 @@ function ProjectRow({
           hidden
           onChange={(e) => void onFilesChosen(e.target.files)}
         />
+        <button
+          className="btn"
+          title="You can select several XML files at once (hold ⌘ or Ctrl while clicking)"
+          onClick={() => inputRef.current?.click()}
+        >
+          + Add analysis
+        </button>
         <Menu
           label="Project actions"
           items={[
-            { label: "Add analysis", onSelect: () => inputRef.current?.click() },
             ...(count >= 2
               ? [
                 {
@@ -210,13 +214,12 @@ function ProjectRow({
           ]}
         />
       </div>
-      {project.note && <p className="entity-note">{project.note}</p>}
       {expanded &&
         (count === 0 ? (
-          <p className="project-empty">
-            No analyses yet — use “Add analysis” to load a Save a Copy as XML file (exported
-            with “Include details for analysis tools” enabled).
-          </p>
+          <div className="project-empty">
+            <span>No analyses yet</span>
+            <span className="subtle">Add a Save a Copy as XML file, exported with “Include details for analysis tools”.</span>
+          </div>
         ) : (
           <>
             {project.showHealthGraphs && <ProjectHealth items={project.items} />}
@@ -264,6 +267,8 @@ function AnalysisRow({
     return () => clearTimeout(t);
   }, [isNew, clearRecentlyAdded]);
 
+  const files = item.fileNames.join(", ");
+
   return (
     <li ref={rowRef} className={`row snapshot${isNew ? " snapshot-new" : ""}`} onClick={() => void openSaved(item.id)}>
       <input
@@ -276,11 +281,12 @@ function AnalysisRow({
       />
       <div className="snapshot-main" {...keyPressable(() => void openSaved(item.id))}>
         <span className="snapshot-name">{item.name}</span>
-        <span className="snapshot-files" title={item.fileNames.join(", ")}>
-          {item.fileNames.join(", ") || "—"}
-        </span>
-        {item.note && <span className="entity-note snapshot-note">{item.note}</span>}
+        {item.note && <span className="entity-note">{item.note}</span>}
       </div>
+      {/* Blank when the files just repeat the analysis name. */}
+      <span className="snapshot-files" title={files}>
+        {files === item.name ? "" : files || "—"}
+      </span>
       <span className="snapshot-date">{formatSavedAt(item.savedAt)}</span>
       <Menu
         label="Analysis actions"

@@ -9,10 +9,10 @@
 
 .dashboard-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 32px;
-  margin-bottom: 32px;
+  gap: 24px;
+  margin-bottom: 24px;
 }
 
 .dashboard-header .btn-primary {
@@ -25,11 +25,10 @@
   font-size: 18px;
   line-height: 24px;
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 
 .dashboard-header .subtle {
-  max-width: 78ch;
   margin: 0;
   color: var(--text-dim);
   font-size: 12.5px;
@@ -39,25 +38,32 @@
 .project-list {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 16px;
 }
 
-/* A project: no box; its name, then its analyses as rows. */
+/* A project: an outlined panel on the page's own background — a header row
+   (name, note, count, actions), then its analyses as rows. */
 .project {
-  background: none;
+  border: 1px solid var(--nh-line);
+  border-radius: var(--radius);
 }
 
 .project-head {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0;
+  gap: 10px;
+  padding: 12px 18px 12px 0;
+}
+
+.project-head:not(:last-child) {
+  border-bottom: 1px solid var(--nh-line);
 }
 
 .project-head-main {
-  align-items: baseline;
-  gap: 16px;
+  gap: 10px;
   flex: 1;
+  align-self: stretch;
+  padding-left: 20px;
 }
 
 .project-head-main .fchevron {
@@ -65,23 +71,40 @@
   color: var(--text-dim);
 }
 
+/* The note follows the name and count on the same line, cut off if long. */
+.project-head .project-note {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .project-empty {
-  color: var(--text-dim);
-  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 20px 20px 46px;
   line-height: 20px;
-  padding: 8px 0 0 44px;
-  margin: 0;
+}
+
+.project-empty .subtle {
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 /* Per-project analysis-health dashboard */
 .health {
-  padding: 12px 0 4px 44px;
+  padding: 18px 20px 14px 46px;
+  border-bottom: 1px solid var(--nh-line);
 }
 
 .health-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 8px;
+  /* Tiles align at the bottom so values and sparklines line up even when a
+     label wraps. */
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  align-items: end;
+  gap: 8px 16px;
   margin-bottom: 14px;
 }
 
@@ -96,6 +119,7 @@
 }
 
 .metric-label {
+  grid-column: 1 / -1;
   font-size: var(--label-font);
   text-transform: uppercase;
   letter-spacing: var(--label-tracking);
@@ -117,6 +141,7 @@
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .metric-delta.worse {
@@ -216,30 +241,41 @@
   word-break: break-word;
 }
 
-.project > .entity-note {
-  margin: 0;
-  padding: 0 0 8px 44px;
-}
-
-.snapshot-note {
-  margin-top: 2px;
-}
-
 .project-name {
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 600;
 }
 
 .snapshot-list {
   list-style: none;
-  /* 32px + the row's 12px padding puts the checkboxes under the project's name. */
-  margin: 8px 0 0 32px;
+  margin: 0;
   padding: 0;
 }
 
+/* One line per analysis: checkbox, name (and note), files, date, menu.
+   46px of left padding puts the checkboxes under the project's name. */
 .snapshot {
-  gap: 16px;
-  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+  gap: 12px;
+  min-height: 42px;
+  padding: 8px 18px 8px 46px;
+  border-radius: 0;
+}
+
+.snapshot + .snapshot {
+  border-top: 1px solid var(--nh-line);
+}
+
+/* The row's menu shows on hover, on keyboard focus and while it's open. */
+.snapshot .menu {
+  opacity: 0;
+}
+
+.snapshot:hover .menu,
+.snapshot:focus-within .menu {
+  opacity: 1;
 }
 
 @keyframes snapshot-flash {
@@ -257,11 +293,13 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  flex: 1;
 }
 
 .snapshot-name {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: color var(--nh-dur);
 }
 
@@ -275,7 +313,8 @@
 
 .snapshot-date {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
