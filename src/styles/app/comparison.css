@@ -142,8 +142,8 @@
 
 .type-filter-row {
   display: flex;
-  margin-top: 14px;
-  margin-bottom: 24px;
+  margin-top: 36px;
+  margin-bottom: 10px;
 }
 
 .file-summary-row {
@@ -257,8 +257,72 @@
   word-break: break-word;
 }
 
-.count-added,
-.count-removed,
+/* "By type": one row per type at list-row height, named by its type tag,
+   counts right-aligned in narrow columns so they sit near the name. Fixed
+   column widths (the longest tag, the widest header), so showing all types
+   doesn't move the columns. */
+.type-counts {
+  --type-counts-type-w: 170px;
+  --type-counts-num-w: 104px;
+  table-layout: fixed;
+  width: calc(var(--type-counts-type-w) + 4 * var(--type-counts-num-w));
+  border-collapse: collapse;
+  margin: 20px 0 6px;
+  font-size: var(--row-font);
+  line-height: var(--row-line);
+}
+
+.type-counts-type {
+  width: var(--type-counts-type-w);
+}
+
+.type-counts-num {
+  width: var(--type-counts-num-w);
+}
+
+.type-counts th,
+.type-counts td {
+  padding: var(--row-pad-y) 0 var(--row-pad-y) 32px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.type-counts th:first-child,
+.type-counts td:first-child {
+  padding-left: 0;
+}
+
+.type-counts th {
+  padding-bottom: 8px;
+  font-weight: 400;
+}
+
+.type-counts .type-pill {
+  vertical-align: top;
+}
+
+.type-counts .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.type-counts th.num .head {
+  justify-content: flex-end;
+}
+
+.type-counts-toggle {
+  margin-top: 6px;
+}
+
+/* The same tones as the file cards and change lists. */
+.count-added {
+  color: var(--ok);
+}
+
+.count-removed {
+  color: var(--high);
+}
+
 .count-changed {
   color: var(--info);
 }
@@ -361,9 +425,11 @@
   border-left-color: var(--info);
 }
 
-/* Changed objects with expandable line diffs */
-.changed-section {
-  margin-top: 24px;
+/* Changed objects with expandable line diffs. The gap above sits on the
+   Added/Removed lists (when there are any), so with none the type filter
+   stays right above this section. */
+.change-groups:not(:empty) {
+  margin-bottom: 24px;
 }
 
 .changed-list {

@@ -11,6 +11,7 @@ import {
   lineDiff,
   type DiffOptions,
   type ObjectChange,
+  type TypeDelta,
 } from "@/core/analysis/diff";
 import { TypePill } from "@/components/TypePill";
 import { pressable } from "./a11y";
@@ -30,6 +31,11 @@ function fileUidOfChange(uid: string): string {
   return uid.split(":")[0] ?? "";
 }
 
+/** A "By type" row with anything to show: a count changed or an object moved. */
+function typeHasChanges(row: TypeDelta): boolean {
+  return row.a !== row.b || row.added > 0 || row.removed > 0 || row.changed > 0;
+}
+
 /** Side-by-side comparison of two analyses, oldest → newest. */
 export function ComparisonView() {
   const comparison = useStore((s) => s.comparison);
@@ -39,6 +45,7 @@ export function ComparisonView() {
   const setOpts = useStore((s) => s.setDiffOptions);
   const [fileFilter, setFileFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<ObjectType | "all">("all");
+  const [showAllTypes, setShowAllTypes] = useState(false);
 
   const diff = useMemo(() => {
     if (!comparison) return null;
@@ -114,6 +121,8 @@ export function ComparisonView() {
   }, [diff, comparison, fileFilter, fileOptions, opts]);
 
   if (!comparison || !diff) return null;
+
+  const visibleTypeCounts = showAllTypes ? countsByType : countsByType.filter(typeHasChanges);
 
   // Open an object from a change row: load the analysis it lives in (the baseline
   // "a" for removed items, the comparison "b" otherwise), then focus the object.
@@ -197,31 +206,51 @@ export function ComparisonView() {
         </div>
       )}
 
-      <h3 className="head comparison-section-title">By type</h3>
-      <table className="comparison-table">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Net</th>
-            <th>Added</th>
-            <th>Removed</th>
-            <th>Changed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {countsByType.map((row) => (
-            <tr key={row.type}>
-              <td>{OBJECT_TYPE_META[row.type].plural}</td>
-              <td className={row.b - row.a !== 0 ? "count-changed" : "count-zero"}>
-                {row.b - row.a === 0 ? "—" : `${row.b - row.a > 0 ? "+" : "−"}${Math.abs(row.b - row.a).toLocaleString()}`}
-              </td>
-              <td className={row.added ? "count-added" : "count-zero"}>{row.added || "—"}</td>
-              <td className={row.removed ? "count-removed" : "count-zero"}>{row.removed || "—"}</td>
-              <td className={row.changed ? "count-changed" : "count-zero"}>{row.changed || "—"}</td>
+      {visibleTypeCounts.length > 0 && (
+        <table className="type-counts">
+          <colgroup>
+            <col className="type-counts-type" />
+            <col span={4} className="type-counts-num" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th><span className="head">Type</span></th>
+              <th className="num"><span className="head">Net</span></th>
+              <th className="num"><span className="head">Added</span></th>
+              <th className="num"><span className="head">Removed</span></th>
+              <th className="num"><span className="head">Changed</span></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleTypeCounts.map((row) => {
+              const net = row.b - row.a;
+              return (
+                <tr key={row.type}>
+                  <td>
+                    <TypePill type={row.type} />
+                  </td>
+                  <td className={`num ${net > 0 ? "count-added" : net < 0 ? "count-removed" : "count-zero"}`}>
+                    {net === 0 ? "—" : `${net > 0 ? "+" : "−"}${Math.abs(net).toLocaleString()}`}
+                  </td>
+                  <td className={`num ${row.added ? "count-added" : "count-zero"}`}>{row.added ? row.added.toLocaleString() : "—"}</td>
+                  <td className={`num ${row.removed ? "count-removed" : "count-zero"}`}>{row.removed ? row.removed.toLocaleString() : "—"}</td>
+                  <td className={`num ${row.changed ? "count-changed" : "count-zero"}`}>{row.changed ? row.changed.toLocaleString() : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {visibleTypeCounts.length < countsByType.length && (
+        <button type="button" className="btn type-counts-toggle" onClick={() => setShowAllTypes(true)}>
+          Show all types
+        </button>
+      )}
+      {showAllTypes && countsByType.some((row) => !typeHasChanges(row)) && (
+        <button type="button" className="btn type-counts-toggle" onClick={() => setShowAllTypes(false)}>
+          Show changed types only
+        </button>
+      )}
 
       <div className="type-filter-row">
         <select
