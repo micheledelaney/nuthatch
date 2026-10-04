@@ -57,6 +57,13 @@
 .group-header {
   padding: 5px 12px;
   margin: 0 6px;
+  white-space: nowrap;
+}
+
+/* The name gives way ("…") before the count does. */
+.group-header .fchevron,
+.group-header .group-count {
+  flex: none;
 }
 
 .folder-header {

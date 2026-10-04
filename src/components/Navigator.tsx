@@ -417,7 +417,7 @@ export function Navigator() {
         <div key={key}>
           <div className="head clickable group-header nested" style={{ paddingLeft: pad }} {...pressable(() => toggleGroup(key, open), { expanded: open })}>
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
-            {lg.name} · {lg.objects.length}
+            <GroupLabel name={lg.name} count={lg.objects.length} />
           </div>
           {open && lg.objects.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && lg.objects.length > GROUP_LIMIT && (
@@ -459,7 +459,7 @@ export function Navigator() {
         <div key={key}>
           <div className="head clickable group-header nested" style={{ paddingLeft: pad }} {...pressable(() => toggleGroup(key, open), { expanded: open })}>
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
-            {tg.name} · {tg.fields.length}
+            <GroupLabel name={tg.name} count={tg.fields.length} />
           </div>
           {open && tg.fields.slice(0, GROUP_LIMIT).map((obj) => renderLeaf(obj, depthOffset + 2))}
           {open && tg.fields.length > GROUP_LIMIT && (
@@ -498,7 +498,7 @@ export function Navigator() {
             data-open={open ? "1" : "0"}
           >
             <span className={`fchevron${open ? " open" : ""}`}>›</span>
-            {OBJECT_TYPE_META[type].plural} · {realCount}
+            <GroupLabel name={OBJECT_TYPE_META[type].plural} count={realCount} />
           </div>
         )}
         {open &&
@@ -566,8 +566,10 @@ export function Navigator() {
                   {...pressable(() => toggleGroup(ptKey, ptOpen), { expanded: ptOpen })}
                 >
                   <span className={`fchevron${ptOpen ? " open" : ""}`}>›</span>
-                  {OBJECT_TYPE_META[pinnedType.type].plural} ·{" "}
-                  {pinnedType.items.filter((o) => !o.isSeparator).length}
+                  <GroupLabel
+                    name={OBJECT_TYPE_META[pinnedType.type].plural}
+                    count={pinnedType.items.filter((o) => !o.isSeparator).length}
+                  />
                 </div>
                 );
               })()}
@@ -710,4 +712,17 @@ function groupByType(items: FmObject[]): NavGroup[] {
     });
   }
   return order.filter((t) => buckets.has(t)).map((t) => ({ type: t, items: buckets.get(t) ?? [] }));
+}
+
+/** A group header's name and count on one line: a long name is cut short
+ * with "…" (full name on hover) and the count always shows whole. */
+function GroupLabel({ name, count }: { name: string; count: number }) {
+  return (
+    <>
+      <span className="group-name ellipsis" title={name}>
+        {name}
+      </span>{" "}
+      <span className="group-count">· {count}</span>
+    </>
+  );
 }
