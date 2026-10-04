@@ -666,6 +666,15 @@ describe("what a layout reports", () => {
     expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing>"]);
   });
 
+  it("flags a field object that has no field reference at all", () => {
+    // No sample has one: FileMaker writes <FieldReference id="0" name=""> instead.
+    const field = `<Options>52</Options><Display Style="0" show="1"></Display><Usage inputMode="0" type="0"></Usage>`;
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(editBox("1", field))}</AddAction>`));
+    expect(object(result, "F0:layoutObject:10.1").name).toBe("<Field Missing>");
+    expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing>"]);
+    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing>"]);
+  });
+
   it("flags a button's broken Set Field once, as a script's", () => {
     const setField =
       `<Step id="1" name="Set Field" enable="True"><ParameterValues>` +
@@ -1236,6 +1245,29 @@ describe("a placeholder a developer typed", () => {
 
   it("is still flagged in layout text, which isn't a formula, quotes or not", () => {
     expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Field Missing> via 1"]);
+  });
+
+  it("isn't flagged in an Insert Text step's text, though the step shows it", () => {
+    // FileMaker's rendered text leaves the typed text out; the app adds it.
+    const insertText = (pointer: string): string =>
+      `<Step id="61" name="Insert Text" enable="True">${stepRef(pointer)}<ParameterValues>` +
+      `<Parameter type="Text"><Text value="see &lt;Field Missing&gt;"></Text></Parameter>` +
+      `<Parameter type="Target"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter>` +
+      `</ParameterValues></Step>`;
+    const typed = parse(
+      doc(
+        "MAIN",
+        `<AddAction>${TABLE}
+          <ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>
+          <StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${insertText("_I1")}</ObjectList></Script></StepsForScripts>
+          ${layout(`<LayoutObject id="1" type="Button" name="b"><Button><action>${insertText("_I2")}</action></Button></LayoutObject>`)}
+        </AddAction>`,
+        `<Script><ObjectList>${stepText("_I1", "Insert Text [ T::a ]")}${stepText("_I2", "Insert Text [ T::a ]")}</ObjectList></Script>`,
+      ),
+    );
+    expect(object(typed, "F0:script:1").detail).toMatchObject({ steps: [{ params: `[ T::a ] [ Text: "see <Field Missing>" ]` }] });
+    expect(forcedFrom(typed, "F0:script:1")).toEqual([]);
+    expect(forcedFrom(typed, "F0:layoutObject:10.1")).toEqual([]);
   });
 });
 

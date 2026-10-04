@@ -5,10 +5,10 @@ import { objectUid } from "../uid";
 import { collectCatalogItems } from "../catalogWalk";
 import { scanRefs } from "../refs/scanRefs";
 import { newObject } from "./catalogItems";
-import { isCommentStep, isPerformScriptStep, stepNodes } from "../steps";
+import { isPerformScriptStep, stepNodes } from "../steps";
 import { calcOf } from "./common";
 import { literalText } from "../calcText";
-import { stepParams } from "./stepText";
+import { actionScanTexts } from "./stepText";
 
 const MENU_MODES: ReadonlyArray<readonly [string, string]> = [
   ["browseMode", "browse"],
@@ -104,10 +104,7 @@ export function parseCustomMenuItems(fp: FileParse, containerNode: Record<string
       fp.objects.push(obj);
       // Its action step's rendered text too: as in a script's step, a target
       // FileMaker blanked to `<FieldReference id="0">` shows only there.
-      const stepText = menuItemSteps(item)
-        .map((step) => ({ step, name: textAttr(step, "name") ?? "" }))
-        .filter(({ name }) => !isCommentStep(name))
-        .map(({ step, name }) => stepParams(step, name, fp.index.stepTexts));
+      const stepText = actionScanTexts(menuItemSteps(item), fp.index.stepTexts);
       scans.push({ obj, text: [cdataText(item), ...stepText].join("\n"), source: item });
       if (isSeparator) continue;
       // A menu item exists only as part of its menu, so the menu is what

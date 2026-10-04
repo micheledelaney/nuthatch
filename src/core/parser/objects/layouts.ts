@@ -8,7 +8,6 @@ import { addMergeVariableRefs } from "../refs/globalVariables";
 import { addTextDerivedRefs } from "../refs/textRefs";
 import { makeObject, newObject, placeInCatalog } from "./catalogItems";
 import { stripOuterQuotes } from "./common";
-import { isCommentStep } from "../steps";
 import { addDeferredLayoutRefs } from "./deferredLayouts";
 import { layoutDetail, type LayoutDetail, type LayoutNodes, type LayoutObjectNode } from "./layoutDetail";
 
@@ -97,14 +96,14 @@ function addObjectRefsToLayout(lp: FileParse, layoutUid: string): void {
 
 /** Record what an element holds for `owner` — its references and the globals
  * merged into its text — and return the text the placeholder pass reads for
- * it: after `listedText`, the listed terms of a layout object that can show a
- * placeholder its element doesn't (a field binding whose <FieldReference> is
- * gone shows only there). */
-function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, listedText?: string): string {
+ * it: after `missingBinding`, the placeholder of a layout object's field
+ * binding whose field is gone, which shows nowhere in its element (see
+ * layoutDetail's missingBinding). */
+function scanOwnElement(fp: FileParse, own: unknown, owner: FmObject, missingBinding?: string): string {
   scanRefs(fp, own, owner);
   const literal = cdataText(own);
   addMergeVariableRefs(fp, owner.uid, literal);
-  return listedText ? `${listedText}\n${literal}` : literal;
+  return missingBinding ? `${missingBinding}\n${literal}` : literal;
 }
 
 /** Surface the table occurrence a layout shows records from (a nested
@@ -183,17 +182,15 @@ function addLayoutObject(cx: LayoutObjectsContext, node: LayoutObjectNode, paren
   // triggers, and the calcs behind its label, tooltip, hide condition,
   // conditional formatting, web viewer, and button action — but not what
   // the listed objects inside it use: each of those reports its own. The
-  // placeholder pass reads the same element, after the listed terms the
-  // element doesn't show a placeholder in (its field binding and portal
-  // occurrence, read from attributes) — then its button step's rendered text,
-  // where, as in a script's step, a target FileMaker blanked to
-  // `<FieldReference id="0">` still shows as a placeholder. Not its search
-  // text: what it's found by isn't what it uses.
-  const listed = [lo.fieldRef, lo.portalTable].filter(Boolean).join("\n");
+  // placeholder pass reads the same element, after the placeholder of a field
+  // binding whose field is gone, which the element doesn't show — then its
+  // button step's rendered text, where, as in a script's step, a target
+  // FileMaker blanked to `<FieldReference id="0">` still shows as a
+  // placeholder. Not its search text or labels: what it's found by or shown
+  // as isn't what it uses.
   const own = ownElement(element, cx.listedElements);
-  const text = scanOwnElement(fp, own, obj, listed);
-  const step = lo.actionStep && !isCommentStep(lo.actionStep.name) ? lo.actionStep.params : "";
-  cx.scans.push({ obj, text: step ? `${text}\n${step}` : text, source: own });
+  const text = scanOwnElement(fp, own, obj, node.missingBinding);
+  cx.scans.push({ obj, text: node.actionText ? `${text}\n${node.actionText}` : text, source: own });
   return children.length ? { ...withUid, children: addLayoutObjectTree(cx, children, uid, chain ?? idChain) } : withUid;
 }
 

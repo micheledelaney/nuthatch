@@ -1,6 +1,6 @@
-import type { FmObject, RawReference } from "@/types/ddr";
-import { isBrokenTableOccurrence } from "@/types/ddr";
+import type { RawReference } from "@/types/ddr";
 import type { FileIndex, FileParse, TextScan } from "../context";
+import { attr, child } from "../xmlUtils";
 import { missingFieldOccurrences } from "@/core/identifiers";
 import { MISSING_FIELD_TOKEN, MISSING_FUNCTION_TOKEN, MISSING_TABLE_TOKEN, UNKNOWN_TARGET } from "../sentinels";
 import { formulasUnder, inertSpansWith } from "../calcText";
@@ -24,7 +24,7 @@ export function addPlaceholderRefs(fp: FileParse, batch: readonly TextScan[]): v
   addMissingFieldRefs(fp, batch);
   // After addMissingFieldRefs: a step it already flagged isn't flagged again.
   addMissingTargetTableRefs(fp, batch);
-  forEachPlaceholderUse(batch, MISSING_FUNCTION_TOKEN, (obj, _text, site) => {
+  forEachPlaceholderUse(batch, MISSING_FUNCTION_TOKEN, ({ obj }, _text, site) => {
     pushRef(fp.references, brokenRef(obj.uid, "customFunction", MISSING_FUNCTION_TOKEN), site);
   });
   addBrokenTableOccurrenceRefs(fp, batch);
@@ -38,32 +38,35 @@ export function addPlaceholderRefs(fp: FileParse, batch: readonly TextScan[]): v
  * distinct missing target.
  *
  * The placeholders this pass is for are in calculation text and rendered steps,
- * so every other object is read through its scan text (TextScan): the CDATA of
- * what its element scan read (a field: its *active* calcs only, so a disabled
- * auto-enter calc naming a deleted field doesn't flag it), after a layout
- * object's listed terms. Not its search `text`, where a placeholder FileMaker
- * wrote as an attribute value (`<TableOccurrenceReference id="-1"
- * name="&lt;Table Missing&gt;">`) reads decoded: those are structural, and the
- * element scan already records them as the broken reference.
+ * so every object is read through its scan text (TextScan): a script's steps
+ * as FileMaker rendered them, and every other object the CDATA of what its
+ * element scan read (a field: its *active* calcs only, so a disabled
+ * auto-enter calc naming a deleted field doesn't flag it), after the
+ * placeholder of a layout object's field binding whose field is gone. Not its
+ * search `text`, where a placeholder FileMaker wrote as an attribute value
+ * (`<TableOccurrenceReference id="-1" name="&lt;Table Missing&gt;">`) reads
+ * decoded: those are structural, and the element scan already records them as
+ * the broken reference.
  */
 function forEachPlaceholderUse(
   batch: readonly TextScan[],
   token: string,
-  emit: (obj: FmObject, text: string, site: ScanContext) => void,
+  emit: (scan: TextScan, text: string, site: ScanContext) => void,
 ): void {
   for (const scan of batch) {
     const { obj, text } = scan;
     if (obj.detail?.kind === "script") {
-      for (const step of obj.detail.steps) {
-        if (isCommentStep(step.name) || !step.params.includes(token)) continue;
-        const live = liveText(step.params, scan);
-        if (live.includes(token)) emit(obj, live, { stepIndex: step.index, disabled: !step.enabled });
-      }
+      obj.detail.steps.forEach((step, i) => {
+        const rendered = scan.renderedSteps?.[i] ?? "";
+        if (isCommentStep(step.name) || !rendered.includes(token)) return;
+        const live = liveText(rendered, scan);
+        if (live.includes(token)) emit(scan, live, { stepIndex: step.index, disabled: !step.enabled });
+      });
       continue;
     }
     if (!text.includes(token)) continue;
     const live = liveText(text, scan);
-    if (live.includes(token)) emit(obj, live, {});
+    if (live.includes(token)) emit(scan, live, {});
   }
 }
 
@@ -147,7 +150,7 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly TextScan[]): void {
   // field would be counted and displayed twice. A blank name behind an
   // unavailable file is no such field: it doesn't hide a placeholder.
   const alreadyBroken = sitesWith(fp.references, (r) => isBlankedDeletedField(r, fp.index));
-  forEachPlaceholderUse(batch, MISSING_FIELD_TOKEN, (obj, text, site) => {
+  forEachPlaceholderUse(batch, MISSING_FIELD_TOKEN, ({ obj }, text, site) => {
     if (alreadyBroken.has(siteKey(obj.uid, site.stepIndex))) return;
     const deleted = deletedFieldVia(text, fp.index);
     if (!deleted) return;
@@ -190,14 +193,21 @@ function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } |
 function addMissingTargetTableRefs(fp: FileParse, batch: readonly TextScan[]): void {
   const alreadyBroken = sitesWith(fp.references, (r) => (r.toType === "field" && r.forceBroken === true) || isBlankedDeletedField(r, fp.index));
   const deadOccurrence = sitesWith(fp.references, (r) => r.toType === "tableOccurrence" && r.toId === "-1");
-  forEachPlaceholderUse(batch, MISSING_TABLE_TOKEN, (obj, text, site) => {
+  forEachPlaceholderUse(batch, MISSING_TABLE_TOKEN, (scan, text, site) => {
+    const { obj } = scan;
     const key = siteKey(obj.uid, site.stepIndex);
     if (!BARE_MISSING_TABLE_RE.test(text) || alreadyBroken.has(key)) return;
-    const isPortal = obj.detail?.kind === "layoutObject" && obj.detail.portalTable === MISSING_TABLE_TOKEN;
+    const isPortal = isDeadPortal(scan.source);
     if (isPortal && deadOccurrence.has(key)) return;
     const toType = isPortal ? "tableOccurrence" : "field";
     pushRef(fp.references, brokenRef(obj.uid, toType, MISSING_TABLE_TOKEN), site);
   });
+}
+
+/** A portal whose occurrence was deleted: FileMaker writes it as
+ * `<TableOccurrenceReference id="-1" name="&lt;Table Missing&gt;">`. */
+function isDeadPortal(element: unknown): boolean {
+  return attr(child(child(element, "Portal"), "TableOccurrenceReference"), "id") === "-1";
 }
 
 /**
@@ -208,12 +218,13 @@ function addMissingTargetTableRefs(fp: FileParse, batch: readonly TextScan[]): v
  *
  * An external occurrence counts only when its data source was deleted; one that
  * merely couldn't be resolved at export time isn't broken at all
- * (isUnresolvedTableOccurrence).
+ * (OccurrenceSource.unresolved).
  */
 function addBrokenTableOccurrenceRefs(fp: FileParse, batch: readonly TextScan[]): void {
   for (const { obj } of batch) {
-    if (isBrokenTableOccurrence(obj)) {
-      fp.references.push(brokenRef(obj.uid, "table", obj.attributes.externalDataSource || UNKNOWN_TARGET));
+    const source = obj.type === "tableOccurrence" ? fp.index.toById.get(obj.id) : undefined;
+    if (source && source.baseTableId == null && !source.unresolved) {
+      fp.references.push(brokenRef(obj.uid, "table", source.dataSourceName || UNKNOWN_TARGET));
     }
   }
 }

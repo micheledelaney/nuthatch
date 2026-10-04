@@ -38,17 +38,25 @@ export function sortFields(spec: unknown, index: FileIndex): SortField[] {
     });
 }
 
-/** The field a <FieldReference> names. FileMaker leaves the reference in place
- * with its `name` blank in two cases: the field was deleted — flagged the way
- * a broken reference reads anywhere else in the app — or it sits behind an
- * occurrence whose file wasn't available at export, which proves nothing; that
- * one reads by its id, like any other unnamed object. */
-export function fieldRefName(ref: unknown, index: FileIndex): string {
-  const name = textAttr(ref, "name");
-  if (name) return name;
+/** What a <FieldReference> says about its field. FileMaker leaves the reference
+ * in place with its `name` blank in two cases: the field was deleted, or it
+ * sits behind an occurrence whose file wasn't available at export, which
+ * proves nothing. */
+export type FieldRefState = "named" | "deleted" | "unverifiable";
+
+export function fieldRefState(ref: unknown, index: FileIndex): FieldRefState {
+  if (textAttr(ref, "name")) return "named";
   const toId = attr(child(ref, "TableOccurrenceReference"), "id");
-  const unverifiable = toId != null && index.toById.get(toId)?.unresolved === true;
-  return unverifiable ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
+  return toId != null && index.toById.get(toId)?.unresolved === true ? "unverifiable" : "deleted";
+}
+
+/** The field a <FieldReference> names (see fieldRefState): a deleted one is
+ * flagged the way a broken reference reads anywhere else in the app; an
+ * unverifiable one reads by its id, like any other unnamed object. */
+export function fieldRefName(ref: unknown, index: FileIndex): string {
+  const state = fieldRefState(ref, index);
+  if (state === "named") return textAttr(ref, "name") ?? "";
+  return state === "unverifiable" ? `(field ${attr(ref, "id") ?? "?"})` : MISSING_FIELD_TOKEN;
 }
 
 /** A button's label without the quotes it's shown in (see behaviorLine). A

@@ -1,19 +1,24 @@
 import type { LayoutObjectInfo, LayoutPart, ObjectDetail } from "@/types/ddr";
-import type { FileIndex, StepTexts } from "../context";
+import type { FileIndex } from "../context";
 import { asArray, attr, child, children, displayText, findElement, isRecord, textAttr, uuidText } from "../xmlUtils";
 import { MISSING_FIELD_TOKEN } from "../sentinels";
 import { calculationText, literalText } from "../calcText";
-import { BUTTON_ACTION_TAGS, calcOf, qualifiedField, scriptTriggers, sortFields } from "./common";
-import { stepParams } from "./stepText";
+import { BUTTON_ACTION_TAGS, calcOf, fieldRefState, qualifiedField, scriptTriggers, sortFields } from "./common";
+import { actionScanTexts, stepParams } from "./stepText";
 
 export type LayoutDetail = Extract<ObjectDetail, { kind: "layout" }>;
 
 /** A layout object as read: what it shows, the XML element it was read from,
- * and the objects nested in it (`info.children` holds their infos). */
+ * and the objects nested in it (`info.children` holds their infos) — plus
+ * what the text-based passes read of it beside its element. */
 export interface LayoutObjectNode {
   info: LayoutObjectInfo;
   element: Record<string, unknown>;
   children: LayoutObjectNode[];
+  /** The placeholder of a field binding whose field is gone (see missingBinding). */
+  missingBinding?: string;
+  /** Its button action step as FileMaker rendered it (see actionScanTexts). */
+  actionText?: string;
 }
 
 /** A layout part with its objects as nodes. */
@@ -122,6 +127,7 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
   const tooltip = calcOf(child(obj, "Tooltip"));
   // A computed tooltip shows as its formula.
   const shownTooltip = literalText(tooltip) ?? tooltip;
+  const action = buttonAction(obj);
   const shown: LayoutObjectInfo = {
     type,
     name: panelLabel(obj) ?? textAttr(obj, "name") ?? "",
@@ -139,13 +145,22 @@ function layoutObjectNode(obj: Record<string, unknown>, index: FileIndex): Layou
     ...(portalSort.length > 0 ? { portalSort } : {}),
     ...(kids ? { children: kids.map((kid) => kid.info) } : {}),
     ...fieldBinding(obj, index),
-    ...buttonAction(obj, index.stepTexts),
+    ...(action.scriptRef ? { scriptRef: action.scriptRef } : {}),
+    ...(action.step ? { actionStep: { name: action.step.name, params: stepParams(action.step.node, action.step.name, index.stepTexts) } } : {}),
     // Object-level script triggers (separate from layout-level triggers).
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(shownTooltip ? { tooltip: shownTooltip } : {}),
     ...conditions(obj),
   };
-  return { info: shown, element: obj, children: kids ?? [] };
+  const missing = missingBinding(obj, index);
+  const actionText = action.step ? actionScanTexts([action.step.node], index.stepTexts).join("\n") : "";
+  return {
+    info: shown,
+    element: obj,
+    children: kids ?? [],
+    ...(missing ? { missingBinding: missing } : {}),
+    ...(actionText ? { actionText } : {}),
+  };
 }
 
 /** A Tab Panel / Slide Panel's label, from its <Calculation>. */
@@ -205,19 +220,40 @@ function fieldBinding(obj: Record<string, unknown>, index: FileIndex): Partial<L
   };
 }
 
+/**
+ * The placeholder FileMaker shows for a field binding whose field is gone —
+ * `<Field Missing>`, after its occurrence when it names one — for the
+ * text-based passes, which read it as they read one in a calc. Read from the
+ * XML, apart from the binding's label (fieldBinding), so how the label reads
+ * can't change what's flagged. The element scan skips a binding left as
+ * `<FieldReference id="0" name="">` or without one at all, so this is all that
+ * flags it. Undefined when the field is there or can't be verified.
+ */
+function missingBinding(obj: Record<string, unknown>, index: FileIndex): string | undefined {
+  const fieldNode = child(obj, "Field");
+  if (!isRecord(fieldNode)) return undefined;
+  const ref = child(fieldNode, "FieldReference");
+  if (!isRecord(ref)) return MISSING_FIELD_TOKEN;
+  if (fieldRefState(ref, index) !== "deleted") return undefined;
+  const to = textAttr(child(ref, "TableOccurrenceReference"), "name");
+  return to ? `${to}::${MISSING_FIELD_TOKEN}` : MISSING_FIELD_TOKEN;
+}
+
 /** What a button (or grouped button — Group and Grouped Button share the
  * <GroupedButton> wrapper) does: the script it performs, or else its single
  * action step. */
-function buttonAction(
-  obj: Record<string, unknown>,
-  stepTexts: StepTexts,
-): Pick<LayoutObjectInfo, "scriptRef" | "actionStep"> {
+interface ButtonAction {
+  scriptRef?: LayoutObjectInfo["scriptRef"];
+  step?: { node: Record<string, unknown>; name: string };
+}
+
+function buttonAction(obj: Record<string, unknown>): ButtonAction {
   const button = BUTTON_ACTION_TAGS.map((tag) => child(obj, tag)).find(isRecord);
   if (!button) return {};
   const scriptRef = extractScriptRef(button["action"]);
   if (scriptRef) return { scriptRef };
-  const actionStep = actionStepOf(button["action"], stepTexts);
-  return actionStep ? { actionStep } : {};
+  const step = actionStepOf(button["action"]);
+  return step ? { step } : {};
 }
 
 /** Hide-object-when and conditional-formatting calculations:
@@ -304,11 +340,11 @@ function extractScriptRef(action: unknown): LayoutObjectInfo["scriptRef"] {
 
 /** A button's single action step (<action><Step name="...">), which single-step
  * buttons use instead of a <ScriptReference>. */
-function actionStepOf(action: unknown, stepTexts: StepTexts): LayoutObjectInfo["actionStep"] {
-  const step = child(asArray(action)[0], "Step");
-  if (!isRecord(step)) return undefined;
-  const name = textAttr(step, "name") ?? "";
-  return name ? { name, params: stepParams(step, name, stepTexts) } : undefined;
+function actionStepOf(action: unknown): ButtonAction["step"] {
+  const node = child(asArray(action)[0], "Step");
+  if (!isRecord(node)) return undefined;
+  const name = textAttr(node, "name") ?? "";
+  return name ? { node, name } : undefined;
 }
 
 /** A styled label's text: the first non-empty <StyledText><Data> under `node`,
