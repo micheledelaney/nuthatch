@@ -27,7 +27,10 @@ export const BROKEN_ELIGIBLE: ReadonlySet<string> = new Set([
   "relationship",
   "account",
   "customMenuSet",
+  "customMenuItem",
   "field",
+  "layoutObject",
+  "file",
 ]);
 
 /** FileMaker's full data-type set. `value` is the raw FMSaveAsXML `datatype`;
