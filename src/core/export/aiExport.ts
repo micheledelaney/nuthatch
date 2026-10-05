@@ -3,6 +3,8 @@ import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { brokenSources } from "@/core/analysis/dependencies";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
+import { buildDataSourceIndex, type DataSourceIndex } from "@/core/model/dataSources";
+import { refLabel, refStatus } from "@/core/model/refStatus";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -49,10 +51,11 @@ export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportF
   const brokenFrom = brokenSources(model);
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
   const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
+  const sources = buildDataSourceIndex(model.objects, model.files);
   return [
     { name: "README.md", content: buildReadme(model, info) },
     { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced, unusedChain)).join("\n") + "\n" },
-    { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model))].join("\n") + "\n" },
+    { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model, sources))].join("\n") + "\n" },
     // Keeps the dump (which can include account names and emails) out of git
     // by default; the README explains how to opt in.
     { name: ".gitignore", content: "*\n" },
@@ -123,20 +126,45 @@ function slimDetail(detail: ObjectDetail | undefined): object | undefined {
   return detail;
 }
 
-function refRow(r: FmReference, model: SolutionModel): string {
+/** The reference's status column: the app's status (see refStatus), with a
+ * disabled step's resolved reference as `disabled`, and a field name read from
+ * calculation text that matched no field of a loaded file as `unmatched`. */
+function refRowStatus(r: FmReference, model: SolutionModel, sources: DataSourceIndex): string {
+  const status = refStatus(r, model.byUid);
+  if (status === "ok") return r.disabled ? "disabled" : "ok";
+  if (status !== "external") return status;
+  // Only a field name recovered from calculation text has no FileMaker id.
+  const via = r.viaUid ? model.byUid.get(r.viaUid) : undefined;
+  const isFromText = r.toType === "field" && r.toId === "";
+  return isFromText && via && sources.fileForOccurrence(via) ? "unmatched" : "external";
+}
+
+/** The target's name; when FileMaker left it blank, the app's label for it
+ * (e.g. `<Value List Missing>`). A field's is just the field part, since the
+ * occurrence is in `via_uid`. */
+function refRowName(r: FmReference, model: SolutionModel): string {
+  if (r.toName) return r.toName;
+  if (r.toType !== "field") return refLabel(r, model.byUid);
+  const target = r.toUid ? model.byUid.get(r.toUid) : undefined;
+  if (target?.name) return target.name;
+  const status = refStatus(r, model.byUid);
+  return status === "broken" ? "<Field Missing>" : status === "unverifiable" ? "<File Missing>" : `(field ${r.toId})`;
+}
+
+function refRow(r: FmReference, model: SolutionModel, sources: DataSourceIndex): string {
   const from = model.byUid.get(r.fromUid);
-  const status = r.broken ? "broken" : r.toUid ? (r.disabled ? "disabled" : "ok") : "unresolved";
   return [
     r.fromUid,
     from?.type ?? "",
     from ? objectLabel(from) : "",
     r.fromStep ?? "",
     r.kind,
-    status,
+    refRowStatus(r, model, sources),
     r.toUid ?? "",
     r.toType,
-    r.toName,
-    r.viaUid ?? "",
+    refRowName(r, model),
+    // A deleted occurrence (FileMaker's `<Table Missing>`) isn't in the model.
+    r.viaUid && model.byUid.has(r.viaUid) ? r.viaUid : "",
   ]
     .map((v) => tsvCell(String(v)))
     .join("\t");
@@ -189,7 +217,7 @@ above, re-export the XML, re-analyze it in nuthatch, and export again.
 ${files}
 
 Files not listed here were not loaded. References into them show as
-\`unresolved\` (or broken), and anything *they* reference is invisible here.
+\`external\` (or broken), and anything *they* reference is invisible here.
 
 ## uids
 
@@ -225,8 +253,10 @@ One JSON object per line:
   \`weightedBy\`, \`restartsEachGroup\`. Lookups: \`source\`, \`startingFrom\`,
   \`ifNoMatch\`, \`skipEmpty\`. Layouts: \`parts\` (a sub-summary's \`breakField\`),
   \`tableView\` columns. Layout objects: \`loType\`, \`fieldRef\`, \`scriptRef\`,
-  \`scriptParameter\`, \`triggers\`, \`tooltip\`, \`placeholder\`, \`hideWhen\`,
-  \`conditionalFormats\`, \`portalFilter\`, \`popoverTitle\`, \`chart\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
+  \`scriptParameter\`, \`valueListRef\`, \`actionStep\` (a button's single step),
+  \`triggers\`, \`tooltip\`, \`placeholder\`, \`hideWhen\` (\`hideInFind\`: also in
+  Find mode), \`conditionalFormats\`, \`portalSort\`, \`portalFilter\`,
+  \`popoverTitle\`, \`chart\`, \`bounds\`, … Relationships: \`predicates\` and cascade settings.
 - \`text\`: readable content for types without a structured body.
 
 | type | label | count |
@@ -242,9 +272,9 @@ Tab-separated, one reference per line, with a header row:
 | \`from_uid\`, \`from_type\`, \`from_name\` | the object holding the reference |
 | \`step\` | 1-based step index, when the reference is in a step: of a script, or of a button's or custom menu item's action |
 | \`kind\` | how it references, e.g. \`performScript\`, \`trigger\`, \`field\`, \`goToLayout\` |
-| \`status\` | \`ok\`, \`disabled\` (in a disabled script step), \`broken\` (target gone), or \`unresolved\` (target in a file that wasn't loaded) |
-| \`to_uid\`, \`to_type\`, \`to_name\` | the target (\`to_uid\` is empty when broken or unresolved) |
-| \`via_uid\` | for field references: the table occurrence the field is read through |
+| \`status\` | \`ok\`; \`disabled\` (in a disabled script step); \`broken\` (target gone); \`external\` (target in a file that wasn't loaded); \`unverifiable\` (a field FileMaker left nameless behind an occurrence whose file wasn't available at export: no one can tell whether it exists); \`unmatched\` (a field name read from calculation text that matches no field of the loaded file) |
+| \`to_uid\`, \`to_type\`, \`to_name\` | the target (\`to_uid\` is empty unless \`ok\` or \`disabled\`). Where FileMaker left the name blank, \`to_name\` is FileMaker's placeholder, e.g. \`<Field Missing>\`, \`<Value List Missing>\`, \`<File Missing>\` |
+| \`via_uid\` | for field references: the table occurrence the field is read through (empty when that occurrence was deleted) |
 
 A layout object's references (its field, button action, tooltip,
 hide-object-when, conditional formatting, …) are listed under the object, and
