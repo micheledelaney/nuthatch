@@ -808,7 +808,7 @@
     {
       "id": "guest-login",
       "about": "EXT:file:TEST_EXT autoLogin",
-      "question": "Which <Login type> does FileMaker write for 'log in using Guest'? Compare with SampleB (type -1)."
+      "question": "Which <Login type> does FileMaker write for 'log in using Guest'? Compare with a sample export with automatic login off (type -1)."
     },
     {
       "id": "ds-path-variable",

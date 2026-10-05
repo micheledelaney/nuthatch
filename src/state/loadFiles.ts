@@ -13,7 +13,7 @@ const DECODE_SLICE_BYTES = 64 * 1024 * 1024;
  * alongside the raw buffer.
  *
  * Decoded in slices: Node's TextDecoder rejects UTF-16 input of 256 MiB or
- * more as invalid (Orders.xml is 341 MiB), which failed the command-line
+ * more as invalid (the largest sample export is 341 MiB), which failed the command-line
  * export. The decoder streams, so a character split between two slices still
  * decodes, and `+=` joins the pieces without copying them yet.
  */

@@ -45,7 +45,7 @@ describe("chunkListMatchesText", () => {
   });
 
   it("doesn't match another calc's chunks", () => {
-    expect(chunkListMatchesText(list, `If ( Customers::Ort = "x" ; 1 )`)).toBe(false);
+    expect(chunkListMatchesText(list, `If ( Customers::City = "x" ; 1 )`)).toBe(false);
   });
 
   it("reads a field chunk with no occurrence as the bare field name", () => {

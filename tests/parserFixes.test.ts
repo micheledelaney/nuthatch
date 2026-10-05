@@ -107,7 +107,7 @@ describe("layout objects record what they use", () => {
   });
 
   it("flags a deleted field in a portal's filter on the portal, not only on its layout", () => {
-    // As in the Order.xml sample: the filter names a field of a deleted
+    // As in a sample export: the filter names a field of a deleted
     // occurrence, so its chunk list is empty.
     const filtered = parse(
       doc(
@@ -364,7 +364,7 @@ describe("what gets parsed", () => {
   });
 
   it("flags a deleted field in a step whose other field sits behind an unavailable file", () => {
-    // As in the SampleB.xml sample: the target's file wasn't available at
+    // As in a sample export: the target's file wasn't available at
     // export, so FileMaker blanks its name; the value reads a deleted occurrence.
     const result = parse(
       doc(
@@ -460,7 +460,7 @@ describe("what gets parsed", () => {
   });
 
   it("shows an auto-enter calc that's on beside an auto-entered Data value", () => {
-    // As in the SampleA sample: FileMaker 26 marks each option enable="…".
+    // As in a sample export: FileMaker 26 marks each option enable="…".
     const autoEnter = (enable: string): string =>
       `<AutoEnter type="ConstantData" overwriteExisting="True" alwaysEvaluate="True"><ConstantData>0</ConstantData>` +
       `<Calculated enable="${enable}"><Calculation><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference><Text><![CDATA[T::a]]></Text></Calculation></Calculated></AutoEnter>`;
@@ -644,7 +644,7 @@ describe("what a layout reports", () => {
     `<Conditions><Formatting><Condition><Calculation><DDRREF kind="ChunkList" hash="H5">_P5</DDRREF><Text><![CDATA[${formula}]]></Text></Calculation></Condition></Formatting></Conditions>`;
 
   it("flags a deleted field in one object's calc although another object reads a deleted occurrence", () => {
-    // As on the Production sample's Duration layout.
+    // As on a layout in a sample export.
     const result = parse(
       doc(
         "MAIN",
@@ -660,7 +660,7 @@ describe("what a layout reports", () => {
   });
 
   it("flags a field object whose field and occurrence were deleted on its layout too", () => {
-    // As on the Contacts sample's Contact-dev layout.
+    // As on another layout in a sample export.
     const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(editBox("1", `<FieldReference id="0" name="" UUID=""></FieldReference>`))}</AddAction>`));
     expect(object(result, "F0:layoutObject:10.1").name).toBe("<Field Missing>");
     expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing>"]);
@@ -1053,8 +1053,8 @@ describe("calcs that share a chunk list", () => {
 describe("layout objects copied without a new UUID", () => {
   // FileMaker copies a layout object without regenerating its UUID, so the
   // copies' calcs share pointers (`_<UUID>_Label`); DDR_INFO keeps one block
-  // per pointer, and the copy whose pointer has the hash owns it (as on
-  // SampleA's layout 982, buttons 3486 and 3953).
+  // per pointer, and the copy whose pointer has the hash owns it (as on two
+  // buttons of a layout in a sample export).
   const SPELLS_A = `<ChunkList hash="X"><Chunk type="FieldRef"><FieldReference id="1" name="a"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Chunk></ChunkList>`;
   const block = (pointer: string): string => `<${pointer} hash="X" datatype="ChunkList">${SPELLS_A}</${pointer}>`;
   const pointer = (name: string, hash: string): string => `<DDRREF kind="ChunkList" hash="${hash}">${name}</DDRREF>`;
@@ -1135,7 +1135,7 @@ describe("a field read through another file's occurrence, recovered from a calc'
 });
 
 describe("a field read through another file's occurrence while that file isn't loaded", () => {
-  // As SampleA's JOB_X: X has its base table recorded, so its file
+  // As an occurrence in a sample export: X has its base table recorded, so its file
   // was open at export.
   const TABLE_AND_EXTERNAL = TABLE.replace(
     "</TableOccurrenceCatalog>",
@@ -1337,7 +1337,7 @@ describe("a button's script parameter", () => {
         "MAIN",
         `<AddAction>${TABLE}${layout(
           button("1", `<ScriptReference id="1" name="S"></ScriptReference>${calc(parameter)}`) +
-            // As in SampleA and Images: the script was deleted, so FileMaker
+            // As in two sample exports: the script was deleted, so FileMaker
             // dropped the <ScriptReference> and kept the parameter.
             button("2", calc(`"orphaned"`)),
         )}</AddAction>`,
@@ -1456,7 +1456,7 @@ describe("sort orders", () => {
 });
 
 describe("a deleted field with the id of another table's field", () => {
-  // As SampleA's MAP_EDIT loaded without its local file: no field
+  // As a layout of a sample export loaded without its local file: no field
   // is found, and field ids are only unique within a table, so X's field 7 is
   // no repeat of Y's, while Z's is: Z is another occurrence of Y's table.
   const EXTERNAL = TABLE.replace(
@@ -1576,7 +1576,7 @@ describe("settings the samples write in shapes the test solution doesn't", () =>
   /** TABLE with field b replaced by `field` (an element with id 2). */
   const withField = (field: string): string => TABLE.replace('<Field id="2" name="b"></Field>', field);
 
-  it("reads a lookup's constant for no match (Dev Invoice)", () => {
+  it("reads a lookup's constant for no match", () => {
     const result = parse(
       doc(
         "MAIN",
@@ -1590,7 +1590,7 @@ describe("settings the samples write in shapes the test solution doesn't", () =>
     expect(object(result, "F0:field:1.2").detail).toEqual({ kind: "lookup", source: "T::a", startingFrom: "T", skipEmpty: false, ifNoMatch: "Use “none”" });
   });
 
-  it("names a standard deviation as FileMaker spells it (Dev OrderLists)", () => {
+  it("names a standard deviation as FileMaker spells it", () => {
     const result = parse(
       doc(
         "MAIN",
@@ -1617,7 +1617,7 @@ describe("settings the samples write in shapes the test solution doesn't", () =>
     expect(detail).not.toHaveProperty("sortedBy");
   });
 
-  it("lists every container base directory and the thumbnail setting (SampleA)", () => {
+  it("lists every container base directory and the thumbnail setting", () => {
     const result = parse(
       doc(
         "MAIN",
@@ -1648,7 +1648,7 @@ describe("settings the samples write in shapes the test solution doesn't", () =>
     expect(object(result, "F0:table:1").attributes.fieldsListedBy).toBe("3");
   });
 
-  it("reads a chart's series data formula when FileMaker exports one (SampleA)", () => {
+  it("reads a chart's series data formula when FileMaker exports one", () => {
     const result = parse(
       doc(
         "MAIN",

@@ -357,7 +357,7 @@ New objects pick up the privilege sets' defaults; nothing was set for them by ha
 - PS_CustomLayouts: L_Calcs is modifiable, with no access to records.
 - PS_CustomVL: VL_SecondOnly has no access.
 
-Also: note what SampleB's File Options ▸ "Log in using" shows. That settles the `Login type="-1"` label.
+Also: note what File Options ▸ "Log in using" shows in a sample export with automatic login off. That settles the `Login type="-1"` label.
 
 ## Running the test
 
@@ -384,7 +384,7 @@ A scenario whose exports are missing is skipped. Checks tied to a pinned to-do r
 
 ## To do
 
-- **Parser: auto-login label** (pinned): the parser decides the File Options auto-login label by whether an account name is present, not by `<Login type>` (1 = named account, 0 = Guest, -1 = off). TEST_EXT (Guest) shows `Account “[Guest]”` instead of "Guest account", and a file with no automatic login (SampleB, `type="-1"`) shows "Guest account". Until fixed, the `EXT:file:TEST_EXT autoLogin` check fails. Still to decide: whether `-1` shows nothing or "Off".
+- **Parser: auto-login label** (pinned): the parser decides the File Options auto-login label by whether an account name is present, not by `<Login type>` (1 = named account, 0 = Guest, -1 = off). TEST_EXT (Guest) shows `Account “[Guest]”` instead of "Guest account", and a file with no automatic login (`type="-1"`) shows "Guest account". Until fixed, the `EXT:file:TEST_EXT autoLogin` check fails. Still to decide: whether `-1` shows nothing or "Off".
 - **Two broken edges for one deletion**: a deleted data source gives TO_DelDS two broken edges (data source and table), and VL_ExtDeleted two (value list and data source). The report card counts objects, so it's unaffected, but the object page and the browse list show "2 broken refs". Decide whether to keep both.
 - **FM 22 export with TEST_EXT closed**: would confirm the closed-file shape the parser relies on (TO_Ext without its base table, step 13 without a layout id). It could also become a test scenario. With the appended build, obj_ExtGTRR also covers FM 22's deferred button targets.
 - **Appended items**:

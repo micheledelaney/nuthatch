@@ -1,7 +1,10 @@
 /**
  * Before/after check for parser changes, over the sample exports in files/
- * (gitignored) and the test-solution fixtures. Build it once per side, so each
- * bundle keeps the parser as it was when it was built:
+ * (gitignored) and the test-solution fixtures. The samples' groups are listed
+ * in files/corpus.json, gitignored with them — `{ "group": ["files/a.xml",
+ * "files/dir/"] }`, a path ending in `/` standing for every .xml in it — so no
+ * sample is ever named in the repo. Build it once per side, so each bundle
+ * keeps the parser as it was when it was built:
  *
  *   npx esbuild scripts/corpus.ts --bundle --platform=node --format=esm --alias:@=./src --outfile=<dir>/corpus.mjs
  *   node <dir>/corpus.mjs dump <outDir> [group…]       each group in a fresh process
@@ -26,17 +29,12 @@ import { buildModel } from "@/core/model/buildModel";
 import type { ParseResult } from "@/types/ddr";
 
 const FIXTURES = "tests/fixtures/test-solution";
-const MISMATCHES = "files/XML Mismatches";
+const SAMPLE_GROUPS = "files/corpus.json";
 
-/** Files loaded together, as the app would load them. */
+/** Files loaded together, as the app would load them: the samples' groups
+ * (see SAMPLE_GROUPS), then the fixtures'. */
 const GROUPS: Record<string, () => string[]> = {
-  "solution-final": () => ["files/SOLUTION final.xml"],
-  solution: () => ["files/SOLUTION.xml"],
-  SampleA: () => ["files/SampleA.xml", "files/SampleA Local File.xml"],
-  "sample-a-prod": () => ["files/SAMPLE-A PROD/SampleA.xml", "files/SAMPLE-A PROD/SampleA Local File.xml"],
-  "sample-b": () => ["files/SampleB.xml"],
-  dev: () => xmlFilesIn(`${MISMATCHES}/Dev`),
-  prod: () => xmlFilesIn(`${MISMATCHES}/Prod`),
+  ...sampleGroups(),
   "fixture-fm26": () => [`${FIXTURES}/XML FM26/TEST_MAIN.xml`, `${FIXTURES}/XML FM26/TEST_EXT.xml`],
   "fixture-fm26-intact": () => [`${FIXTURES}/XML FM26/TEST_MAIN__intact.xml`, `${FIXTURES}/XML FM26/TEST_EXT__intact.xml`],
   "fixture-fm26-appended": () => [`${FIXTURES}/XML FM26/APPENDED TESTS/TEST_MAIN.xml`, `${FIXTURES}/XML FM26/APPENDED TESTS/TEST_EXT.xml`],
@@ -46,12 +44,21 @@ const GROUPS: Record<string, () => string[]> = {
 
 const MB = 1024 * 1024;
 
+/** The samples' groups from SAMPLE_GROUPS; none when it's missing. */
+function sampleGroups(): Record<string, () => string[]> {
+  if (!existsSync(SAMPLE_GROUPS)) return {};
+  const listed = JSON.parse(readFileSync(SAMPLE_GROUPS, "utf8")) as Record<string, string[]>;
+  return Object.fromEntries(
+    Object.entries(listed).map(([group, paths]) => [group, () => paths.flatMap((p) => (p.endsWith("/") ? xmlFilesIn(p) : [p]))]),
+  );
+}
+
 function xmlFilesIn(dir: string): string[] {
   return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".xml")).sort().map((f) => join(dir, f)) : [];
 }
 
 /** A file decoded as the app decodes it, but with Buffer instead of TextDecoder,
- * which throws on UTF-16 input of 256 MiB or more (Orders.xml). */
+ * which throws on UTF-16 input of 256 MiB or more. */
 function readExport(path: string): string {
   const bytes = readFileSync(path);
   const text =
