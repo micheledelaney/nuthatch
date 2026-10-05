@@ -12,33 +12,71 @@ function isCollapsibleStep(name: string): boolean {
 }
 
 /** Steps that open a block (indent following steps). */
-const OPENERS = new Set(["If", "Loop"]);
+const OPENERS = new Set(["If", "Loop", "Open Transaction"]);
 /** Steps that close a block (dedent themselves and following steps). */
-const CLOSERS = new Set(["End If", "End Loop"]);
+const CLOSERS = new Set(["End If", "End Loop", "Commit Transaction"]);
 /** Steps that sit one level out without changing the running depth. */
 const MIDDLES = new Set(["Else", "Else If"]);
 
 const FLOW_STEPS = new Set([
   "If", "Else If", "Else", "End If",
   "Loop", "Exit Loop If", "End Loop",
-  "Begin Transaction", "End Transaction", "Roll Back Transaction",
+  "Open Transaction", "Commit Transaction", "Revert Transaction",
 ]);
 const NAV_STEPS = new Set([
-  "Go to Layout", "Go to Related Record", "New Window",
+  "Go to Layout", "Go to Related Record", "Go to Record/Request/Page",
+  "Go to Object", "Go to Field", "Go to Portal Row", "Close Popover",
+  "New Window", "Select Window", "Close Window", "Adjust Window",
+  "Move/Resize Window", "Freeze Window", "Refresh Window",
+]);
+const CALL_STEPS = new Set([
+  "Perform Script", "Perform Script on Server", "Perform Script on Server with Callback",
+  "Perform JavaScript in Web Viewer", "Perform AppleScript", "Execute FileMaker Data API",
+  "Install OnTimer Script",
 ]);
 const EXIT_STEPS = new Set([
   "Halt Script", "Exit Script", "Exit Application",
 ]);
 const DELETE_STEPS = new Set([
-  "Delete Record/Request", "Truncate Table", "Delete Portal Row",
+  "Delete Record/Request", "Delete All Records", "Delete Portal Row", "Truncate Table",
+  "Delete File", "Delete Account",
+]);
+/** Steps that change records: the ones a reader most needs to see. */
+const CHANGE_STEPS = new Set([
+  "Set Field", "Set Field By Name", "Replace Field Contents", "Relookup Field Contents",
+  "Insert Text", "Insert Calculated Result", "Insert from URL", "Insert File", "Clear", "Paste",
+  "New Record/Request", "Duplicate Record/Request", "Commit Records/Requests",
+  "Revert Record/Request", "Import Records",
+]);
+const SET_STEPS = new Set([
+  "Set Variable", "Copy", "Set Selection",
+]);
+const FIND_STEPS = new Set([
+  "Enter Find Mode", "Enter Browse Mode", "Enter Preview Mode", "Perform Find", "Perform Quick Find",
+  "Show All Records", "Omit Record", "Omit Multiple Records", "Show Omitted Only",
+  "Constrain Found Set", "Extend Found Set", "Sort Records", "Open Record/Request", "Export Records",
+]);
+/** Steps that set how the script runs, not what it does: shown quieter. */
+const QUIET_STEPS = new Set([
+  "Set Error Capture", "Allow User Abort", "Pause/Resume Script", "Beep",
+  "Set Layout Object Animation", "Set Zoom Level",
+  "Show/Hide Toolbars", "Show/Hide Menubar", "Show/Hide Text Ruler",
 ]);
 
+const STEP_GROUPS: [Set<string>, string][] = [
+  [FLOW_STEPS, "sw-flow"],
+  [NAV_STEPS, "sw-nav"],
+  [CALL_STEPS, "sw-call"],
+  [EXIT_STEPS, "sw-exit"],
+  [DELETE_STEPS, "sw-delete"],
+  [CHANGE_STEPS, "sw-change"],
+  [SET_STEPS, "sw-set"],
+  [FIND_STEPS, "sw-find"],
+  [QUIET_STEPS, "sw-quiet"],
+];
+
 function stepColorClass(name: string): string {
-  if (FLOW_STEPS.has(name)) return "sw-flow";
-  if (NAV_STEPS.has(name)) return "sw-nav";
-  if (EXIT_STEPS.has(name)) return "sw-exit";
-  if (DELETE_STEPS.has(name)) return "sw-delete";
-  return "";
+  return STEP_GROUPS.find(([steps]) => steps.has(name))?.[1] ?? "";
 }
 
 interface Line {

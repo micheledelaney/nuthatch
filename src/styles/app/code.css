@@ -86,14 +86,27 @@
   pointer-events: auto;
 }
 
-/* Step name colour categories */
-.sw-name.sw-flow   { color: var(--syn-kw); }     /* purple: if/loop/transaction */
+/* Step name colour categories. Steps that change records stand out: bold,
+   full colour. The other groups sit back, their hue mixed toward the text
+   colour: muted, but as bright as text, so no step reads as commented out
+   (only comments are dim grey and italic). */
+.sw-name.sw-change { color: var(--syn-change); font-weight: 600; } /* orange: set field, insert, new/commit record */
 
-.sw-name.sw-nav    { color: var(--ok); }           /* green:  navigation/window */
+.sw-name.sw-delete { color: var(--high); font-weight: 600; }       /* red:    delete records/files */
 
-.sw-name.sw-exit   { color: var(--nh-syn-exit); }  /* pink:   halt/exit script/app */
+.sw-name.sw-flow   { color: color-mix(in srgb, var(--syn-kw) var(--sw-group-mix), var(--nh-ink-soft)); }      /* blue:   if/loop/transaction */
 
-.sw-name.sw-delete { color: var(--high); }
+.sw-name.sw-nav    { color: color-mix(in srgb, var(--ok) var(--sw-group-mix), var(--nh-ink-soft)); }          /* green:  navigation/window */
+
+.sw-name.sw-call   { color: color-mix(in srgb, var(--syn-func) var(--sw-group-mix), var(--nh-ink-soft)); }    /* teal:   perform script/JavaScript */
+
+.sw-name.sw-exit   { color: color-mix(in srgb, var(--nh-syn-exit) var(--sw-group-mix), var(--nh-ink-soft)); } /* pink:   halt/exit script/app */
+
+.sw-name.sw-set    { color: color-mix(in srgb, var(--syn-var) var(--sw-group-mix), var(--nh-ink-soft)); }     /* yellow: set variable, copy */
+
+.sw-name.sw-find   { color: color-mix(in srgb, var(--syn-const) var(--sw-group-mix), var(--nh-ink-soft)); }   /* lavender: modes, find, sort, export */
+
+.sw-name.sw-quiet  { color: var(--text-muted); }                   /* grey:   error capture, user abort, beep… */
 
 /* Syntax highlighting */
 .syn-comment {
@@ -110,9 +123,10 @@
 }
 
 /* The two halves of an unlinked `TO::Field` reference: the occurrence keeps the
-   table color, the field is grey to signal it is external / not clickable. */
+   table occurrence color, the field is grey to signal it is external / not
+   clickable. */
 .syn-to {
-  color: var(--type-table);
+  color: var(--type-table-occurrence);
 }
 
 .syn-field {
@@ -129,6 +143,17 @@
 
 .syn-num {
   color: var(--syn-num);
+}
+
+/* True / False, ¶, the constant in Get ( … ), a step option's On / Off. */
+.syn-const {
+  color: var(--syn-const);
+}
+
+/* A step option's label ("Parameter:", "With dialog:"): quieter than its value,
+   but not comment grey. */
+.syn-label {
+  color: var(--syn-label);
 }
 
 .syn-op {

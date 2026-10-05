@@ -203,13 +203,19 @@ Type colours are never used at full strength. Tags tone them toward the ground, 
 
 | Token | Value | Colours |
 |---|---|---|
-| `--syn-string` | `#79dca4` | `"strings"` |
-| `--syn-var` | `#f2cc5c` | `$variables`, `$$globals` |
+| `--syn-string` | `#a5c0b6` | `"strings"`, names quoted in step text (`“Layout”`) |
+| `--syn-var` | `#d9bf72` | `$variables`, `$$globals` |
 | `--syn-func` | `#6fdccb` | `Functions ()` |
 | `--syn-kw` | `#7fb4ff` | Keywords; control-flow step names (If, Loop…) |
 | `--syn-num` | `#e6ad73` | Numbers |
 | `--syn-op` | = `--nh-ink-muted` | Operators |
+| `--syn-const` | `#c3a6ff` | `True` / `False`, `¶`, the constant in `Get ( … )`, a step option's `On` / `Off` |
+| `--syn-label` | = `--nh-ink-muted` | A step option's label (`Parameter:`, `With dialog:`) |
+| `--syn-change` | `#ff9e57` | Step names that change records (bold) |
+| `--sw-group-mix` | `60%` | How much hue the other step groups keep, mixed with the text colour (8.4:1 or more, above comments' 6:1) |
 | `--nh-syn-exit` | `#f08fb0` | Halt / Exit step names |
+
+Keywords are the logical operators (`and`, `or`, `xor`, `not`) and the functions that steer a calculation (`If`, `Case`, `Let`, `While`, `Choose`). Names with spaces (`Due Date`, `TO::Field Name`) never take in a logical operator next to them: FileMaker writes a name that contains one as `${…}`.
 
 ### 3.6 Sizes
 
@@ -1020,22 +1026,31 @@ Code sits in a well one step darker than the ground (`--code-bg`), with `--nh-ra
   pointer-events: none;
 }
 
-/* Step names by category. */
-.sw-name.sw-flow   { color: var(--syn-kw); }      /* If, Loop, transactions */
-.sw-name.sw-nav    { color: var(--ok); }          /* navigation, windows */
-.sw-name.sw-exit   { color: var(--nh-syn-exit); } /* Halt, Exit Script / App */
-.sw-name.sw-delete { color: var(--high); }
+/* Step names by category. Steps that change records stand out (bold, full
+   colour); the other groups sit back, their hue mixed toward the text colour —
+   muted but as bright as text, so nothing but a comment reads as commented out. */
+.sw-name.sw-change { color: var(--syn-change); font-weight: 600; } /* Set Field, Insert …, Replace, New / Commit / Revert Record, Import */
+.sw-name.sw-delete { color: var(--high); font-weight: 600; }       /* Delete …, Truncate Table */
+.sw-name.sw-flow   { color: color-mix(in srgb, var(--syn-kw) var(--sw-group-mix), var(--nh-ink-soft)); }      /* If, Loop, transactions */
+.sw-name.sw-nav    { color: color-mix(in srgb, var(--ok) var(--sw-group-mix), var(--nh-ink-soft)); }          /* Go to …, windows, popovers */
+.sw-name.sw-call   { color: color-mix(in srgb, var(--syn-func) var(--sw-group-mix), var(--nh-ink-soft)); }    /* Perform Script / JavaScript / AppleScript, Data API, OnTimer */
+.sw-name.sw-exit   { color: color-mix(in srgb, var(--nh-syn-exit) var(--sw-group-mix), var(--nh-ink-soft)); } /* Halt, Exit Script / App */
+.sw-name.sw-set    { color: color-mix(in srgb, var(--syn-var) var(--sw-group-mix), var(--nh-ink-soft)); }     /* Set Variable, Copy, Set Selection */
+.sw-name.sw-find   { color: color-mix(in srgb, var(--syn-const) var(--sw-group-mix), var(--nh-ink-soft)); }   /* Enter … Mode, Find, Omit, Sort, Open Record, Export */
+.sw-name.sw-quiet  { color: var(--text-muted); }                   /* Set Error Capture, Allow User Abort, Beep… */
 
 /* Syntax. */
 .syn-comment { color: var(--text-dim); font-style: italic; }
 .syn-string  { color: var(--syn-string); }
 .syn-var     { color: var(--syn-var); }
-.syn-to      { color: var(--type-table); }        /* TO half of an unlinked TO::Field */
+.syn-to      { color: var(--type-table-occurrence); } /* TO half of an unlinked TO::Field */
 .syn-field   { color: var(--text-dim); }          /* field half: grey, not clickable */
 .syn-func    { color: var(--syn-func); }
 .syn-kw      { color: var(--syn-kw); }
 .syn-num     { color: var(--syn-num); }
 .syn-op      { color: var(--syn-op); }
+.syn-const   { color: var(--syn-const); }
+.syn-label   { color: var(--syn-label); }
 .syn-missing { color: var(--high); font-weight: 600; }  /* <Field Missing> etc. */
 
 pre.code {                            /* calculations */
@@ -1055,7 +1070,7 @@ Every code block goes in a `CodeBox` (`src/components/CodeBox.tsx`), which adds 
 </CodeBox>
 ```
 
-Linked names inside code are `.obj-link`: they keep the syntax colour around them and lift on hover. Script triggers are shown the same way: the trigger's name and mode tags on a line, then a code box with `Perform Script [ "script" ; Parameter: … ]`.
+Linked names inside code are `.obj-link`: they take the syntax colour of the token they sit in (a linked `$$global` stays a variable, a script name in quotes stays a string) and lift on hover. The text is coloured whole before the links are laid over it, so a link never splits a string or a comment. Nothing is linked inside a comment, a step option's label or a `<… Missing>` placeholder. Script triggers are shown the same way: the trigger's name and mode tags on a line, then a code box with `Perform Script [ "script" ; Parameter: … ]`.
 
 ---
 

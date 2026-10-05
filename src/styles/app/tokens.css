@@ -50,11 +50,13 @@
   --nh-t-menuitem: #cdd2de;
   --nh-t-theme: #dcbd6a;
   --nh-t-global: #c7e88f;
-  --nh-syn-string: #79dca4;
-  --nh-syn-var: #f2cc5c;
+  --nh-syn-string: #a5c0b6; /* grey with a hint of green: calm, as bright as text, never comment grey */
+  --nh-syn-var: #d9bf72;
   --nh-syn-func: #6fdccb;
   --nh-syn-kw: #7fb4ff;
   --nh-syn-num: #e6ad73;
+  --nh-syn-const: #c3a6ff;
+  --nh-syn-change: #ff9e57;
   --nh-syn-exit: #f08fb0;
 
   /* Sizes for the kinds in kinds.css. A row is the original navigator row:
@@ -146,6 +148,12 @@
   --syn-kw: var(--nh-syn-kw);
   --syn-num: var(--nh-syn-num);
   --syn-op: var(--nh-ink-muted);
+  --syn-const: var(--nh-syn-const);
+  --syn-label: var(--nh-ink-muted);
+  --syn-change: var(--nh-syn-change);
+  /* How much of its hue a step group (other than changes) keeps, mixed with
+     the text colour: muted, never as dim as a comment. */
+  --sw-group-mix: 60%;
 
   /* Power is monospace everywhere; condensed display type is for titles. */
   --font-ui: var(--nh-font-mono);
