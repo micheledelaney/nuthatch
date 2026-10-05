@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { type FmObject, type ScriptStep, type SolutionModel } from "@/types/ddr";
 import { Highlight, LinkedCode } from "./Highlight";
 import { CodeBox } from "./CodeBox";
+import { matchOffsets, useFindHighlights, type FindState } from "./ScriptFind";
 
 const INDENT_PX = 18;
 const PARAMS_COLLAPSE_THRESHOLD = 120;
@@ -100,6 +101,7 @@ export function ScriptWorkspace({
   model,
   owner,
   onGo,
+  find,
 }: {
   steps: ScriptStep[];
   brokenSteps?: Set<number>;
@@ -112,9 +114,14 @@ export function ScriptWorkspace({
   model?: SolutionModel;
   owner?: string;
   onGo?: (uid: string, rowKey: string) => void;
+  /** A search to highlight in the steps (from the section's find field). */
+  find?: FindState;
 }) {
   const lines = layout(steps);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const findLayerRef = useRef<HTMLDivElement>(null);
+  useFindHighlights(boxRef, findLayerRef, ".sw-step", find);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   function toggleExpanded(index: number) {
@@ -137,13 +144,18 @@ export function ScriptWorkspace({
 
   return (
     <CodeBox text={scriptText(lines)}>
-    <div className="sw">
+    <div className="sw" ref={boxRef}>
+      {/* Tints behind search matches, drawn by useFindHighlights. First, so the
+          steps paint over it. */}
+      <div className="sw-find-layer" ref={findLayerRef} aria-hidden />
       {lines.map(({ step, depth, isComment }) => {
         const hit = brokenSteps?.has(step.index) ?? false;
         const refs = isComment ? [] : [...(stepRefs?.get(step.index) ?? []), ...(scriptGlobals ?? [])];
         const long = !isComment && isCollapsibleStep(step.name) && step.params.length > PARAMS_COLLAPSE_THRESHOLD;
         const nameClass = stepColorClass(step.name);
-        const isExpanded = !long || expanded.has(step.index);
+        // A long step opens while the search matches inside it.
+        const isExpanded =
+          !long || expanded.has(step.index) || (find != null && matchOffsets(step.params, find.query).length > 0);
         const paramsText = long && !isExpanded
           ? step.params.slice(0, PARAMS_COLLAPSE_THRESHOLD) + "…"
           : step.params;

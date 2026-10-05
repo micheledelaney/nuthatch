@@ -35,6 +35,17 @@
   margin-top: 10px;
 }
 
+/* A section header with tools on its right (the script's find field). */
+.detail-widget-head-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.detail-widget-head-row > .head {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Everything in a section starts where the title's text starts, past its
    chevron. Script steps are the exception (.flush). */
 .detail-widget-body:not(.flush) {

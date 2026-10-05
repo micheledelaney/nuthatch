@@ -4,6 +4,7 @@
 /* Script steps: Power's step list — rounded rows in the well, a dim number
    column, broken steps tinted red with a bar on the left. */
 .sw {
+  position: relative;
   margin: 4px 0 0;
   /* The right side leaves room for the copy button. */
   padding: 8px 34px 8px 0;
@@ -28,7 +29,9 @@
 }
 
 .sw-line.hit {
-  background: var(--nh-danger-soft);
+  /* The same shade as --nh-danger-soft on the well, but see-through, so a
+     search tint behind the step still shows. */
+  background: color-mix(in srgb, var(--nh-danger) 17%, transparent);
   box-shadow: inset 3px 0 0 var(--high);
   border-radius: var(--radius);
 }
@@ -107,6 +110,54 @@
 .sw-name.sw-find   { color: color-mix(in srgb, var(--syn-const) var(--sw-group-mix), var(--nh-ink-soft)); }   /* lavender: modes, find, sort, export */
 
 .sw-name.sw-quiet  { color: var(--text-muted); }                   /* grey:   error capture, user abort, beep… */
+
+/* Find in a script: the field in the Script steps header, then a tint behind
+   every match (the text keeps its syntax colour), stronger on the current one.
+   Warning yellow, so a match doesn't look like the orange text selection. The
+   tints are boxes on .sw-find-layer, under the steps. */
+/* One fixed size: the field, the count and the arrows always take the same
+   room, so nothing moves while typing or stepping through matches. The field
+   is last, flush with the steps' right edge; the count and arrows sit before it. */
+.sw-find {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.sw-find .nav-search {
+  flex: 0 0 200px;
+  margin-left: 0;
+}
+.sw-find-results {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sw-find-results.is-idle {
+  visibility: hidden;
+}
+.sw-find-count {
+  /* Room for "No matches", "999 matches" and "999 of 999" in the mono font. */
+  width: 11ch;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sw-find-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sw-find-mark {
+  position: absolute;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.sw-find-mark.is-current {
+  background: color-mix(in srgb, var(--warn) 40%, transparent);
+}
 
 /* Syntax highlighting */
 .syn-comment {

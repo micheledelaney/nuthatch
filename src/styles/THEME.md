@@ -691,9 +691,9 @@ Status has one look per meaning, and every indicator of a status (dot, tag, list
   box-shadow: 0 0 0 2px var(--bg-panel);
 }
 
-/* A broken script step. */
+/* A broken script step: --nh-danger-soft's shade, see-through for find tints. */
 .sw-line.hit {
-  background: var(--nh-danger-soft);
+  background: color-mix(in srgb, var(--nh-danger) 17%, transparent);
   box-shadow: inset 3px 0 0 var(--high);
   border-radius: var(--radius);
 }
@@ -1068,6 +1068,14 @@ Every code block goes in a `CodeBox` (`src/components/CodeBox.tsx`), which adds 
     <LinkedCode text={calc} objects={targets} onGo={onGo} model={model} owner={owner.uid} />
   </pre>
 </CodeBox>
+```
+
+**Find in a script.** The Script steps header holds a find field (`.sw-find`: the navigator's `.nav-search`, always open at a fixed 200px and flush with the steps' right edge, with "3 of 12" and ↑ ↓ glyph buttons before it, which keep their room while hidden so nothing moves; typing tints every match and shows "12 matches"; the first Enter (or ↓) goes to the first match, ↑ to the last, then Enter / Shift+Enter move and the view scrolls to the current one; Esc clears). Matches are found in the text as shown and tinted with plain boxes on `.sw-find-layer`, under the steps, so links and syntax colours stay: a warning-yellow tint behind every match, stronger behind the current one. Not the CSS Custom Highlight API: Safari leaves parts of a changed highlight painted. A broken step's red is see-through (the same shade as `--nh-danger-soft` on the well) so a tint behind it shows. Long collapsed steps open while they match.
+
+```css
+.sw-find-layer             { position: absolute; inset: 0; pointer-events: none; }  /* first in .sw */
+.sw-find-mark              { position: absolute; border-radius: 2px; background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.sw-find-mark.is-current   { background: color-mix(in srgb, var(--warn) 40%, transparent); }
 ```
 
 Linked names inside code are `.obj-link`: they take the syntax colour of the token they sit in (a linked `$$global` stays a variable, a script name in quotes stays a string) and lift on hover. The text is coloured whole before the links are laid over it, so a link never splits a string or a comment. Nothing is linked inside a comment, a step option's label or a `<… Missing>` placeholder. Script triggers are shown the same way: the trigger's name and mode tags on a line, then a code box with `Perform Script [ "script" ; Parameter: … ]`.

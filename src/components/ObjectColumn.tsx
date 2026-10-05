@@ -24,6 +24,7 @@ import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { CodeBox } from "./CodeBox";
 import { ScriptWorkspace } from "./ScriptWorkspace";
+import { useScriptFind } from "./ScriptFind";
 import { LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
 import { TypePill } from "./TypePill";
@@ -611,6 +612,7 @@ export function Section({
   count,
   defaultOpen = true,
   flush = false,
+  actions,
   children,
 }: {
   title: string;
@@ -618,17 +620,39 @@ export function Section({
   defaultOpen?: boolean;
   /** Start the content at the section's edge instead of under the title text (script steps). */
   flush?: boolean;
+  /** Tools on the right of the title, shown while the section is open (the script's find field). */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const head = (
+    <div className="head clickable detail-widget-header" {...pressable(() => setOpen((v) => !v), { expanded: open })}>
+      <span className={`fchevron${open ? " open" : ""}`}>›</span> {title}
+      {count != null && ` · ${count}`}
+    </div>
+  );
   return (
     <div className={`detail-widget${open ? "" : " collapsed"}`}>
-      <div className="head clickable detail-widget-header" {...pressable(() => setOpen((v) => !v), { expanded: open })}>
-        <span className={`fchevron${open ? " open" : ""}`}>›</span> {title}
-        {count != null && ` · ${count}`}
-      </div>
+      {actions ? (
+        <div className="detail-widget-head-row">
+          {head}
+          {open && actions}
+        </div>
+      ) : (
+        head
+      )}
       {open && <div className={`detail-widget-body${flush ? " flush" : ""}`}>{children}</div>}
     </div>
+  );
+}
+
+/** A script's steps, with a find field in the section header. */
+function ScriptSteps(props: Omit<React.ComponentProps<typeof ScriptWorkspace>, "find">) {
+  const { field, find } = useScriptFind();
+  return (
+    <Section title="Script steps" count={props.steps.length} flush actions={field}>
+      <ScriptWorkspace {...props} find={find} />
+    </Section>
   );
 }
 
@@ -651,23 +675,25 @@ export function Detail({
   const refIndex = refIndexFor(model, owner.uid);
 
   if (detail.kind === "script") {
-    return (
-      <Section title="Script steps" count={detail.steps.length} flush>
-        {detail.steps.length === 0 ? (
+    if (detail.steps.length === 0) {
+      return (
+        <Section title="Script steps" count={0} flush>
           <div className="subtle indent">No steps.</div>
-        ) : (
-          <ScriptWorkspace
-            steps={detail.steps}
-            brokenSteps={brokenSteps}
-            scrollToStep={scrollToStep}
-            stepRefs={refIndex.byStep}
-            scriptGlobals={refIndex.scriptGlobals}
-            model={model}
-            owner={owner.uid}
-            onGo={onGo}
-          />
-        )}
-      </Section>
+        </Section>
+      );
+    }
+    return (
+      <ScriptSteps
+        key={owner.uid}
+        steps={detail.steps}
+        brokenSteps={brokenSteps}
+        scrollToStep={scrollToStep}
+        stepRefs={refIndex.byStep}
+        scriptGlobals={refIndex.scriptGlobals}
+        model={model}
+        owner={owner.uid}
+        onGo={onGo}
+      />
     );
   }
 
