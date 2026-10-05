@@ -69,6 +69,7 @@ const RENDERED_ATTRS = new Set([
   "View",
   "kind", // account kind enum (e.g. "0")
   "enable", // raw True/False — shown more readably as "Status: Active/Inactive"
+  "portalFilter", // a portal's filter — shown as code in its own Filter section
 ]);
 
 /** Friendly labels for raw FileMaker attribute keys; unlisted keys fall back to
@@ -160,7 +161,6 @@ const ATTR_LABELS: Record<string, string> = {
   portalOccurrence: "Table occurrence",
   portalRows: "Portal rows",
   portalInitialRow: "Initial row",
-  portalFilter: "Filter",
   // Layout options.
   includeInLayoutMenus: "Include in layout menus",
   clientType: "Client type",
@@ -1427,6 +1427,16 @@ function LayoutObjectColumnDetail({
       {detail.portalSort && (
         <Section title="Sort order" count={detail.portalSort.length}>
           <SortFieldList fields={detail.portalSort} model={model} owner={owner.uid} onGo={onGo} />
+        </Section>
+      )}
+
+      {detail.portalFilter && (
+        <Section title="Filter">
+          <CodeBox text={detail.portalFilter}>
+            <pre className="code">
+              <LinkedCode text={detail.portalFilter} objects={refIndexFor(model, owner.uid).targets} onGo={onGo} model={model} owner={owner.uid} />
+            </pre>
+          </CodeBox>
         </Section>
       )}
 
