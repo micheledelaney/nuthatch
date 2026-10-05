@@ -597,7 +597,7 @@ Everything is IBM Plex Mono. Weight and size carry the hierarchy, not a second f
 
 Rules:
 
-- **Uppercase is for labels only** (`.head`, eyebrows, the wordmark). Never for names, titles of FileMaker objects, or sentences.
+- **Uppercase is for labels only** (`.head`, eyebrows). Never for names, titles of FileMaker objects, or sentences.
 - **Sentence case** for every heading and button label ("Mark as used…", "Show all types").
 - Numbers that line up use `font-variant-numeric: tabular-nums`.
 - Display headings are unified. Don't introduce a 20px, 24px or 30px title; use 18px / 600.
@@ -702,7 +702,7 @@ Disabled FileMaker options (a lookup, auto-enter or validation that's switched o
 ### 8.1 Toolbar and view tabs (`shell.css`)
 
 - The toolbar has a fixed height so it doesn't jump between screens, and `--header-bg` (the ground).
-- The wordmark is the bird in its own colours, then "nuthatch" in spaced caps.
+- The wordmark is the bird in its own colours, then "nuthatch" in lowercase, normal spacing.
 - View tabs (Report Card, Browse, ERD) are a `.tabs` strip in `.main-header`; the header draws the baseline, and the open analysis's name sits on the right.
 
 ### 8.2 Menus, popovers, dialogs
