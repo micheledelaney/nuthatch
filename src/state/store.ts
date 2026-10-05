@@ -666,7 +666,7 @@ export const useStore = create<AppState>((set, get) => ({
   showReport: () => set({ view: "report", showDashboard: false, trail: [], trailKeys: [], highlight: null }),
   showBrowse: () => set({ view: "browse", showDashboard: false, trail: [], trailKeys: [], highlight: null }),
   showErd: () => set({ view: "erd", showDashboard: false, trail: [], trailKeys: [], highlight: null, graphFocus: null }),
-  showGraphFor: (uid) => set({ view: "erd", trail: [], trailKeys: [], highlight: null, graphFocus: uid }),
+  showGraphFor: (uid) => set({ view: "erd", graphFocus: uid }),
   clearGraphFocus: () => set({ graphFocus: null }),
   openObject: (uid) =>
     set({ view: "browse" as HomeView, trail: [uid], trailKeys: [""], highlight: null, activePane: "primary" }),
