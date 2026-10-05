@@ -150,6 +150,13 @@
   color: var(--text-dim);
 }
 
+/* A field's kind, type and storage, right-aligned after its name in a table's
+   Fields list; it truncates before the name does. */
+.ref-list .ref-field-info {
+  margin-left: auto;
+  max-width: 55%;
+}
+
 /* "Show N more" toggle below a truncated reference list. */
 .ref-show-more {
   display: block;

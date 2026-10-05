@@ -8,6 +8,7 @@ import { renderWithBrokenPlaceholders, Section } from "../ObjectColumn";
 import { brokenSourcesFor } from "./refStats";
 import type { Fact } from "./facts";
 import { isInUnusedChain } from "./filters";
+import { fieldKindAndType } from "./fieldSummary";
 
 type OnGo = (uid: string, rowKey: string) => void;
 
@@ -16,8 +17,6 @@ interface GlanceRow {
   value: React.ReactNode;
 }
 
-const FIELD_KIND_LABEL: Record<string, string> = { Normal: "Normal", Calculated: "Calculation", Summary: "Summary" };
-const DATA_TYPE_LABEL: Record<string, string> = { Binary: "Container" };
 /** Objects named in the Used only by row before "and N more". */
 const USED_ONLY_BY_SHOWN = 3;
 
@@ -94,12 +93,7 @@ function subtype(obj: FmObject): string | undefined {
   const a = obj.attributes;
   switch (obj.type) {
     case "field":
-      return [
-        a.fieldtype && (FIELD_KIND_LABEL[a.fieldtype] ?? a.fieldtype),
-        a.datatype && (DATA_TYPE_LABEL[a.datatype] ?? a.datatype),
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      return fieldKindAndType(a);
     case "layoutObject":
       return a.loType;
     case "tableOccurrence":

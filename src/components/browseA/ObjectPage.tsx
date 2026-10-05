@@ -18,6 +18,7 @@ import { isInUnusedChain, isUnreferenced } from "./filters";
 import { factsFor } from "./facts";
 import { refStatsFor } from "./refStats";
 import { Glance, GlanceSection } from "./Glance";
+import { fieldSummary } from "./fieldSummary";
 import { PaneNavContext } from "../workbench/paneNav";
 import { pressable, onTabListKeyDown } from "../a11y";
 
@@ -217,6 +218,9 @@ function DefinitionTab({
                   <div className="row" {...pressable(() => onGo(child.uid, child.uid))} title={objectLabel(child)}>
                     <TypePill type={child.type} short />
                     <span className="ellipsis">{child.name}</span>
+                    {child.type === "field" && (
+                      <span className="subtle ellipsis ref-field-info">{fieldSummary(child.attributes)}</span>
+                    )}
                   </div>
                 </li>
               ),
