@@ -11,6 +11,8 @@
   <a href="https://micheledelaney.github.io/nuthatch/">Website</a>
   &nbsp;·&nbsp;
   <a href="https://micheledelaney.github.io/nuthatch/app/">Try the live app</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/micheledelaney/nuthatch/releases/latest">Download for macOS</a>
 </p>
 
 ---
@@ -27,6 +29,24 @@ webview. Nothing is uploaded, and there is no backend or telemetry.
 ---
 
 ## Install
+
+Download it, or build it yourself.
+
+### 📦 Download (macOS)
+
+Download the `.dmg` from the [latest release](https://github.com/micheledelaney/nuthatch/releases/latest),
+open it, and drag **nuthatch** into **Applications**. It runs on Intel and
+Apple Silicon Macs.
+
+The app isn't notarized by Apple yet, so macOS blocks the first launch with
+*"nuthatch" Not Opened*. Click **Done**, then go to **System Settings → Privacy
+& Security**, scroll to **Security** and click **Open Anyway**. After that it
+opens normally.
+
+No Mac, or rather not install anything? [Use the live app](https://micheledelaney.github.io/nuthatch/app/)
+in your browser. It's the same app.
+
+### 🛠️ Build it yourself
 
 nuthatch runs two ways from the same codebase. Pick one:
 
