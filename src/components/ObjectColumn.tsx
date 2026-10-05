@@ -70,6 +70,7 @@ const RENDERED_ATTRS = new Set([
   "kind", // account kind enum (e.g. "0")
   "enable", // raw True/False — shown more readably as "Status: Active/Inactive"
   "portalFilter", // a portal's filter — shown as code in its own Filter section
+  "hideWhen", // an object's hide condition — shown as code in its own Hide condition section
 ]);
 
 /** Friendly labels for raw FileMaker attribute keys; unlisted keys fall back to
@@ -1437,6 +1438,17 @@ function LayoutObjectColumnDetail({
               <LinkedCode text={detail.portalFilter} objects={refIndexFor(model, owner.uid).targets} onGo={onGo} model={model} owner={owner.uid} />
             </pre>
           </CodeBox>
+        </Section>
+      )}
+
+      {detail.hideWhen && (
+        <Section title="Hide condition">
+          <CodeBox text={detail.hideWhen}>
+            <pre className="code">
+              <LinkedCode text={detail.hideWhen} objects={refIndexFor(model, owner.uid).targets} onGo={onGo} model={model} owner={owner.uid} />
+            </pre>
+          </CodeBox>
+          {detail.hideInFind && <div className="subtle">Also applies in Find mode</div>}
         </Section>
       )}
 
