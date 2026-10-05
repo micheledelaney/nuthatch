@@ -111,7 +111,6 @@ export function RelationshipGraphView() {
   if (graphs.length === 0) {
     return (
       <div className="panel">
-        <h2 className="head">Relationship Graph</h2>
         <div className="subtle">No table occurrences with graph coordinates were found.</div>
       </div>
     );
@@ -124,7 +123,6 @@ export function RelationshipGraphView() {
         graph={graph!}
         head={
           <>
-            <h2 className="head">Relationship Graph</h2>
             <span className="subtle">
               {graph!.nodes.length} occurrences · {graph!.edges.length} relationships
             </span>
