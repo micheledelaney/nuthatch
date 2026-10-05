@@ -308,7 +308,7 @@ function AnalysisRow({
             label: item.note ? "Edit note" : "Add note",
             onSelect: () => openEdit({ target: { kind: "analysis-note", id: item.id }, initialValue: item.note ?? "" }),
           },
-          { label: "Export for AI…", onSelect: () => void exportForAi(item.id) },
+          { label: "Export for AI", onSelect: () => void exportForAi(item.id) },
           { label: "Delete", danger: true, onSelect: () => void removeSaved(item.id) },
         ]}
       />

@@ -456,10 +456,10 @@
       .topic.alt {
         background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
       }
-      /* Centered heading and intro above the stats. */
+      /* Centered heading and intro of the Export for AI section. */
       .topic-head {
         max-width: 680px;
-        margin: 0 auto 48px;
+        margin: 0 auto;
         text-align: center;
       }
       .topic-head p {
@@ -505,53 +505,6 @@
         content: "$ ";
         color: var(--accent);
       }
-      .stats {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 24px;
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 0;
-        list-style: none;
-      }
-      .stats li {
-        padding: 28px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        background: var(--pane);
-      }
-      .stats .num {
-        display: block;
-        font-family: var(--font-display);
-        font-size: 30px;
-        line-height: 1.15;
-        font-weight: 700;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-        margin-bottom: 6px;
-      }
-      .stats .label {
-        display: block;
-        color: var(--text-strong);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: var(--label-tracking);
-        text-transform: uppercase;
-        margin-bottom: 8px;
-      }
-      .stats p {
-        margin: 0;
-        font-size: 14px;
-        color: var(--text-dim);
-      }
-      .topic .method {
-        max-width: 680px;
-        margin: 24px auto 0;
-        text-align: center;
-        font-size: 13px;
-        color: var(--text-dim);
-      }
-
       /* Closing: pointer to the install guide, then how to get in touch. */
       .closing {
         padding: 72px 16px;
@@ -610,9 +563,6 @@
         .topic-split {
           grid-template-columns: 1fr;
           gap: 24px;
-        }
-        .stats {
-          grid-template-columns: 1fr;
         }
       }
       @media (max-width: 560px) {
@@ -769,37 +719,14 @@
             <span class="eyebrow">Export for AI</span>
             <h2>Give your AI assistant the answers, not the XML</h2>
             <p>
-              Choose <strong>Export for AI…</strong> on any saved analysis, or run
+              Choose <strong>Export for AI</strong> on any saved analysis, or run
               <a href="#cli">the command-line tool</a>. nuthatch writes a compact index of your solution
               into your project folder, with every reference already resolved, so your assistant looks
-              answers up instead of searching the raw XML.
+              answers up instead of searching the raw XML. That saves tokens, makes each lookup faster,
+              and gets you better answers, because the assistant no longer has to work out from the XML
+              what refers to what.
             </p>
           </div>
-          <ul class="stats">
-            <li>
-              <span class="num">55% fewer</span>
-              <span class="label">Tokens over 20 questions</span>
-              <p>An AI assistant answered the same 20 dependency questions twice: once from the export, once from the XML.</p>
-            </li>
-            <li>
-              <span class="num">20 of 20</span>
-              <span class="label">Answers right</span>
-              <p>Against 11 of 20 from the XML, where it credited references to the wrong script, counted steps from 0, or missed deleted objects.</p>
-            </li>
-            <li>
-              <span class="num">18× faster</span>
-              <span class="label">Per lookup</span>
-              <p>0.07 s against 1.25 s to search the XML. The one-time export takes 8 seconds.</p>
-            </li>
-          </ul>
-          <p class="method">
-            Measured on a 127 MB production solution with 21,867 objects. The questions asked what
-            calls a script, what references a field (and whether it can be deleted), what goes to a
-            layout, where a custom function, value list or table occurrence is used, what a script
-            references, and whether a script references anything deleted. A single lookup such as
-            “What uses this field?” returns a median of 116 tokens, against 1,177 for a search of the
-            XML (estimated as characters divided by 4).
-          </p>
         </div>
       </section>
 
