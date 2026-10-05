@@ -1,5 +1,5 @@
-// Drifting-particle background: dots drift, nearby dots link with fading
-// lines, and dots near the pointer light up and tether to it.
+// Particle background: still dots, nearby dots link with fading lines, and
+// dots near the pointer light up and tether to it.
 (() => {
   const canvas = document.getElementById("particles");
   const ctx = canvas && canvas.getContext("2d");
@@ -13,9 +13,7 @@
   const MAX_DOTS = 170;
   const LINK_DIST = 140;
   const HOVER_DIST = 200;
-  const SPEED = 14; // px per second
   const DOT_RADIUS = 1.6;
-  const DRIFT_ANGLE = Math.PI / 2; // mostly downward, like the reference
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const pointer = { x: -9999, y: -9999, active: false };
@@ -35,15 +33,7 @@
   }
 
   function makeDot() {
-    const angle = DRIFT_ANGLE + (Math.random() - 0.5) * 1.4;
-    const speed = SPEED * (0.5 + Math.random());
-    return {
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      glow: 0,
-    };
+    return { x: Math.random() * width, y: Math.random() * height, glow: 0 };
   }
 
   function resize() {
@@ -60,14 +50,6 @@
 
   function step(dt) {
     for (const d of dots) {
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
-      // Wrap around edges so the field never empties.
-      if (d.x < -10) d.x = width + 10;
-      else if (d.x > width + 10) d.x = -10;
-      if (d.y < -10) d.y = height + 10;
-      else if (d.y > height + 10) d.y = -10;
-
       const dist = Math.hypot(d.x - pointer.x, d.y - pointer.y);
       const target = pointer.active && dist < HOVER_DIST ? 1 - dist / HOVER_DIST : 0;
       d.glow += (target - d.glow) * Math.min(1, dt * 8);
@@ -112,7 +94,7 @@
   }
 
   function tick(now) {
-    // Integrate per second (capped) so speed is refresh-rate independent.
+    // Per-second step (capped) so the glow fades at the same rate on any refresh rate.
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     step(dt);
