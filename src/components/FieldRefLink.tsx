@@ -88,7 +88,7 @@ export function FieldRefLink({
     status === "broken" ? (
       <>
         {sep >= 0 && label.slice(0, sep + 2)}
-        <span className="broken-value">{label.slice(sep + 2)}</span>
+        <span className="broken-value">{sep >= 0 ? label.slice(sep + 2) : label}</span>
       </>
     ) : (
       label
