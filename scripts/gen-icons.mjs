@@ -17,7 +17,7 @@ const svg = readFileSync(new URL("src/brand/bird.svg", root), "utf8");
 const viewBox = svg.match(/viewBox="([^"]+)"/)[1];
 const inner = svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "").trim();
 
-const BG = "#252a33";
+const BG = "#1b1c1e";
 
 // Favicon: flat rounded square so the mark reads on a browser tab.
 const favicon =
@@ -26,16 +26,10 @@ const favicon =
   `<svg x="3" y="3" width="18" height="18" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${inner}</svg>` +
   `</svg>\n`;
 
-// App icon: 1024px with a rounded gradient backdrop; the bird fills the safe area.
+// App icon: 1024px with a rounded flat backdrop; the bird fills the safe area.
 const appIcon =
   `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">\n` +
-  `  <defs>\n` +
-  `    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">\n` +
-  `      <stop offset="0" stop-color="#2d333f"/>\n` +
-  `      <stop offset="1" stop-color="${BG}"/>\n` +
-  `    </linearGradient>\n` +
-  `  </defs>\n` +
-  `  <rect width="1024" height="1024" rx="180" fill="url(#bg)"/>\n` +
+  `  <rect width="1024" height="1024" rx="180" fill="${BG}"/>\n` +
   `  <svg x="140" y="140" width="744" height="744" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${inner}</svg>\n` +
   `</svg>\n`;
 
