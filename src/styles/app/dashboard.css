@@ -92,6 +92,11 @@
   font-size: 12px;
 }
 
+.project-empty .btn {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
 /* Per-project analysis-health dashboard */
 .health {
   padding: 18px 20px 14px 46px;

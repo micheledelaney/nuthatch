@@ -185,11 +185,17 @@ function ProjectRow({
           onChange={(e) => void onFilesChosen(e.target.files)}
         />
         <button
-          className="btn"
-          title="You can select several XML files at once (hold ⌘ or Ctrl while clicking)"
+          className="icon-btn"
+          aria-label="Add analysis"
+          title="Add analysis (you can select several XML files at once)"
           onClick={() => inputRef.current?.click()}
         >
-          + Add analysis
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <line x1="8" y1="3" x2="8" y2="13" />
+              <line x1="3" y1="8" x2="13" y2="8" />
+            </g>
+          </svg>
         </button>
         <Menu
           label="Project actions"
@@ -219,6 +225,9 @@ function ProjectRow({
           <div className="project-empty">
             <span>No analyses yet</span>
             <span className="subtle">Add a Save a Copy as XML file, exported with “Include details for analysis tools”.</span>
+            <button className="btn" onClick={() => inputRef.current?.click()}>
+              + Add analysis
+            </button>
           </div>
         ) : (
           <>
