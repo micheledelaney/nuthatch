@@ -1,6 +1,7 @@
 /** Helpers for navigating the loosely-typed object tree from fast-xml-parser. */
 
 import { decodeEntities } from "./entities";
+import { PASSWORD_ELEMENTS, isPasswordParameterType, withoutPasswordText } from "./passwords";
 
 export const ATTR_PREFIX = "@_";
 
@@ -198,7 +199,18 @@ function gatherText(node: unknown, out: string[], mode: "display" | "cdata"): vo
     return;
   }
   if (isRecord(node)) {
+    // A password's typed text stays out of every display text (see
+    // passwords.ts); the text-based reference passes, which keep nothing of
+    // it, still read it.
+    if (mode === "display" && isPasswordParameterType(node[ATTR_PREFIX + "type"])) {
+      pushPasswordFormula(node, out);
+      return;
+    }
     for (const [key, value] of Object.entries(node)) {
+      if (mode === "display" && PASSWORD_ELEMENTS.has(key)) {
+        if (key === "Password") pushPasswordFormula(value, out);
+        continue;
+      }
       // A DDRREF is an internal content-chunk pointer (e.g. `_77C7BC7B…`) that
       // FileMaker regenerates on every export — not human content. Skipping it
       // keeps it out of the search index and out of diffs (where an otherwise
@@ -222,6 +234,16 @@ function gatherText(node: unknown, out: string[], mode: "display" | "cdata"): vo
       }
     }
   }
+}
+
+/** A password's formula without its typed text (withoutPasswordText) — and
+ * nothing of a password that isn't a formula: the auto-login one. */
+function pushPasswordFormula(node: unknown, out: string[]): void {
+  if (findElement(node, "Calculation") == null) return;
+  const parts: string[] = [];
+  gatherText(node, parts, "cdata");
+  const formula = parts.join(" ");
+  pushText(out, withoutPasswordText(formula, [formula]), false);
 }
 
 function pushText(out: string[], raw: string, decode: boolean): void {

@@ -1,8 +1,10 @@
 import type { ScriptStep } from "@/types/ddr";
 import type { StepTexts } from "../context";
 import { INSERT_TEXT_STEP, isCommentStep, renderedStepText, stepNodes } from "../steps";
-import { attr, child, children, isRecord, textAttr } from "../xmlUtils";
+import { attr, child, children, isElementKey, isRecord, textAttr } from "../xmlUtils";
 import { charForCode, decodeEntities } from "../entities";
+import { formulasUnder } from "../calcText";
+import { isPasswordParameterType, withoutPasswordText } from "../passwords";
 
 /** Build the ordered step list shown in a script's inspector, and each step's
  * rendered parameters (renderedParams, "" for a step without), by position. */
@@ -19,8 +21,8 @@ export function scriptSteps(stepsContainer: unknown, stepTexts: StepTexts): { st
   return { steps, rendered: rendered.map((params) => params ?? "") };
 }
 
-/** The step's display parameters: its rendered parameters (renderedParams),
- * plus what FileMaker's rendering leaves out. */
+/** The step's display parameters: its rendered parameters (renderedParams)
+ * without their passwords, plus what FileMaker's rendering leaves out. */
 export function stepParams(step: Record<string, unknown>, name: string, stepTexts: StepTexts): string {
   return displayParams(step, name, renderedParams(step, name, stepTexts));
 }
@@ -35,14 +37,16 @@ export function actionScanTexts(steps: readonly Record<string, unknown>[], stepT
   });
 }
 
-/** Insert Text omits the text value from StepText — append it from
- * ParameterValues. It's typed text, so only for display: the text-based
- * passes read renderedParams. */
+/** The rendered parameters without their passwords' typed text
+ * (withoutPasswordText). Insert Text omits the text value from StepText —
+ * append it from ParameterValues. It's typed text, so only for display: the
+ * text-based passes read renderedParams. */
 function displayParams(step: Record<string, unknown>, name: string, rendered: string | undefined): string {
   if (rendered == null) return "";
+  const shown = withoutPasswordText(rendered, passwordFormulas(step["ParameterValues"]));
   const text = name === INSERT_TEXT_STEP ? insertTextValue(step) : undefined;
-  if (!text) return rendered;
-  return rendered ? `${rendered} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
+  if (!text) return shown;
+  return shown ? `${shown} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
 }
 
 /**
@@ -99,6 +103,23 @@ function renderedStepBody(raw: string): string {
 /** Decode FileMaker's {{charN}} attribute encoding to the actual character. */
 function decodeFmChars(s: string): string {
   return s.replace(/{{char(\d+)}}/g, (_, n: string) => charForCode(parseInt(n, 10), true) ?? "");
+}
+
+/** The formulas of a step's passwords: under a `<Parameter type="Password">`
+ * (Re-Login's, Add Account's …) or a `<Password>` (Send Mail's SMTP one). */
+function passwordFormulas(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) passwordFormulas(item, out);
+    return out;
+  }
+  if (!isRecord(node)) return out;
+  if (isPasswordParameterType(attr(node, "type"))) return formulasUnder(node, out);
+  for (const [key, value] of Object.entries(node)) {
+    if (!isElementKey(key)) continue;
+    if (key === "Password") formulasUnder(value, out);
+    else passwordFormulas(value, out);
+  }
+  return out;
 }
 
 /** Extract the literal text value from an Insert Text step's ParameterValues. */

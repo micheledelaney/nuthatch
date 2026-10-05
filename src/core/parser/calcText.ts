@@ -1,5 +1,6 @@
 import { asArray, child, children, displayText, isElementKey, isRecord, ownText, textAttr } from "./xmlUtils";
 import { decodeEntities } from "./entities";
+import { inertEnd, inertSpans } from "./calcLiterals";
 import { isNameChar } from "@/core/identifiers";
 
 /** Calculation text from a <Calculation> node. The formula lives in its <Text>,
@@ -126,43 +127,11 @@ function blankOut(text: string, literals: boolean): string {
   return out;
 }
 
-/** Where the string literal ("…", with \" escapes) or comment (/* … *\/, or //
- * to the end of the line) that starts at `i` ends — the end of the text when
- * it isn't closed; `i` when none starts there. */
-function inertEnd(text: string, i: number): number {
-  if (text[i] === '"') {
-    let j = i + 1;
-    while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
-    return Math.min(j + 1, text.length);
-  }
-  if (text[i] === "/" && text[i + 1] === "*") {
-    const end = text.indexOf("*/", i + 2);
-    return end === -1 ? text.length : end + 2;
-  }
-  if (text[i] === "/" && text[i + 1] === "/") {
-    let j = i;
-    while (j < text.length && text[j] !== "\r" && text[j] !== "\n") j++;
-    return j;
-  }
-  return i;
-}
-
 /** The string literals and comments of a formula that hold one of `tokens`, as
  * written. They're text the developer typed, which FileMaker never rewrites:
  * a placeholder in one (`"<Field Missing>"`) is no reference. */
 export function inertSpansWith(formula: string, tokens: readonly string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < formula.length; ) {
-    const end = inertEnd(formula, i);
-    if (end === i) {
-      i++;
-      continue;
-    }
-    const span = formula.slice(i, end);
-    if (tokens.some((token) => span.includes(token))) out.push(span);
-    i = end;
-  }
-  return out;
+  return inertSpans(formula).filter((span) => tokens.some((token) => span.includes(token)));
 }
 
 /** The formula of every <Calculation> under `node` (a nested one's twice). */
