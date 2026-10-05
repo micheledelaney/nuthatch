@@ -26,16 +26,6 @@ webview. Nothing is uploaded, and there is no backend or telemetry.
 
 ---
 
-## Demo
-
-A walkthrough covering the report card, browsing and filtering, the ⌘K
-command palette, the relationship graph, and comparing two analyses of the
-same solution:
-
-<video src="https://github.com/user-attachments/assets/63390d70-31c6-49dd-94a2-5fd3508e5cff" controls width="100%"></video>
-
----
-
 ## Install
 
 nuthatch runs two ways from the same codebase. Pick one:

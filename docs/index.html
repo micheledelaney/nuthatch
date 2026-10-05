@@ -664,7 +664,6 @@
             </svg>
             View on GitHub
           </a>
-          <a class="btn" href="demo/full-tour-demo.mp4">Watch the demo</a>
         </div>
         </div>
         <div class="peek" aria-hidden="true">
@@ -702,10 +701,22 @@
                 behind it.
               </p>
             </div>
-            <div class="shot" style="--ratio: 2400 / 1005"><img src="shots/report-card.jpg" alt="The report card: reference counts, risk flags, and an object inventory" /></div>
+            <div class="shot" style="--ratio: 2400 / 1305"><img src="shots/report-card.jpg" alt="The report card: two objects with broken references, an account without a password, and 25 unreferenced objects" /></div>
           </div>
 
           <div class="row flip">
+            <div class="text">
+              <h2>Know what breaks before you change it</h2>
+              <p>
+                Open the Used by tab before you rename or delete something. It lists every field,
+                layout, button, and script that depends on the object, across all loaded files. Uses
+                shows the other direction, and a script's Calls tab shows its call chain.
+              </p>
+            </div>
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/used-by.jpg" alt="The Subject field's Used by tab: two fields, a layout, a layout object, and a script" /></div>
+          </div>
+
+          <div class="row">
             <div class="text">
               <h2>Jump anywhere with ⌘K</h2>
               <p>
@@ -717,7 +728,7 @@
             <div class="shot" style="--ratio: 16 / 9"><img src="shots/palette.jpg" alt="The command palette filtered to table:Topics" /></div>
           </div>
 
-          <div class="row">
+          <div class="row flip">
             <div class="text">
               <h2>Put two objects side by side</h2>
               <p>
@@ -729,7 +740,7 @@
             <div class="shot" style="--ratio: 16 / 9"><img src="shots/side-by-side.jpg" alt="Two custom functions, FormatDuration and formatDurationNew, open side by side with the navigator collapsed" /></div>
           </div>
 
-          <div class="row flip">
+          <div class="row">
             <div class="text">
               <h2>See what changed</h2>
               <p>
@@ -737,7 +748,19 @@
                 and changed scripts and calculations show a line-by-line diff.
               </p>
             </div>
-            <div class="shot" style="--ratio: 16 / 9"><img src="shots/compare.jpg" alt="Comparing two analyses of the same solution" /></div>
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/compare.jpg" alt="Comparing two versions of the Meetings solution: added and renamed objects, and the line diff of a changed script" /></div>
+          </div>
+
+          <div class="row flip">
+            <div class="text">
+              <h2>See how your tables connect</h2>
+              <p>
+                The ERD tab draws the relationship graph with each table occurrence in its FileMaker
+                color. Color the lines by cascade delete, record creation, or sorting, click a box to
+                highlight the other occurrences of its table, and double-click it to show its fields.
+              </p>
+            </div>
+            <div class="shot" style="--ratio: 2400 / 700"><img src="shots/erd.jpg" alt="The relationship graph: Meetings related to Topics and Action Items, and the unrelated Topics New occurrence" /></div>
           </div>
         </div>
       </div>
