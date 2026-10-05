@@ -60,6 +60,7 @@ export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused"
  *   - found → links the field
  *   - in another file / can't be verified → links the occurrence
  *   - deleted → links the occurrence; the field half is `broken-value`
+ *   - occurrence deleted too → not linked; both halves are `broken-value`
  *   - the object has no such reference → the label as written, not linked
  *
  * `showChip` toggles the trailing EXTERNAL chip — useful in property-sheet
@@ -84,17 +85,27 @@ export function FieldRefLink({
   const status = refStatus(ref, model.byUid);
   const label = refLabel(ref, model.byUid);
   const sep = label.indexOf("::");
+  // The occurrence it names is gone too, so the table half reads <Table Missing>.
+  const isTableGone = !!ref.viaUid && !model.byUid.has(ref.viaUid);
   const inner =
     status === "broken" ? (
       <>
-        {sep >= 0 && label.slice(0, sep + 2)}
+        {sep >= 0 &&
+          (isTableGone ? (
+            <>
+              <span className="broken-value">{label.slice(0, sep)}</span>::
+            </>
+          ) : (
+            label.slice(0, sep + 2)
+          ))}
         <span className="broken-value">{sep >= 0 ? label.slice(sep + 2) : label}</span>
       </>
     ) : (
       label
     );
   const target = (ref.toUid ? model.byUid.get(ref.toUid) : undefined) ?? (ref.viaUid ? model.byUid.get(ref.viaUid) : undefined);
-  if (!target) return <>{inner}</>;
+  // One span, so a flex parent (an At a glance value) can't space the halves apart.
+  if (!target) return <span>{inner}</span>;
   return (
     <>
       <ObjLink obj={target} onGo={onGo}>
