@@ -344,10 +344,12 @@ export function BrokenBadge({ title }: { title: string }) {
 }
 
 /** Wrap any FileMaker `<… Missing …>` / `<unknown>` placeholder in a
- * `broken-value` span so it reads as broken everywhere it shows up (titles,
- * attribute rows, layout-object names), instead of mixing in with normal
- * text. The placeholder pattern itself lives in @/core/identifiers. Pass
- * `broken: false` for an object's own name when the model finds nothing
+ * `broken-value` span so it reads as broken everywhere it shows up (attribute
+ * rows, layout-object names in a layout's tree and a portal's Contents),
+ * instead of mixing in with normal text. Not for an object's own name where
+ * it heads things (page title, navigator, breadcrumbs, pins): that stays plain.
+ * The placeholder pattern itself lives in @/core/identifiers. Pass
+ * `broken: false` for an object's name when the model finds nothing
  * broken about it: a text object's merge field can read `<File Missing>`
  * because its file was closed at export. */
 export function renderWithBrokenPlaceholders(text: string, broken = true): React.ReactNode {
@@ -1395,8 +1397,15 @@ function LayoutObjectColumnDetail({
   const valueListObj = detail.valueListRef?.id
     ? model.byUid.get(`${fileUid}:valueList:${detail.valueListRef.id}`) ?? null
     : null;
-  const valueListName =
-    detail.valueListRef?.name || (detail.valueListRef?.id ? `Value list ${detail.valueListRef.id}` : "");
+  // A deleted value list is written as id -1 with no name: the model calls it
+  // broken and FileMaker shows it as <Value List Missing>.
+  const valueListEdge = detail.valueListRef
+    ? model.outbound.get(owner.uid)?.find((r) => r.toType === "valueList" && r.toId === detail.valueListRef?.id)
+    : undefined;
+  const isValueListBroken = valueListEdge != null && refStatus(valueListEdge, model.byUid) === "broken";
+  const valueListName = isValueListBroken
+    ? refLabel(valueListEdge, model.byUid)
+    : detail.valueListRef?.name || (detail.valueListRef?.id ? `Value list ${detail.valueListRef.id}` : "");
 
   function ancestorLayout(): FmObject | null {
     let uid = owner.parentUid;
@@ -1505,7 +1514,7 @@ function LayoutObjectColumnDetail({
               <div
                 {...pressable(() => valueListObj && onGo(valueListObj.uid, `lo-vl:${valueListObj.uid}`), { inert: !valueListObj })}
                 title={valueListName}
-                className={valueListObj ? "row" : "row external inert"}
+                className={valueListObj ? "row" : isValueListBroken ? "row broken inert" : "row external inert"}
               >
                 <TypePill type="valueList" short />
                 <span className="ellipsis">{valueListName}</span>
@@ -1528,7 +1537,7 @@ function LayoutObjectColumnDetail({
               <li key={child.uid}>
               <div className="row" {...pressable(() => onGo(child.uid, child.uid))} title={child.name}>
                 <TypePill type="layoutObject" short />
-                <span className="ellipsis">{child.name}</span>
+                <span className="ellipsis">{renderWithBrokenPlaceholders(child.name, brokenSourcesFor(model).has(child.uid))}</span>
               </div>
               </li>
             ))}

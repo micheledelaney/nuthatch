@@ -87,7 +87,6 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
       <header className="op-header">
         <Glance
           obj={obj}
-          model={model}
           facts={facts}
           actions={
             <div className="op-glance-actions">

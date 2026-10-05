@@ -671,6 +671,8 @@ Status has one look per meaning, and every indicator of a status (dot, tag, list
 | **External** (target in a file that isn't loaded) | Dimmed, `.inert` | `.tag` "External" (no tone) | Not an error: never red. |
 | **Marked as used** | Normal | `.tag.tone-ok` | Report Card "Marked as used" figure. |
 
+An object's own name stays in plain ink where it heads things (page title, navigator, breadcrumbs, pins), even when it reads `<Field Missing>`. Anywhere else the name is listed (a portal's Contents, a layout's object tree, At a glance), its `<… Missing>` parts are `.broken-value` red.
+
 ```tsx
 // RefStatusChip: the status tag right after a reference's name.
 <span className="tag ref-external-tag tone-high">Broken</span>

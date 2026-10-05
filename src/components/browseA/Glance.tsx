@@ -5,7 +5,6 @@ import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders, Section } from "../ObjectColumn";
-import { brokenSourcesFor } from "./refStats";
 import type { Fact } from "./facts";
 import { isInUnusedChain } from "./filters";
 import { fieldKindAndType } from "./fieldSummary";
@@ -381,21 +380,20 @@ function usedOnlyByRow(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceR
  */
 export function Glance({
   obj,
-  model,
   facts,
   actions,
 }: {
   obj: FmObject;
-  /** Whether a placeholder in the name reads as broken is the model's call. */
-  model: SolutionModel;
   facts: Fact[];
   /** Extra buttons for the name row (e.g. "Show in graph"). */
   actions?: React.ReactNode;
 }) {
+  // The object's own name in plain ink, placeholders too, like the
+  // navigator, breadcrumbs and pins; the header's tags say it's broken.
   return (
     <div className="op-glance-head">
       <h1 className="op-glance-name" title={objectLabel(obj)}>
-        {renderWithBrokenPlaceholders(objectLabel(obj), brokenSourcesFor(model).has(obj.uid))}
+        {objectLabel(obj)}
       </h1>
       {facts.length > 0 && (
         <div className="op-facts">
