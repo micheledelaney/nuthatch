@@ -9,6 +9,7 @@ import type {
   RelFilter,
 } from "@/state/store";
 import { ORPHAN_CANDIDATE_TYPES, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
+import { shownScriptChecksByScript } from "@/core/scriptAnalysis/analyze";
 import { brokenSourcesFor } from "./refStats";
 
 /** Types for which "unreferenced" is meaningful — the same set the report card
@@ -218,7 +219,13 @@ export function effectiveRefFilter(type: ObjectType | "all", ref: RefFilter): Re
   const canBroken = type === "all" || BROKEN_ELIGIBLE.has(type);
   if ((ref === "unreferenced" || ref === "unusedChain" || ref === "markedUsed") && !canUnref) return "all";
   if (ref === "broken" && !canBroken) return "all";
+  if (ref === "scriptChecks" && !canScriptChecks(type)) return "all";
   return ref;
+}
+
+/** Types for which the Script checks chip is offered: Scripts and All objects. */
+function canScriptChecks(type: ObjectType | "all"): boolean {
+  return type === "all" || type === "script";
 }
 
 /** Narrow `objects` by every sub-filter that applies to `type`. */
@@ -255,6 +262,9 @@ export function applyNavFilters(
     tests.push((o) => isInUnusedChain(model, o));
   } else if (ref === "markedUsed") {
     tests.push((o) => isMarkedUsed(model, o));
+  } else if (ref === "scriptChecks") {
+    const flagged = shownScriptChecksByScript(model);
+    tests.push((o) => flagged.has(o.uid));
   }
   if (tests.length === 0) return objects;
   return objects.filter((o) => tests.every((t) => t(o)));
@@ -264,7 +274,7 @@ export interface ChipOption {
   value: string;
   label: string;
   /** Visual accent for health chips. */
-  tone?: "high" | "warn";
+  tone?: "high" | "warn" | "soft";
 }
 
 export interface ChipGroup {
@@ -290,11 +300,12 @@ export function chipGroupsFor(model: SolutionModel, type: ObjectType | "all"): C
   const canUnref = type === "all" || UNREF_ELIGIBLE.has(type);
   const canBroken = type === "all" || BROKEN_ELIGIBLE.has(type);
   const health: ChipOption[] = [];
-  if (canUnref) health.push({ value: "unreferenced", label: "Unreferenced", tone: "warn" });
-  if (canUnref) health.push({ value: "unusedChain", label: "Unused chain", tone: "warn" });
+  if (canUnref) health.push({ value: "unreferenced", label: "Unreferenced", tone: "soft" });
+  if (canUnref) health.push({ value: "unusedChain", label: "Unused chain", tone: "soft" });
   // Only once something is marked, so the chip doesn't sit there empty.
   if (canUnref && model.usageMarks.size > 0) health.push({ value: "markedUsed", label: "Marked used" });
   if (canBroken) health.push({ value: "broken", label: "Broken", tone: "high" });
+  if (canScriptChecks(type)) health.push({ value: "scriptChecks", label: "Script checks", tone: "warn" });
   if (health.length) groups.push({ key: "ref", label: "Health", options: health });
 
   switch (type) {

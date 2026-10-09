@@ -1,4 +1,4 @@
-import type { FmFile, FmObject, ParseResult, RawReference } from "@/types/ddr";
+import type { FmFile, FmObject, ParseResult, RawReference, StepIr } from "@/types/ddr";
 import { OBJECT_TYPE_META } from "@/types/ddr";
 import { buildFileIndex, type FileParse, type TextScan } from "./context";
 import { xmlParser } from "./xmlParser";
@@ -32,6 +32,7 @@ export function parseDocuments(docs: Iterable<SourceDoc>): ParseResult {
   const references: RawReference[] = [];
   const globals: FmObject[] = [];
   const errors: string[] = [];
+  const scriptSteps: Record<string, StepIr[]> = {};
   for (const doc of docs) {
     const parsed = parseDocument(doc, files.length, errors);
     if (!parsed) continue;
@@ -39,10 +40,11 @@ export function parseDocuments(docs: Iterable<SourceDoc>): ParseResult {
     for (const obj of parsed.objects) objects.push(obj);
     for (const ref of parsed.references) references.push(ref);
     for (const obj of parsed.globals) globals.push(obj);
+    Object.assign(scriptSteps, parsed.scriptSteps);
   }
   // Global variables come last, after every file's catalog objects.
   for (const obj of globals) objects.push(obj);
-  return { files, objects, references: dedupeRefs(references), errors };
+  return { files, objects, references: dedupeRefs(references), errors, scriptSteps };
 }
 
 interface ParsedFile {
@@ -50,6 +52,7 @@ interface ParsedFile {
   objects: FmObject[];
   references: RawReference[];
   globals: FmObject[];
+  scriptSteps: Record<string, StepIr[]>;
 }
 
 function parseDocument(doc: SourceDoc, fileIndex: number, errors: string[]): ParsedFile | null {
@@ -159,7 +162,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
   if (!isRecord(node)) {
     // e.g. a <Structure> with several <AddAction> blocks: a shape no sample has.
     errors.push(`${container.source}: unrecognized <Structure> layout (expected one <AddAction>) — none of its catalogs could be read.`);
-    return { file, objects: [fileObject], references: [], globals: [] };
+    return { file, objects: [fileObject], references: [], globals: [], scriptSteps: {} };
   }
 
   const fp: FileParse = {
@@ -172,6 +175,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     themeBases: new Map(),
     objects: [fileObject],
     references: [],
+    scriptSteps: {},
     errors,
   };
   // The catalog objects, each with the text the text-based passes read for it
@@ -193,7 +197,7 @@ function parseFile(container: Container, fileIndex: number, errors: string[], la
     const what = count === 1 ? `1 ${label.toLowerCase()} without an id was` : `${count} ${plural.toLowerCase()} without an id were`;
     errors.push(`${container.source}: ${what} left out.`);
   }
-  return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp) };
+  return { file, objects: fp.objects, references: fp.references, globals: globalVariableObjects(fp), scriptSteps: fp.scriptSteps };
 }
 
 /** Drop exact-duplicate references (same source, target, kind, occurrence

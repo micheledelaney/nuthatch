@@ -40,16 +40,16 @@ export function ObjLink({
 
 type StatusChipKind = "external" | "broken" | "unused" | "unmatched" | "disabled";
 
-const STATUS_CHIP: Record<StatusChipKind, { label: string; tone?: "high" | "warn" }> = {
+const STATUS_CHIP: Record<StatusChipKind, { label: string; tone?: "high" | "soft" }> = {
   external: { label: "External" },
   broken: { label: "Broken", tone: "high" },
-  unused: { label: "Unused", tone: "warn" },
+  unused: { label: "Unused", tone: "soft" },
   unmatched: { label: "Unmatched" },
   disabled: { label: "Disabled" },
 };
 
 /** A status tag right after a reference's name — the same tag as an object's
- * flags: Broken in red, Unused in the warning tone (like Unreferenced), and,
+ * flags: Broken in red, Unused in the dead-code tone (like Unreferenced), and,
  * with no tone, External (in a file that isn't loaded), Unmatched (a name from
  * calculation text its loaded file doesn't have) and Disabled (from a disabled
  * step). */

@@ -114,6 +114,9 @@
   --selected-soft: var(--nh-pane-2);
   --high: var(--nh-danger);
   --warn: var(--nh-warning);
+  /* Dead code (unreferenced, unused): --warn lightened three quarters of the
+     way to the ink, so it reads apart from what needs fixing (script checks). */
+  --warn-soft: color-mix(in srgb, var(--nh-warning) 25%, var(--nh-ink));
   --ok: var(--nh-ok);
   --info: var(--nh-info);
 

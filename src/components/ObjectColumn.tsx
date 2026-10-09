@@ -21,10 +21,12 @@ import type { CallNode } from "@/core/analysis/callChain";
 import { BROKEN_PLACEHOLDER_RE } from "@/core/identifiers";
 import { findMissingFieldOccurrences } from "@/core/model/refResolution";
 import { ownFieldRef, ownScriptRef, refLabel, refStatus } from "@/core/model/refStatus";
+import { shownScriptChecks } from "@/core/scriptAnalysis/analyze";
 import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { CodeBox } from "./CodeBox";
 import { ScriptWorkspace, stepColorClass } from "./ScriptWorkspace";
+import { findingSteps, ScriptChecks } from "./ScriptChecks";
 import { useScriptFind } from "./ScriptFind";
 import { LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
@@ -648,6 +650,24 @@ function ScriptSteps(props: Omit<React.ComponentProps<typeof ScriptWorkspace>, "
   );
 }
 
+/** A script's steps, with what the script checks found in them listed above:
+ * a finding's steps are marked, and its row scrolls to them. */
+function CheckedScriptSteps(props: Omit<React.ComponentProps<typeof ScriptSteps>, "checkSteps" | "scrollKey">) {
+  const [shown, setShown] = useState<{ step: number } | null>(null);
+  const checks = props.model && props.owner ? shownScriptChecks(props.model, props.owner) : [];
+  const checkSteps = new Set(checks.flatMap(findingSteps));
+  return (
+    <>
+      {checks.length > 0 && (
+        <Section title="Script checks" count={checks.length}>
+          <ScriptChecks checks={checks} onShow={(step) => setShown({ step })} />
+        </Section>
+      )}
+      <ScriptSteps {...props} checkSteps={checkSteps} scrollToStep={shown?.step ?? props.scrollToStep} scrollKey={shown} />
+    </>
+  );
+}
+
 /** Type-specific rich content: script steps, calculation body, or an ERD. */
 export function Detail({
   detail,
@@ -675,7 +695,7 @@ export function Detail({
       );
     }
     return (
-      <ScriptSteps
+      <CheckedScriptSteps
         key={owner.uid}
         steps={detail.steps}
         brokenSteps={brokenSteps}

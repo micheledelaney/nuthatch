@@ -4,6 +4,7 @@ import { isBrokenTableOccurrence, objectLabel, type FmObject, type SolutionModel
 import { buildDependencyView } from "@/core/analysis/dependencies";
 import { buildCallChain } from "@/core/analysis/callChain";
 import { isUnusedSource } from "@/core/analysis/unusedChains";
+import { shownScriptChecks } from "@/core/scriptAnalysis/analyze";
 import {
   CallTreeNode,
   Detail,
@@ -69,6 +70,7 @@ export function ObjectPage({ uid, index }: { uid: string; index: number }) {
   const mark = model.usageMarks.get(uid);
   const facts = factsFor({
     brokenCount,
+    scriptCheckCount: obj.type === "script" ? shownScriptChecks(model, uid).length : 0,
     unreferenced,
     unusedChain,
     selfBroken: isBrokenTableOccurrence(obj),

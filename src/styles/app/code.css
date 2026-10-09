@@ -36,6 +36,14 @@
   border-radius: var(--radius);
 }
 
+/* A step a script check found something in (listed under Script checks): the
+   broken step's mark in --warn, with tone-warn's tint. */
+.sw-line.check {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--warn);
+  border-radius: var(--radius);
+}
+
 .sw-ln {
   position: absolute;
   /* Right-aligned, so every number ends the same distance before its text.

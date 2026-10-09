@@ -15,8 +15,8 @@
      .head                 small-caps label (.clickable to toggle a section)
 
    States: .active (selected / on), .inert (a row that can't be clicked),
-   .tone-high / .tone-warn / .tone-ok (on chips and tags). Disabled and focus
-   come from the theme ([disabled], :focus-visible). */
+   .tone-high / .tone-warn / .tone-soft / .tone-ok (on chips and tags).
+   Disabled and focus come from the theme ([disabled], :focus-visible). */
 
 .btn {
   display: inline-flex;
@@ -303,6 +303,12 @@
   background: color-mix(in srgb, var(--warn) 14%, transparent);
   border-color: var(--warn);
   color: var(--warn);
+}
+/* Dead code: lighter than tone-warn, with a fainter outline and tint. */
+:where(.chip.active, .tag).tone-soft {
+  background: color-mix(in srgb, var(--warn-soft) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warn-soft) 55%, transparent);
+  color: var(--warn-soft);
 }
 :where(.tag).tone-ok {
   background: color-mix(in srgb, var(--ok) 12%, transparent);

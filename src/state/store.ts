@@ -73,9 +73,10 @@ export type PrivCapFilter = "all" | "create" | "edit" | "delete" | "readonly";
 
 /** Cross-cutting reference-health filter, applied to whatever type is selected:
  * objects nothing references (unreferenced), objects used only by unused ones
- * (unusedChain), objects someone marked as used (markedUsed), or that have a
- * broken outbound reference (broken). */
-export type RefFilter = "all" | "unreferenced" | "unusedChain" | "markedUsed" | "broken";
+ * (unusedChain), objects someone marked as used (markedUsed), that have a
+ * broken outbound reference (broken), or scripts the script checks found
+ * something in (scriptChecks). */
+export type RefFilter = "all" | "unreferenced" | "unusedChain" | "markedUsed" | "broken" | "scriptChecks";
 
 /** Layout sub-filter (only meaningful when navType is "layout"). */
 export type LayoutFilter = "all" | "hasTriggers";

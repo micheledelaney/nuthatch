@@ -72,6 +72,7 @@ export function buildModel(parsed: ParseResult, marks: readonly UsageMark[] = []
       inbound,
       brokenReferences,
       parseErrors: parsed.errors,
+      scriptSteps: new Map(Object.entries(parsed.scriptSteps ?? {})),
     },
     marks,
   );

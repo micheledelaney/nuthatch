@@ -6,6 +6,7 @@ import { stepNodes } from "../steps";
 import { scanRefs } from "../refs/scanRefs";
 import { makeObject, placeInCatalog } from "./catalogItems";
 import { scriptSteps, stepTextNamesStep } from "./stepText";
+import { stepIrs } from "./stepIr";
 
 /**
  * Scripts come from ScriptCatalog (in workspace order, with folders and
@@ -26,7 +27,10 @@ export function parseScripts(fp: FileParse, containerNode: Record<string, unknow
       continue;
     }
     const block = stepBlocks.get(placed.id);
-    if (block) scriptsWithSteps.add(placed.id);
+    if (block) {
+      scriptsWithSteps.add(placed.id);
+      fp.scriptSteps[placed.uid] = stepIrs(block["ObjectList"]);
+    }
     const script = annotateScript(node, placed);
     // The steps' references: only the steps (ObjectList), not the block's
     // leading binding reference. (scanRefs also recovers the targets FileMaker

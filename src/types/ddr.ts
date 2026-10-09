@@ -558,6 +558,35 @@ export interface ScriptStep {
   params: string;
 }
 
+/** How a Go to Layout step picks its layout (<LayoutReferenceContainer value>):
+ * 1 its original layout, 5 one named in the step; anything else (3 by name, 4
+ * by number) is a formula. */
+export type LayoutChoice = "original" | "specified" | "calculated";
+
+/**
+ * One script step, typed from its XML instead of FileMaker's rendered text:
+ * what the script checks (core/scriptAnalysis) read of it.
+ */
+export interface StepIr {
+  /** 1-based position in the script, as everywhere (see stepNodes). */
+  index: number;
+  name: string;
+  enabled: boolean;
+  /** Each of the step's formulas, as written (a nested one once), password
+   * formulas left out. */
+  calcs: string[];
+  /** The variable the step writes: Set Variable's, or the target variable of
+   * a step that stores its result (Insert from URL …). */
+  setsVariable?: string;
+  /** Go to Layout: how it picks its layout. */
+  layoutChoice?: LayoutChoice;
+  /** Perform Script (on Server): its parameter formula, when it has one. */
+  parameter?: string;
+  /** The step's on/off options (`<Boolean type value>`), by name, e.g.
+   * "Wait for completion" on Perform Script on Server. */
+  flags?: Record<string, boolean>;
+}
+
 export interface JoinPredicate {
   leftField: string;
   /** Comparison symbol: =, ≠, <, ≤, >, ≥, × (cartesian). */
@@ -654,6 +683,9 @@ export interface SolutionModel {
   usageMarks: ReadonlyMap<string, UsageMark>;
   reportCard: ReportCard;
   parseErrors: string[];
+  /** Each script's typed steps, by script uid (empty for an analysis saved
+   * before the script checks). */
+  scriptSteps: ReadonlyMap<string, readonly StepIr[]>;
 }
 
 /** Why someone marked an object as used when nothing in the export uses it. */
@@ -685,6 +717,9 @@ export interface ParseResult {
   objects: FmObject[];
   references: RawReference[];
   errors: string[];
+  /** Each script's typed steps, by script uid. Missing from analyses saved
+   * before the script checks. */
+  scriptSteps?: Record<string, StepIr[]>;
 }
 
 /** Unresolved reference produced by the parser (toUid filled in by buildModel). */

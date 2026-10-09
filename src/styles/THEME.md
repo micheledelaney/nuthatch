@@ -149,7 +149,8 @@ Orange is the only accent. Red, yellow, green and blue mean status, never decora
 | `--nh-accent-deep` → `--accent-dim` | `#3a2418` | Orange-on-dark tile (notice icon). |
 | `--nh-danger` → `--high` | `#ff6b6b` | Broken. Red text, red outline, red dot. |
 | `--nh-danger-soft` | `#3b2326` | Red tint behind broken steps, `tone-high` chips, the error banner. |
-| `--nh-warning` → `--warn` | `#f6c453` | Needs a look: unreferenced, unused, unstored calculations. |
+| `--nh-warning` → `--warn` | `#f6c453` | Needs a look: script checks, unstored calculations; the Report Card's unreferenced figures. |
+| `--warn-soft` | 25% `--warn`, 75% `--nh-ink` (≈ `#f4e4c3`) | Dead code: the Unreferenced, Unused chain and Unused tags and chips, lighter so they read apart from script checks. |
 | `--nh-ok` → `--ok` | `#79dca4` | Good or added: marked as used, added in a comparison, record-creation cascade. |
 | `--nh-info` → `--info` | `#7fb4ff` | Neutral information: changed in a comparison, sort cascade. |
 
@@ -554,6 +555,11 @@ Fonts are bundled with `@fontsource` (the app runs offline in Tauri), so there's
   border-color: var(--warn);
   color: var(--warn);
 }
+:where(.chip.active, .tag).tone-soft {          /* dead code: lighter, fainter outline and tint */
+  background: color-mix(in srgb, var(--warn-soft) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warn-soft) 55%, transparent);
+  color: var(--warn-soft);
+}
 :where(.tag).tone-ok {
   background: color-mix(in srgb, var(--ok) 12%, transparent);
   border-color: var(--ok);
@@ -666,19 +672,20 @@ Status has one look per meaning, and every indicator of a status (dot, tag, list
 | Status | Row in a list | Flag / tag | Elsewhere |
 |---|---|---|---|
 | **Broken** | Red dot (`--high`), rail tile gets a red dot | `.tag.tone-high` "Broken" | Broken script step: red tint + 3px red bar. Broken value: `.broken-value` red. Placeholder in code (`<Field Missing>`): `.syn-missing` red 600. |
-| **Unreferenced** | Dim ink (`.unref`); orange once selected | `.tag.tone-warn` | Report Card figure in `--warn`. |
-| **Unused** (used only by unreferenced objects) | Dim ink | `.tag.tone-warn` "Unused" | Call chain: dimmed. |
+| **Unreferenced** | Dim ink (`.unref`); orange once selected | `.tag.tone-soft` | Report Card figure in `--warn`. |
+| **Unused** (used only by unreferenced objects) | Dim ink | `.tag.tone-soft` "Unused" | Call chain: dimmed. |
 | **External** (target in a file that isn't loaded) | Dimmed, `.inert` | `.tag` "External" (no tone) | Not an error: never red. |
 | **Unmatched** (a field name from calculation text that its loaded file doesn't have) | Dimmed, `.inert` | `.tag` "Unmatched" (no tone) | Not counted as broken: the name is read from text. |
 | **Disabled** (a Used by row whose every reference is in a disabled step) | Normal | `.tag` "Disabled" (no tone) | Call chain: a call in a disabled step gets "Disabled". |
 | **Marked as used** | Normal | `.tag.tone-ok` | Report Card "Marked as used" figure. |
+| **Script check** (a script a script check found something in: a fact or a likely defect) | Normal; the Health chip "Script checks" (`tone-warn`, Scripts and All objects) lists them | `.tag.tone-warn` "2 script checks" | Script step: amber tint + 3px amber bar (`.sw-line.check`, the broken step's mark in `--warn`); each finding is a row under "Script checks", above the steps, that scrolls to it. A broken step's red wins. |
 
 An object's own name stays in plain ink where it heads things (page title, navigator, breadcrumbs, pins), even when it reads `<Field Missing>`. Anywhere else the name is listed (a portal's Contents, a layout's object tree, At a glance), its `<… Missing>` parts are `.broken-value` red. In the relationship graph a broken occurrence's box has a red outline and a red name.
 
 ```tsx
 // RefStatusChip: the status tag right after a reference's name.
 <span className="tag ref-external-tag tone-high">Broken</span>
-<span className="tag ref-external-tag tone-warn">Unused</span>
+<span className="tag ref-external-tag tone-soft">Unused</span>
 <span className="tag ref-external-tag">External</span>
 <span className="tag ref-external-tag">Unmatched</span>
 <span className="tag ref-external-tag">Disabled</span>
@@ -701,6 +708,13 @@ An object's own name stays in plain ink where it heads things (page title, navig
 .sw-line.hit {
   background: color-mix(in srgb, var(--nh-danger) 17%, transparent);
   box-shadow: inset 3px 0 0 var(--high);
+  border-radius: var(--radius);
+}
+
+/* A step a script check found something in: the same mark in --warn. */
+.sw-line.check {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--warn);
   border-radius: var(--radius);
 }
 ```
@@ -866,6 +880,9 @@ Icons only; the type name is the tooltip and `aria-label`. Each entry is a `.tab
    ▸ AT A GLANCE                                               .head.clickable
      Type          [S] Script                                  .op-glance-kv
      Folder        Utilities
+   ▸ SCRIPT CHECKS · 2                                         only when there are findings
+     12  $x is never set                                       .row.script-check: step gutter,
+         Read at step 12, so it's always empty.                headline (code colours), dim detail
    ▸ SCRIPT STEPS
      ┌ 1  Set Variable [ $x ; Value: 1 ] ──────────────────┐  .sw
 ```
@@ -1259,7 +1276,7 @@ The section's title, chevron, spacing and indent come for free.
 <span className={`tag op-fact tone-${tone}`} title={explanation}>{label}</span>
 ```
 
-Use `tone-high` for broken, `tone-warn` for needs-a-look, `tone-ok` for good, no tone for neutral. Make sure the dot, the filter and the Report Card count read the same source.
+Use `tone-high` for broken, `tone-warn` for needs-a-look, `tone-soft` for dead code (unreferenced, unused), `tone-ok` for good, no tone for neutral. Make sure the dot, the filter and the Report Card count read the same source.
 
 ### A new object type
 

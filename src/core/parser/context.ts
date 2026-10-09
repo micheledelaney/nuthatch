@@ -1,4 +1,4 @@
-import type { FmFile, FmObject, ObjectType, RawReference } from "@/types/ddr";
+import type { FmFile, FmObject, ObjectType, RawReference, StepIr } from "@/types/ddr";
 import { asArray, attr, child, isElementKey, isRecord, textAttr } from "./xmlUtils";
 import { makeNameIndex, type NameIndex } from "./calcText";
 import { collectCatalogItems, fieldCatalogs } from "./catalogWalk";
@@ -30,6 +30,8 @@ export interface FileParse {
   readonly themeBases: Map<string, string>;
   readonly objects: FmObject[];
   readonly references: RawReference[];
+  /** Each script's typed steps, by script uid. */
+  readonly scriptSteps: Record<string, StepIr[]>;
   /** Shared with the whole parse: problems worth telling the user about. */
   readonly errors: string[];
 }

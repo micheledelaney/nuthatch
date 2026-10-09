@@ -6,6 +6,8 @@ import { charForCode, decodeEntities } from "../entities";
 import { formulasUnder } from "../calcText";
 import { isPasswordParameterType, withoutPasswordText } from "../passwords";
 
+const PSOS_STEP = "Perform Script on Server";
+
 /** Build the ordered step list shown in a script's inspector, and each step's
  * rendered parameters (renderedParams, "" for a step without), by position. */
 export function scriptSteps(stepsContainer: unknown, stepTexts: StepTexts): { steps: ScriptStep[]; rendered: string[] } {
@@ -40,13 +42,16 @@ export function actionScanTexts(steps: readonly Record<string, unknown>[], stepT
 /** The rendered parameters without their passwords' typed text
  * (withoutPasswordText). Insert Text omits the text value from StepText —
  * append it from ParameterValues. It's typed text, so only for display: the
- * text-based passes read renderedParams. */
+ * text-based passes read renderedParams. Perform Script on Server's StepText
+ * says "[ Wait for completion ]" when it waits and nothing when it doesn't —
+ * append the off state. */
 function displayParams(step: Record<string, unknown>, name: string, rendered: string | undefined): string {
   if (rendered == null) return "";
   const shown = withoutPasswordText(rendered, passwordFormulas(step["ParameterValues"]));
   const text = name === INSERT_TEXT_STEP ? insertTextValue(step) : undefined;
-  if (!text) return shown;
-  return shown ? `${shown} [ Text: "${text}" ]` : `[ Text: "${text}" ]`;
+  const added = text ? `[ Text: "${text}" ]` : name === PSOS_STEP && doesNotWait(step) ? "[ Wait for completion: Off ]" : undefined;
+  if (!added) return shown;
+  return shown ? `${shown} ${added}` : added;
 }
 
 /**
@@ -120,6 +125,14 @@ function passwordFormulas(node: unknown, out: string[] = []): string[] {
     else passwordFormulas(value, out);
   }
   return out;
+}
+
+/** Whether a step's <Boolean type="Wait for completion"> is set to False. */
+function doesNotWait(step: Record<string, unknown>): boolean {
+  return children(child(step, "ParameterValues"), "Parameter")
+    .filter((param) => attr(param, "type") === "Boolean")
+    .flatMap((param) => children(param, "Boolean"))
+    .some((el) => textAttr(el, "type") === "Wait for completion" && attr(el, "value") === "False");
 }
 
 /** Extract the literal text value from an Insert Text step's ParameterValues. */

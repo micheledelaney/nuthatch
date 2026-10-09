@@ -212,4 +212,15 @@ describe("stepParams", () => {
     const text = { ParameterValues: { Parameter: { "@_type": "Text", Text: { "@_value": "Hi{{char13}}there" } } } };
     expect(params("Insert Text", "Insert Text [ Select ; Target: T::f ]", text)).toBe(`[ Select ; Target: T::f ] [ Text: "Hi\nthere" ]`);
   });
+
+  it("adds a Perform Script on Server's off Wait for completion, which its rendered text leaves out", () => {
+    const wait = (value: string): Record<string, unknown> => ({
+      ParameterValues: { Parameter: [{ "@_type": "Parameter" }, { "@_type": "Boolean", Boolean: { "@_type": "Wait for completion", "@_id": "256", "@_value": value } }] },
+    });
+    expect(params("Perform Script on Server", "Perform Script on Server [ By name; $s ]", wait("False"))).toBe("[ By name; $s ] [ Wait for completion: Off ]");
+    expect(params("Perform Script on Server", "Perform Script on Server [ By name; $s ]&#13;[ Wait for completion ]", wait("True"))).toBe(
+      "[ By name; $s ] [ Wait for completion ]",
+    );
+    expect(params("Perform Script on Server", "Perform Script on Server [ By name; $s ]")).toBe("[ By name; $s ]");
+  });
 });

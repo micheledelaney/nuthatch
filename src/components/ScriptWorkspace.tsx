@@ -92,12 +92,15 @@ interface Line {
  * Render a script the way FileMaker's Script Workspace does: a numbered list
  * with If/Loop blocks indented, comments highlighted, disabled steps dimmed.
  * When `highlight` is set (from a clicked broken reference), the step(s) whose
- * parameters mention the target are flagged and scrolled into view.
+ * parameters mention the target are flagged and scrolled into view. Steps a
+ * script check found something in (`checkSteps`) get the same mark in amber.
  */
 export function ScriptWorkspace({
   steps,
   brokenSteps,
+  checkSteps,
   scrollToStep,
+  scrollKey,
   stepRefs,
   scriptGlobals,
   model,
@@ -107,7 +110,11 @@ export function ScriptWorkspace({
 }: {
   steps: ScriptStep[];
   brokenSteps?: Set<number>;
+  /** Steps a script check found something in (see core/scriptAnalysis). */
+  checkSteps?: ReadonlySet<number>;
   scrollToStep?: number | null;
+  /** A new value scrolls to `scrollToStep` again, even when it's the same step. */
+  scrollKey?: unknown;
   /** Objects each step references (by step index), linked inline in its params. */
   stepRefs?: Map<number, FmObject[]>;
   /** Global variable objects used anywhere in the script — merged into every step. */
@@ -142,7 +149,7 @@ export function ScriptWorkspace({
 
   useEffect(() => {
     if (scrollIndex != null) scrollRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [scrollIndex]);
+  }, [scrollIndex, scrollKey]);
 
   return (
     <CodeBox text={scriptText(lines)}>
@@ -152,6 +159,8 @@ export function ScriptWorkspace({
       <div className="sw-find-layer" ref={findLayerRef} aria-hidden />
       {lines.map(({ step, depth, isComment }) => {
         const hit = brokenSteps?.has(step.index) ?? false;
+        // A broken step's red wins over a check's amber.
+        const checked = !hit && (checkSteps?.has(step.index) ?? false);
         const refs = isComment ? [] : [...(stepRefs?.get(step.index) ?? []), ...(scriptGlobals ?? [])];
         const long = !isComment && isCollapsibleStep(step.name) && step.params.length > PARAMS_COLLAPSE_THRESHOLD;
         const nameClass = stepColorClass(step.name);
@@ -165,7 +174,7 @@ export function ScriptWorkspace({
           <div
             key={step.index}
             ref={step.index === scrollIndex ? scrollRef : undefined}
-            className={`sw-line${isComment ? " comment" : ""}${step.enabled ? "" : " disabled"}${hit ? " hit" : ""}`}
+            className={`sw-line${isComment ? " comment" : ""}${step.enabled ? "" : " disabled"}${hit ? " hit" : ""}${checked ? " check" : ""}`}
           >
             <span className="lo-chevron-space" />
             <span className="sw-ln">
