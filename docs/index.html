@@ -613,6 +613,27 @@
         70% { clip-path: inset(20% 0 48% 0); }
         100% { clip-path: inset(76% 0 4% 0); }
       }
+      /* Hero words that flicker into their XML tags. The slot keeps the
+         term's width; a longer tag is squeezed sideways (--squeeze) to fit. */
+      .kw {
+        display: inline-block;
+        white-space: nowrap;
+      }
+      .kw .glitch-label {
+        transform: scaleX(var(--squeeze, 1));
+        transform-origin: 4px 50%;
+      }
+      .kw.tag {
+        color: var(--accent-2);
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -639,7 +660,9 @@
           nuthatch is a static-analysis tool for FileMaker “Save a Copy as XML” exports.
           Load one file or a whole multi-file solution and explore its structure,
           dependencies, call chains, and maintenance risks. Find broken references and
-          unused objects, trace where any field or script is used, and compare two
+          unused objects, trace where a <span class="kw" data-tag="&lt;ValueList&gt;">value list</span>,
+          <span class="kw" data-tag="&lt;CustomFunction&gt;">custom function</span>,
+          <span class="kw" data-tag="&lt;TableOccurrence&gt;">table occurrence</span>, or any other object is used, and compare two
           versions side by side. Everything is parsed locally, in your browser or the
           desktop app. Nothing is uploaded.
         </p>
@@ -873,28 +896,56 @@ to ~/my-project/nuthatch</pre>
       document.addEventListener("keydown", (e) => e.key === "Escape" && closeAll());
       canZoom.addEventListener("change", () => closeAll());
 
-      // Hover glitch: wrap each nav link's and button's text in a label that
-      // scrambles for a moment on hover or focus. Its size is pinned while it
-      // glitches so the noise glyphs never resize the button.
+      // Glitch effects. Nav links and buttons scramble for a moment on hover
+      // or focus; the hero's FileMaker terms flicker into their XML tags and
+      // back. Only a label's text node characters change, never the node
+      // itself: Safari drops a click if the node under the pointer is swapped.
       (() => {
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
         const NOISE = "░▒▓█▌▐▀▄<>/=\"_#";
-        const DURATION = 300;
+        const HOVER_DURATION = 300;
+        const MORPH_DURATION = 650;
+        const FIRST_DELAY = 500; // ms after load before the first hero word glitches
+        const TAG_HOLD = 2000; // ms a hero word stays a tag
+        const MORPH_GAP = 1200; // ms between two hero words, plus up to as much again
         const noise = () => NOISE[Math.floor(Math.random() * NOISE.length)];
         const rand = (min, max) => (min + Math.random() * (max - min)).toFixed(1);
+        const scramble = (text, rate) => [...text].map((ch) => (Math.random() < rate ? noise() : ch)).join("");
 
-        document.querySelectorAll(".nav-links a, .btn").forEach((link) => {
-          const node = [...link.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
-          if (!node) return;
-          const original = node.textContent.trim();
+        const makeLabel = (text) => {
+          const node = document.createTextNode(text);
           const label = document.createElement("span");
           label.className = "glitch-label";
-          label.dataset.glitchText = original;
-          // Only this text node's characters change while it glitches: Safari
-          // drops a click if the node under the pointer is swapped out.
-          node.replaceWith(label);
-          node.data = original;
+          label.dataset.glitchText = text;
           label.append(node);
+          return { label, node };
+        };
+        const jitter = (label) => {
+          label.classList.add("glitching");
+          label.style.setProperty("--glitch-shadow1", rand(-2.5, 2.5) + "px");
+          label.style.setProperty("--glitch-shadow2", rand(-2.5, 2.5) + "px");
+          label.style.setProperty("--glitch-x1", rand(-3, 3) + "px");
+          label.style.setProperty("--glitch-y1", rand(-1.5, 1.5) + "px");
+          label.style.setProperty("--glitch-x2", rand(-3, 3) + "px");
+          label.style.setProperty("--glitch-y2", rand(-1.5, 1.5) + "px");
+          label.style.setProperty("--glitch-t1", rand(5, 65) + "%");
+          label.style.setProperty("--glitch-b1", rand(5, 65) + "%");
+          label.style.setProperty("--glitch-t2", rand(20, 75) + "%");
+          label.style.setProperty("--glitch-b2", rand(5, 55) + "%");
+        };
+        const calm = (label) => {
+          label.classList.remove("glitching");
+          label.style.cssText = "";
+        };
+
+        // Nav links and buttons. The label's size is pinned while it glitches
+        // so the noise glyphs never resize the button.
+        document.querySelectorAll(".nav-links a, .btn").forEach((link) => {
+          const textNode = [...link.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+          if (!textNode) return;
+          const original = textNode.textContent.trim();
+          const { label, node } = makeLabel(original);
+          textNode.replaceWith(label);
 
           let frame = 0;
           let running = false;
@@ -902,25 +953,13 @@ to ~/my-project/nuthatch</pre>
             running = false;
             cancelAnimationFrame(frame);
             node.data = original;
-            label.classList.remove("glitching");
-            label.style.cssText = "";
+            calm(label);
           };
           const tick = (startTime) => (now) => {
             if (!running) return;
-            const p = Math.min(1, (now - startTime) / DURATION);
-            let text = "";
-            for (const ch of original) text += Math.random() < (p < 0.55 ? 0.58 : 0.18) ? noise() : ch;
-            node.data = text;
-            label.style.setProperty("--glitch-shadow1", rand(-2.5, 2.5) + "px");
-            label.style.setProperty("--glitch-shadow2", rand(-2.5, 2.5) + "px");
-            label.style.setProperty("--glitch-x1", rand(-3, 3) + "px");
-            label.style.setProperty("--glitch-y1", rand(-1.5, 1.5) + "px");
-            label.style.setProperty("--glitch-x2", rand(-3, 3) + "px");
-            label.style.setProperty("--glitch-y2", rand(-1.5, 1.5) + "px");
-            label.style.setProperty("--glitch-t1", rand(5, 65) + "%");
-            label.style.setProperty("--glitch-b1", rand(5, 65) + "%");
-            label.style.setProperty("--glitch-t2", rand(20, 75) + "%");
-            label.style.setProperty("--glitch-b2", rand(5, 55) + "%");
+            const p = Math.min(1, (now - startTime) / HOVER_DURATION);
+            node.data = scramble(original, p < 0.55 ? 0.58 : 0.18);
+            jitter(label);
             if (p < 1) frame = requestAnimationFrame(tick(startTime));
             else stop();
           };
@@ -930,7 +969,6 @@ to ~/my-project/nuthatch</pre>
             const { width, height } = label.getBoundingClientRect();
             label.style.width = width + "px";
             label.style.height = height + "px";
-            label.classList.add("glitching");
             frame = requestAnimationFrame(tick(performance.now()));
           };
 
@@ -939,6 +977,73 @@ to ~/my-project/nuthatch</pre>
           link.addEventListener("focusin", start);
           link.addEventListener("focusout", stop);
         });
+
+        // Hero words, one at a time. Each slot keeps its term's width and a
+        // longer tag is squeezed sideways to fit, so the paragraph never
+        // reflows. Screen readers get the plain term only.
+        const words = [...document.querySelectorAll(".kw")].map((kw) => {
+          const term = kw.textContent;
+          const sr = document.createElement("span");
+          sr.className = "sr";
+          sr.textContent = term;
+          const { label, node } = makeLabel(term);
+          label.setAttribute("aria-hidden", "true");
+          kw.replaceChildren(sr, label);
+          kw.style.width = term.length + "ch";
+          return { kw, label, node, term, tag: kw.dataset.tag, isTag: false };
+        });
+        if (!words.length) return;
+
+        const show = (word, text) => {
+          word.node.data = text;
+          word.kw.style.setProperty("--squeeze", Math.min(1, word.term.length / text.length));
+        };
+        const morph = (word, done) => {
+          const from = word.isTag ? word.tag : word.term;
+          const to = word.isTag ? word.term : word.tag;
+          word.isTag = !word.isTag;
+          const startTime = performance.now();
+          const tick = (now) => {
+            const p = Math.min(1, (now - startTime) / MORPH_DURATION);
+            const target = p < 0.5 ? from : to;
+            word.label.dataset.glitchText = target;
+            word.kw.classList.toggle("tag", p < 0.5 ? !word.isTag : word.isTag);
+            if (p < 1) {
+              show(word, scramble(target, p < 0.75 ? 0.6 : 0.2));
+              jitter(word.label);
+              requestAnimationFrame(tick);
+              return;
+            }
+            show(word, to);
+            calm(word.label);
+            done();
+          };
+          requestAnimationFrame(tick);
+        };
+
+        // Pause while the hero is off screen or the tab is hidden.
+        let isHeroVisible = true;
+        new IntersectionObserver(([entry]) => {
+          isHeroVisible = entry.isIntersecting;
+        }).observe(document.querySelector(".hero p"));
+        // A random word (never the same twice in a row) turns into its tag,
+        // holds, and turns back; then a pause before the next one.
+        let last = -1;
+        const pick = () => {
+          let i;
+          do i = Math.floor(Math.random() * words.length);
+          while (words.length > 1 && i === last);
+          last = i;
+          return words[i];
+        };
+        const schedule = (delay) => setTimeout(step, delay);
+        const pause = () => schedule(MORPH_GAP * (1 + Math.random()));
+        const step = () => {
+          if (!isHeroVisible || document.hidden) return pause();
+          const word = pick();
+          morph(word, () => setTimeout(() => morph(word, pause), TAG_HOLD));
+        };
+        schedule(FIRST_DELAY);
       })();
     </script>
   </body>
