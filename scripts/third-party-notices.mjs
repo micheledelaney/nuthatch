@@ -16,7 +16,7 @@ const OUT = join(ROOT, "public", "THIRD_PARTY_NOTICES.txt");
 /** The platforms the desktop app is released for: only their crates ship. */
 const RUST_TARGETS = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 /** This app's own crates, not third-party. */
-const OWN_CRATES = new Set(["app"]);
+const OWN_CRATES = new Set(["nuthatch"]);
 
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|copyright)([-._].*)?$/i;
 

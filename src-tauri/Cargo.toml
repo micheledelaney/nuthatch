@@ -1,10 +1,10 @@
 [package]
-name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+name = "nuthatch"
+version = "1.0.1"
+description = "DDR / XML analysis for FileMaker solutions (structure, dependencies, call chains, risks)"
+authors = ["Michèle Delaney"]
+license = "MIT"
+repository = "https://github.com/micheledelaney/nuthatch"
 edition = "2021"
 rust-version = "1.77.2"
 

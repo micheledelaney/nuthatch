@@ -2,6 +2,7 @@
   "name": "nuthatch",
   "version": "1.0.1",
   "private": true,
+  "license": "MIT",
   "description": "nuthatch — DDR / XML analysis in the browser (structure, dependencies, call chains, risks)",
   "type": "module",
   "scripts": {
