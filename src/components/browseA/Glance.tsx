@@ -1,5 +1,5 @@
 import type React from "react";
-import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
+import { isBrokenTableOccurrence, layoutOf, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import { occurrenceBaseTable } from "@/core/model/refResolution";
@@ -30,18 +30,6 @@ function byId(model: SolutionModel, fileUid: string, type: ObjectType, id: strin
 function byName(model: SolutionModel, fileUid: string, type: ObjectType, name: string | undefined): FmObject | null {
   if (!name) return null;
   return model.objects.find((o) => o.type === type && o.fileUid === fileUid && o.name === name) ?? null;
-}
-
-/** The nearest layout above a layout object (its parent may be a portal, tab, …). */
-function ancestorLayout(model: SolutionModel, obj: FmObject): FmObject | null {
-  let uid = obj.parentUid;
-  while (uid) {
-    const up = model.byUid.get(uid);
-    if (!up) return null;
-    if (up.type === "layout") return up;
-    uid = up.parentUid;
-  }
-  return null;
 }
 
 /** The base table behind a table occurrence, as the model resolved it. */
@@ -160,7 +148,7 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     }
     case "layoutObject":
       return [
-        { label: "Layout", value: linkOrText(ancestorLayout(model, obj), undefined, onGo) },
+        { label: "Layout", value: linkOrText(layoutOf(obj, model.byUid), undefined, onGo) },
         { label: "Bound to", value: boundTo(obj, model, onGo) },
         { label: "Position", value: a.position },
       ];

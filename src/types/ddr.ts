@@ -322,6 +322,19 @@ export function objectLabel(o: FmObject): string {
   return o.name;
 }
 
+/** The layout a layout object is on, up through the containers it may sit in
+ * (a portal, a tab, a group). */
+export function layoutOf(obj: FmObject, byUid: ReadonlyMap<string, FmObject>): FmObject | null {
+  let uid = obj.parentUid;
+  while (uid) {
+    const ancestor = byUid.get(uid);
+    if (!ancestor) break;
+    if (ancestor.type === "layout") return ancestor;
+    uid = ancestor.parentUid;
+  }
+  return null;
+}
+
 /**
  * A broken table occurrence: it has no base table, and the export shows why —
  * a local occurrence whose base table was deleted, or an external one whose data

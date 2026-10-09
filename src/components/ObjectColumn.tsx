@@ -3,6 +3,7 @@ import {
   OBJECT_TYPE_META,
   objectLabel,
   isBrokenTableOccurrence,
+  layoutOf,
   type ChartInfo,
   type FmObject,
   type LayoutBounds,
@@ -41,19 +42,6 @@ function sourceFieldLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): s
   if (obj?.type !== "field") return null;
   const table = obj.parentUid ? byUid.get(obj.parentUid) : undefined;
   return table ? `${table.name}::${obj.name}` : obj.name;
-}
-
-/** The layout a layout object is on, up through the containers it may sit in
- * (a portal, a tab, a group). */
-function layoutOf(obj: FmObject, byUid: ReadonlyMap<string, FmObject>): FmObject | null {
-  let uid = obj.parentUid;
-  while (uid) {
-    const ancestor = byUid.get(uid);
-    if (!ancestor) break;
-    if (ancestor.type === "layout") return ancestor;
-    uid = ancestor.parentUid;
-  }
-  return null;
 }
 
 /** Attributes rendered explicitly below (or internal markers) — kept out of the
@@ -1373,17 +1361,7 @@ function LayoutObjectColumnDetail({
     ? refLabel(valueListEdge, model.byUid)
     : detail.valueListRef?.name || (detail.valueListRef?.id ? `Value list ${detail.valueListRef.id}` : "");
 
-  function ancestorLayout(): FmObject | null {
-    let uid = owner.parentUid;
-    while (uid) {
-      const obj = model.byUid.get(uid);
-      if (!obj) return null;
-      if (obj.type === "layout") return obj;
-      uid = obj.parentUid;
-    }
-    return null;
-  }
-  const parentLayout = ancestorLayout();
+  const parentLayout = layoutOf(owner, model.byUid);
   const layoutDetail = parentLayout?.detail?.kind === "layout" ? parentLayout.detail : null;
 
   const children = model.objects.filter((o) => o.parentUid === owner.uid);

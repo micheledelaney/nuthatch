@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/store";
-import { OBJECT_TYPE_META, objectLabel, type FmFile, type FmObject, type ObjectType } from "@/types/ddr";
+import { OBJECT_TYPE_META, layoutOf, objectLabel, type FmFile, type FmObject, type ObjectType } from "@/types/ddr";
 import { TypePill } from "./TypePill";
 import { applyNavFilters, effectiveRefFilter, isInUnusedChain, isUnreferenced, type NavFilters } from "./browseA/filters";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
@@ -382,21 +382,9 @@ export function Navigator() {
 
   /** Layout objects grouped by their parent layout, same pattern as fields by table. */
   const renderLayoutObjectsByLayout = (items: FmObject[], fileUid: string | null, depthOffset: number) => {
-    // Walk up parentUid chain until we reach a "layout" object.
-    function ancestorLayout(obj: FmObject): FmObject | null {
-      let uid = obj.parentUid;
-      while (uid) {
-        const parent = model?.byUid.get(uid);
-        if (!parent) return null;
-        if (parent.type === "layout") return parent;
-        uid = parent.parentUid;
-      }
-      return null;
-    }
-
     const byLayout = new Map<string, FmObject[]>();
     for (const obj of items) {
-      const layout = ancestorLayout(obj);
+      const layout = model ? layoutOf(obj, model.byUid) : null;
       const key = layout?.uid ?? "";
       const list = byLayout.get(key);
       if (list) list.push(obj);
