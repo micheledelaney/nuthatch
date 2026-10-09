@@ -52,7 +52,6 @@
         --accent-2: #f6b58b;
         --accent-soft: color-mix(in srgb, var(--accent) 45%, var(--border));
         --on-accent: #1b1c1e;
-        --particle: #8b94a3;
         --radius: 6px;
         --hover-lift: 1.25;
         --label-tracking: 0.16em;
@@ -80,15 +79,6 @@
         text-rendering: optimizeLegibility;
       }
 
-      /* Drifting-particle field behind everything (see particles.js). */
-      #particles {
-        position: fixed;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        z-index: -1;
-        pointer-events: none;
-      }
       body::before {
         content: "";
         position: fixed;
@@ -573,10 +563,59 @@
           padding-top: 48px;
         }
       }
+
+      /* Hover glitch on nav links and buttons: the label scrambles while
+         orange/blue ghost slices jitter around it. The padding (cancelled by
+         the margin) makes the label's box cover every spot the ghosts reach,
+         so Safari repaints it all when the glitch ends. */
+      .glitch-label {
+        position: relative;
+        display: inline-block;
+        isolation: isolate;
+        padding: 2px 4px;
+        margin: -2px -4px;
+      }
+      .glitch-label::before,
+      .glitch-label::after {
+        content: attr(data-glitch-text);
+        position: absolute;
+        inset: 2px 4px;
+        pointer-events: none;
+        opacity: 0;
+        white-space: nowrap;
+      }
+      .glitch-label::before {
+        color: #ff6a00;
+        transform: translate(var(--glitch-x1, 0), var(--glitch-y1, 0));
+        clip-path: inset(var(--glitch-t1, 0) 0 var(--glitch-b1, 100%) 0);
+      }
+      .glitch-label::after {
+        color: #3aa7ff;
+        transform: translate(var(--glitch-x2, 0), var(--glitch-y2, 0));
+        clip-path: inset(var(--glitch-t2, 0) 0 var(--glitch-b2, 100%) 0);
+      }
+      .glitch-label.glitching {
+        white-space: nowrap;
+        text-shadow:
+          var(--glitch-shadow1, 0) 0 #ff6a00,
+          var(--glitch-shadow2, 0) 0 #3aa7ff;
+      }
+      .glitch-label.glitching::before,
+      .glitch-label.glitching::after {
+        opacity: 0.9;
+      }
+      .glitch-label.glitching::after {
+        animation: label-glitch-scan 90ms steps(2, end) infinite;
+      }
+      @keyframes label-glitch-scan {
+        0% { clip-path: inset(5% 0 70% 0); }
+        35% { clip-path: inset(62% 0 12% 0); }
+        70% { clip-path: inset(20% 0 48% 0); }
+        100% { clip-path: inset(76% 0 4% 0); }
+      }
     </style>
   </head>
   <body>
-    <canvas id="particles" aria-hidden="true"></canvas>
     <header>
       <div class="wrap nav">
         <a class="brand" href="#top"><img src="bird.svg" alt="" />nuthatch</a>
@@ -769,7 +808,6 @@ to ~/my-project/nuthatch</pre>
         <span>Made by <a href="https://github.com/micheledelaney">Michèle</a></span>
       </div>
     </footer>
-    <script src="particles.js"></script>
     <script>
       if ("IntersectionObserver" in window) {
         document.body.classList.add("reveal");
@@ -834,6 +872,74 @@ to ~/my-project/nuthatch</pre>
       document.addEventListener("click", () => closeAll());
       document.addEventListener("keydown", (e) => e.key === "Escape" && closeAll());
       canZoom.addEventListener("change", () => closeAll());
+
+      // Hover glitch: wrap each nav link's and button's text in a label that
+      // scrambles for a moment on hover or focus. Its size is pinned while it
+      // glitches so the noise glyphs never resize the button.
+      (() => {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const NOISE = "░▒▓█▌▐▀▄<>/=\"_#";
+        const DURATION = 300;
+        const noise = () => NOISE[Math.floor(Math.random() * NOISE.length)];
+        const rand = (min, max) => (min + Math.random() * (max - min)).toFixed(1);
+
+        document.querySelectorAll(".nav-links a, .btn").forEach((link) => {
+          const node = [...link.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+          if (!node) return;
+          const original = node.textContent.trim();
+          const label = document.createElement("span");
+          label.className = "glitch-label";
+          label.dataset.glitchText = original;
+          // Only this text node's characters change while it glitches: Safari
+          // drops a click if the node under the pointer is swapped out.
+          node.replaceWith(label);
+          node.data = original;
+          label.append(node);
+
+          let frame = 0;
+          let running = false;
+          const stop = () => {
+            running = false;
+            cancelAnimationFrame(frame);
+            node.data = original;
+            label.classList.remove("glitching");
+            label.style.cssText = "";
+          };
+          const tick = (startTime) => (now) => {
+            if (!running) return;
+            const p = Math.min(1, (now - startTime) / DURATION);
+            let text = "";
+            for (const ch of original) text += Math.random() < (p < 0.55 ? 0.58 : 0.18) ? noise() : ch;
+            node.data = text;
+            label.style.setProperty("--glitch-shadow1", rand(-2.5, 2.5) + "px");
+            label.style.setProperty("--glitch-shadow2", rand(-2.5, 2.5) + "px");
+            label.style.setProperty("--glitch-x1", rand(-3, 3) + "px");
+            label.style.setProperty("--glitch-y1", rand(-1.5, 1.5) + "px");
+            label.style.setProperty("--glitch-x2", rand(-3, 3) + "px");
+            label.style.setProperty("--glitch-y2", rand(-1.5, 1.5) + "px");
+            label.style.setProperty("--glitch-t1", rand(5, 65) + "%");
+            label.style.setProperty("--glitch-b1", rand(5, 65) + "%");
+            label.style.setProperty("--glitch-t2", rand(20, 75) + "%");
+            label.style.setProperty("--glitch-b2", rand(5, 55) + "%");
+            if (p < 1) frame = requestAnimationFrame(tick(startTime));
+            else stop();
+          };
+          const start = () => {
+            if (running) return;
+            running = true;
+            const { width, height } = label.getBoundingClientRect();
+            label.style.width = width + "px";
+            label.style.height = height + "px";
+            label.classList.add("glitching");
+            frame = requestAnimationFrame(tick(performance.now()));
+          };
+
+          link.addEventListener("mouseenter", start);
+          link.addEventListener("mouseleave", stop);
+          link.addEventListener("focusin", start);
+          link.addEventListener("focusout", stop);
+        });
+      })();
     </script>
   </body>
 </html>
