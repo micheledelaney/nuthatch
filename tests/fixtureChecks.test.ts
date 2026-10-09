@@ -85,6 +85,15 @@ describe("a layout catalog read in the parsed tree", () => {
   });
 });
 
+describe("file access entries", () => {
+  it("say whether each is local or external, and whether it is the file itself", () => {
+    const entries = parse("XML FM26/TEST_EXT.xml")
+      .objects.filter((o) => o.type === "fileAccess")
+      .map((o) => `${o.id}: ${o.attributes.accessType} ${o.attributes.selfAuthorized}`);
+    expect(entries).toEqual(["1: Local Yes", "2: External Yes", "3: Local No", "4: External No"]);
+  });
+});
+
 describe("privilege-set field access", () => {
   const mainFields = (file: string): PrivilegeSetFieldAccess[] => {
     const detail = parse(file).objects.find((o) => o.type === "privilegeSet" && o.name === "PS_CustomRecords")?.detail;

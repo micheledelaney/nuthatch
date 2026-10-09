@@ -114,6 +114,8 @@ const ATTR_LABELS: Record<string, string> = {
   colorScheme: "Color scheme",
   baseFontSize: "Base font size",
   palette: "Palette",
+  accessType: "Access",
+  selfAuthorized: "This file itself",
   authorizedBy: "Authorized by",
   authorizedOn: "Authorized on",
   basedOn: "Based on",

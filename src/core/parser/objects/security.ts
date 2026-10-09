@@ -335,19 +335,24 @@ export function addExtendedPrivilegeGrants(fp: FileParse, node: Record<string, u
  * A <Authorization> (an authorized client file) carries no `name`; its label is a
  * nested <Display> CDATA. Lift it to the object name, and reset the text to that
  * label so the embedded <Authentication> credential hash stays out of the body.
- * The nested <Source> records who first authorized the file and when.
+ * The nested <Source> records who first authorized the file and when. `type`
+ * is Local or External, and `self="True"` marks the file authorizing itself —
+ * requiring authorization adds one such entry per type, both under its own name.
  */
 export function annotateFileAccess(node: Record<string, unknown>, obj: FmObject): FmObject {
   const name = displayText(node["Display"]) || obj.name;
   const source = child(node, "Source");
   const account = textAttr(source, "CreationAccountName");
   const created = attr(source, "CreationTimestamp");
+  const accessType = attr(node, "type");
   return {
     ...obj,
     name,
     text: name,
     attributes: {
       ...obj.attributes,
+      ...(accessType ? { accessType } : {}),
+      selfAuthorized: attr(node, "self") === "True" ? "Yes" : "No",
       ...(account ? { authorizedBy: account } : {}),
       ...(created ? { authorizedOn: created } : {}),
     },

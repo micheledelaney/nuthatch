@@ -256,6 +256,8 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
     }
     case "fileAccess":
       return [
+        { label: "Access", value: a.accessType },
+        { label: "This file itself", value: a.selfAuthorized },
         { label: "Authorized by", value: a.authorizedBy },
         { label: "Authorized on", value: a.authorizedOn },
         { label: "Description", value: a.description },

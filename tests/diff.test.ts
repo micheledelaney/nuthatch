@@ -42,6 +42,13 @@ describe("what a comparison sees", () => {
     expect(changed(object("script", script, { order: 1 }), object("script", script, { order: 2 }))).toEqual([]);
   });
 
+  it("a file access entry's access type and self-authorization", () => {
+    const entry = (accessType: string, selfAuthorized: string) =>
+      object("fileAccess", script, { detail: undefined, attributes: { accessType, selfAuthorized } });
+    expect(changed(entry("Local", "Yes"), entry("External", "Yes"))).toEqual(["F0:fileAccess:1"]);
+    expect(changed(entry("Local", "Yes"), entry("Local", "No"))).toEqual(["F0:fileAccess:1"]);
+  });
+
   it("a relationship side's sort order", () => {
     expect(changed(object("relationship", relationship(sorted("B::a"))), object("relationship", relationship(sorted("B::b"))))).toEqual(["F0:relationship:1"]);
   });
