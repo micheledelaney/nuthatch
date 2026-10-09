@@ -5,10 +5,10 @@
   flex: 1;
   /* The left edge is the first view tab's label (32px header padding + 14px
      tab padding), so the page hangs from the same line as the tabs. */
-  padding: 32px 32px 40px calc(32px + 14px);
+  padding: 24px 32px 24px calc(32px + 14px);
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 28px;
 }
 
 .report-card .head {
@@ -32,7 +32,7 @@
 }
 
 .report-card .nh-notice + .nh-notice {
-  margin-top: -28px;
+  margin-top: -16px;
 }
 
 .report-card .nh-notice__icon {
@@ -54,7 +54,7 @@
 .report-card .nh-issue {
   --issue-tone: var(--accent);
   padding: 0;
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -78,7 +78,7 @@
 .report-card .nh-issue__main {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   width: fit-content;
   max-width: 100%;
   cursor: pointer;
@@ -116,7 +116,7 @@
 
 /* What the main issue means and what to do about it. */
 .report-card .nh-issue__detail {
-  max-width: 78ch;
+  max-width: 100ch;
   margin: 0;
   font-size: 12.5px;
   line-height: 20px;
@@ -145,7 +145,7 @@
 .report-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 36px 40px;
+  gap: 24px 40px;
 }
 
 .report-card .nh-tile,
