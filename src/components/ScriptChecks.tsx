@@ -17,8 +17,9 @@ export function ScriptChecks({ checks, onShow }: { checks: readonly ScriptFindin
   const gutter = `${Math.max(...checks.map((check) => String(check.step).length))}ch`;
   return (
     <ul className="ref-list">
-      {checks.map((check) => (
-        <li key={`${check.rule}:${check.step}`}>
+      {checks.map((check, i) => (
+        // A step can have several findings of one rule (two unset variables).
+        <li key={`${check.rule}:${check.step}:${i}`}>
           <div className="row script-check" {...pressable(() => onShow(check.step!))}>
             <span className="script-check-step" style={{ width: gutter }}>
               {check.step}

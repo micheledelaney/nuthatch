@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { Detail } from "@/components/ObjectColumn";
 import { factsFor } from "@/components/browseA/facts";
 import { applyNavFilters, chipGroupsFor, NO_FILTERS } from "@/components/browseA/filters";
+import { ScriptChecks } from "@/components/ScriptChecks";
 import { ScriptWorkspace } from "@/components/ScriptWorkspace";
 import { buildModel } from "@/core/model/buildModel";
 import { shownScriptChecks } from "@/core/scriptAnalysis/analyze";
@@ -50,6 +51,16 @@ describe("script checks on a script's page", () => {
     );
     expect(html.indexOf("Script checks")).toBeLessThan(html.indexOf("Script steps"));
     expect(markedSteps(html)).toEqual([2, 3]);
+  });
+
+  it("keys two findings on the same step apart", () => {
+    const { script, model } = solution(["Beep"], { 1: { calcs: ["$title & $message"] } });
+    const checks = shownScriptChecks(model, script.uid);
+    // Static rendering doesn't report duplicate keys; ScriptChecks has no
+    // hooks, so call it for its rows.
+    const rows = ScriptChecks({ checks, onShow: () => {} }).props.children as { key: string }[];
+    expect(checks.map((check) => check.step)).toEqual([1, 1]);
+    expect(new Set(rows.map((row) => row.key)).size).toBe(2);
   });
 
   it("shows the names a finding mentions in their code colours", () => {
