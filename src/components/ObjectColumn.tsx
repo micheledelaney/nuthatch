@@ -15,7 +15,7 @@ import {
   type SolutionModel,
   type SortField,
 } from "@/types/ddr";
-import { buildDependencyView, type DependencyEdge } from "@/core/analysis/dependencies";
+import { type DependencyEdge } from "@/core/analysis/dependencies";
 import type { CallNode } from "@/core/analysis/callChain";
 import { BROKEN_PLACEHOLDER_RE } from "@/core/identifiers";
 import { findMissingFieldOccurrences } from "@/core/model/refResolution";
@@ -23,7 +23,7 @@ import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
 import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { CodeBox } from "./CodeBox";
-import { ScriptWorkspace } from "./ScriptWorkspace";
+import { ScriptWorkspace, stepColorClass } from "./ScriptWorkspace";
 import { useScriptFind } from "./ScriptFind";
 import { LinkedCode } from "./Highlight";
 import { FieldRefLink, ObjLink, RefStatusChip } from "./FieldRefLink";
@@ -1158,7 +1158,6 @@ function LayoutTriggers({
   onGo: (uid: string, rowKey: string) => void;
   title?: string;
 }) {
-  const outbound = buildDependencyView(model, owner.uid)?.outbound.filter((e) => e.ref.kind !== "menuItem") ?? [];
   const targets = refIndexFor(model, owner.uid).targets;
   return (
     <Section title={title} count={triggers.length}>
@@ -1171,7 +1170,6 @@ function LayoutTriggers({
               trigger={trigger}
               owner={owner}
               model={model}
-              outbound={outbound}
               targets={targets}
               onGo={onGo}
               key={`${trigger.id ?? trigger.action}:${i}`}
@@ -1187,29 +1185,25 @@ function LayoutTriggerRow({
   trigger,
   owner,
   model,
-  outbound,
   targets,
   onGo,
 }: {
   trigger: LayoutTriggerInfo;
   owner: FmObject;
   model: SolutionModel;
-  outbound: DependencyEdge[];
   targets: FmObject[];
   onGo: (uid: string, rowKey: string) => void;
 }) {
   const script = trigger.scriptName || (trigger.scriptId ? `Script ${trigger.scriptId}` : "(missing script)");
   const target = trigger.scriptId ? model.byUid.get(`${owner.fileUid}:script:${trigger.scriptId}`) ?? null : null;
-  const rowKey = target ? layoutTriggerRowKey(owner.uid, trigger, target, outbound) : "";
   const title = [trigger.scriptUuid ? `UUID: ${trigger.scriptUuid}` : "", trigger.id ? `Trigger id: ${trigger.id}` : ""]
     .filter(Boolean)
     .join("\n");
-  const text =
-    `Perform Script [ “${script}”` +
+  const params =
+    `[ “${script}”` +
     (trigger.parameter ? ` ; Parameter: ${trigger.parameter}` : "") +
     (trigger.parameterFieldName ? ` ; Parameter field: ${trigger.parameterFieldName}` : "") +
     " ]";
-  const link = (code: string) => <LinkedCode text={code} objects={targets} onGo={onGo} model={model} owner={owner.uid} />;
   return (
     <div className="layout-trigger" title={title || undefined}>
       <div className="layout-obj-row">
@@ -1220,43 +1214,31 @@ function LayoutTriggerRow({
           </span>
         ))}
       </div>
-      {/* The trigger's script call, drawn as the Perform Script step it runs. */}
-      <CodeBox text={text}>
+      {/* The trigger's script call, drawn as the Perform Script step it runs:
+          a deleted script reads “<unknown>”, red as in a script. */}
+      <CodeBox text={`Perform Script ${params}`}>
         <pre className="code">
-          {"Perform Script [ "}
-          {target ? (
-            <ObjLink obj={target} onGo={(uid) => onGo(uid, rowKey)}>
-              “{script}”
-            </ObjLink>
-          ) : (
-            <span className="syn-field" title="This script isn't in the loaded files">“{script}”</span>
-          )}
-          {trigger.parameter && <>{" ; Parameter: "}{link(trigger.parameter)}</>}
-          {trigger.parameterFieldName && <>{" ; Parameter field: "}{link(trigger.parameterFieldName)}</>}
-          {" ]"}
+          <StepName name="Perform Script" />{" "}
+          <LinkedCode text={params} objects={performScriptLinks(targets, target)} onGo={onGo} model={model} owner={owner.uid} />
         </pre>
       </CodeBox>
     </div>
   );
 }
 
-function layoutTriggerRowKey(
-  ownerUid: string,
-  trigger: LayoutTriggerInfo,
-  target: FmObject,
-  outbound: DependencyEdge[],
-): string {
-  const refIndex = outbound.findIndex(
-    (edge) =>
-      edge.target?.uid === target.uid &&
-      edge.ref.toType === "script" &&
-      (trigger.scriptId == null || edge.ref.toId === trigger.scriptId),
-  );
-  if (refIndex >= 0) {
-    const edge = outbound[refIndex];
-    if (edge) return `${edge.ref.fromUid}-${edge.ref.toId}-${refIndex}`;
-  }
-  return `layout-trigger:${ownerUid}:${trigger.id ?? trigger.action}:${target.uid}`;
+/** What a Perform Script line links: the objects its parameter can name, and
+ * the script it runs, found by id. The script comes last so it wins a name
+ * shared with another candidate (LinkedCode keeps one object per name: the
+ * last); the owner's other scripts are left out, as they aren't in the line. */
+function performScriptLinks(targets: FmObject[], script: FmObject | null): FmObject[] {
+  const others = targets.filter((o) => o.type !== "script");
+  return script ? [...others, script] : others;
+}
+
+/** A step's name in the colour its step group has in a script. */
+function StepName({ name }: { name: string }) {
+  const color = stepColorClass(name);
+  return <span className={color ? `sw-name ${color}` : "sw-name"}>{name}</span>;
 }
 
 /** Try to resolve a "TO::FieldName" field reference to an FmObject in the model. */
@@ -1296,7 +1278,7 @@ function StepBlock({
               1
             </span>
             <span className="sw-step">
-              <span className="sw-name">{name}</span>
+              <StepName name={name} />
               {children}
             </span>
           </div>
@@ -1345,25 +1327,12 @@ function PerformScriptSection({
   const long = (parameter?.length ?? 0) > ACTION_STEP_COLLAPSE_THRESHOLD;
   const [expanded, setExpanded] = useState(!long);
   const shown = parameter && long && !expanded ? parameter.slice(0, ACTION_STEP_COLLAPSE_THRESHOLD) + "…" : parameter;
-  const text = `Perform Script [ "${scriptName}"${parameter ? ` ; Parameter: ${parameter}` : ""} ]`;
+  const params = (p: string | undefined) => `[ “${scriptName}”${p ? ` ; Parameter: ${p}` : ""} ]`;
   return (
-    <StepBlock name="Perform Script" text={text} long={long} expanded={expanded} onToggle={() => setExpanded((v) => !v)}>
+    <StepBlock name="Perform Script" text={`Perform Script ${params(parameter)}`} long={long} expanded={expanded} onToggle={() => setExpanded((v) => !v)}>
       <span className="sw-params">
-        {" [ "}
-        {scriptObj ? (
-          <ObjLink obj={scriptObj} onGo={(uid) => onGo(uid, `lo-script:${uid}`)}>
-            “{scriptName}”
-          </ObjLink>
-        ) : (
-          <span className="syn-field" title="This script isn't in the loaded files">“{scriptName}”</span>
-        )}
-        {shown ? (
-          <>
-            {" ; Parameter: "}
-            <LinkedCode text={shown} objects={targets} onGo={onGo} model={model} owner={owner} />
-          </>
-        ) : null}
-        {" ]"}
+        {" "}
+        <LinkedCode text={params(shown)} objects={performScriptLinks(targets, scriptObj)} onGo={onGo} model={model} owner={owner} />
       </span>
     </StepBlock>
   );
@@ -1440,6 +1409,8 @@ function LayoutObjectColumnDetail({
                 text={detail.info.replace(/^URL:\s*/, "")}
                 objects={refIndexFor(model, owner.uid).targets}
                 onGo={onGo}
+                model={model}
+                owner={owner.uid}
               />
             </pre>
           </CodeBox>

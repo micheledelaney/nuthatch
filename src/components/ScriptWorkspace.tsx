@@ -76,7 +76,9 @@ const STEP_GROUPS: [Set<string>, string][] = [
   [QUIET_STEPS, "sw-quiet"],
 ];
 
-function stepColorClass(name: string): string {
+/** A step name's colour class by its step group ("" for none); the step boxes
+ * outside a script (triggers, buttons) use it too. */
+export function stepColorClass(name: string): string {
   return STEP_GROUPS.find(([steps]) => steps.has(name))?.[1] ?? "";
 }
 

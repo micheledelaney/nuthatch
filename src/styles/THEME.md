@@ -1080,7 +1080,7 @@ Every code block goes in a `CodeBox` (`src/components/CodeBox.tsx`), which adds 
 .sw-find-mark.is-current   { background: color-mix(in srgb, var(--warn) 40%, transparent); }
 ```
 
-Linked names inside code are `.obj-link`: they take the syntax colour of the token they sit in (a linked `$$global` stays a variable, a script name in quotes stays a string) and lift on hover. The text is coloured whole before the links are laid over it, so a link never splits a string or a comment. Nothing is linked inside a comment, a step option's label or a `<… Missing>` placeholder. Script triggers are shown the same way: the trigger's name and mode tags on a line, then a code box with `Perform Script [ "script" ; Parameter: … ]`.
+Linked names inside code are `.obj-link`: they take the syntax colour of the token they sit in (a linked `$$global` stays a variable, a script name in quotes stays a string) and lift on hover. The text is coloured whole before the links are laid over it, so a link never splits a string or a comment. Nothing is linked inside a comment, a step option's label or a `<… Missing>` placeholder. Script triggers are shown the same way: the trigger's name and mode tags on a line, then a code box with the Perform Script step it runs, drawn like a script step: the step name in its step colour, then `[ “script” ; Parameter: … ]` through the same highlighter, so a deleted script reads `“<unknown>”` with the placeholder red. A button's step box (its Perform Script, or its single step) is drawn the same way.
 
 ---
 
