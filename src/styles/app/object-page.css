@@ -161,6 +161,13 @@
   color: var(--text-dim);
 }
 
+/* Between a using layout object's layout and the object (dim, like the
+   history bar's separator). */
+.ref-list .ref-sep {
+  flex: none;
+  color: var(--text-dim);
+}
+
 /* A field's kind, type and storage, right-aligned after its name in a table's
    Fields list; it truncates before the name does. */
 .ref-list .ref-field-info {

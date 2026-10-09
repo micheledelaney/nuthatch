@@ -931,6 +931,7 @@ Content decisions on this page:
 - Sections (`.detail-widget`) have **no box**: a spaced-caps title with a chevron, then spacing.
 - "Show in graph" is a round `.icon-btn` with a tooltip, not a text button.
 - Reference lists group by type (`.ref-group` with a `.head` label), items are `.row`, and long lists end in a `.link-btn` "Show N more".
+- In Used by, a layout object's row starts with its layout: the layout's type tag and its name as an `.obj-link` (it opens the layout), a dim `›` (`.ref-sep`), then the object's own type tag and name (the rest of the row opens the object).
 
 ### 8.8 Report Card (`report-card.css`)
 

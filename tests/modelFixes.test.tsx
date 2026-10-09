@@ -125,6 +125,12 @@ describe("Used by rows", () => {
     expect(rows(recursive, "from")).toEqual(["CF_Recursive"]);
     expect(buildDependencyView(model, find(model, "script", "S_Sub").uid)!.inbound.every((e) => !e.disabled)).toBe(true);
   });
+
+  it("name a layout object after its layout, each with its own type tag, the layout a link of its own", () => {
+    const list = <GroupedRefList edges={buildDependencyView(model, find(model, "script", "S_Sub").uid)!.inbound} side="from" onGo={() => {}} byUid={model.byUid} previewLimit={1000} />;
+    expect(visibleText(list)).toContain("L L_Calcs › Obj obj_ButtonParam");
+    expect(renderToStaticMarkup(list)).toMatch(/<button[^>]*>L_Calcs<\/button>/);
+  });
 });
 
 describe("References rows", () => {

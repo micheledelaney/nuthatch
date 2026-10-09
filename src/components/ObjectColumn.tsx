@@ -43,6 +43,19 @@ function sourceFieldLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): s
   return table ? `${table.name}::${obj.name}` : obj.name;
 }
 
+/** The layout a layout object is on, up through the containers it may sit in
+ * (a portal, a tab, a group). */
+function layoutOf(obj: FmObject, byUid: ReadonlyMap<string, FmObject>): FmObject | null {
+  let uid = obj.parentUid;
+  while (uid) {
+    const ancestor = byUid.get(uid);
+    if (!ancestor) break;
+    if (ancestor.type === "layout") return ancestor;
+    uid = ancestor.parentUid;
+  }
+  return null;
+}
+
 /** Attributes rendered explicitly below (or internal markers) — kept out of the
  * generic "everything else" list so they aren't shown twice. */
 const RENDERED_ATTRS = new Set([
@@ -402,18 +415,7 @@ export function DetailsProps({
   const a = obj.attributes;
   const rest = Object.entries(a).filter(([k, v]) => !RENDERED_ATTRS.has(k) && v !== "");
 
-  // For layout objects, walk up to find the ancestor layout (the immediate
-  // parent may be a portal, tab, or other container, not the layout itself).
-  const ancestorLayout = obj.type === "layoutObject" ? (() => {
-    let uid = obj.parentUid;
-    while (uid) {
-      const ancestor = model.byUid.get(uid);
-      if (!ancestor) break;
-      if (ancestor.type === "layout") return ancestor;
-      uid = ancestor.parentUid;
-    }
-    return null;
-  })() : null;
+  const ancestorLayout = obj.type === "layoutObject" ? layoutOf(obj, model.byUid) : null;
 
   return (
     <Section title="Metadata" defaultOpen={false}>
@@ -2179,7 +2181,14 @@ export function GroupedRefList({
               const unused = obj != null && (isUnused?.(obj.uid) ?? false);
               const rowKey = `${edge.ref.fromUid}-${edge.ref.toId}-${group.type}-${i}`;
               const type = obj?.type ?? edge.ref.toType;
-              const label = side === "to" ? refLabel(edge.ref, byUid) : (sourceFieldLabel(edge, byUid) ?? (obj ? objectLabel(obj) : edge.ref.fromUid));
+              // A using layout object is shown after the layout it's on, which links on its own.
+              const layout = side === "from" && obj?.type === "layoutObject" ? layoutOf(obj, byUid) : null;
+              const label =
+                side === "to"
+                  ? refLabel(edge.ref, byUid)
+                  : layout && obj
+                    ? `${layout.name} › ${objectLabel(obj)}`
+                    : (sourceFieldLabel(edge, byUid) ?? (obj ? objectLabel(obj) : edge.ref.fromUid));
               const title = broken
                 ? `Broken — ${label}`
                 : unverifiable
@@ -2200,8 +2209,30 @@ export function GroupedRefList({
                     {...pressable(() => obj && onGo(obj.uid, rowKey), { inert: broken || external || unmatched || !obj })}
                     title={title}
                   >
-                    <TypePill type={type} short />
-                    <span className="ellipsis">{label}</span>
+                    {layout && obj ? (
+                      <>
+                        <TypePill type="layout" short />
+                        <button
+                          type="button"
+                          className="obj-link ellipsis"
+                          title={layout.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGo(layout.uid, `${rowKey}-layout`);
+                          }}
+                        >
+                          {layout.name}
+                        </button>
+                        <span className="ref-sep">›</span>
+                        <TypePill type={type} short />
+                        <span className="ellipsis">{objectLabel(obj)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <TypePill type={type} short />
+                        <span className="ellipsis">{label}</span>
+                      </>
+                    )}
                     {external && <RefStatusChip kind="external" />}
                     {unmatched && <RefStatusChip kind="unmatched" />}
                     {edge.disabled && <RefStatusChip kind="disabled" />}
