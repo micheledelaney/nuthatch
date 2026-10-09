@@ -15,7 +15,7 @@ import { tokenize, variableUses } from "@/core/scriptAnalysis/calcTokens";
 import { plainText, type RuleId, type ScriptFinding } from "@/core/scriptAnalysis/findings";
 import { passedKeys } from "@/core/scriptAnalysis/jsonKeys";
 import { keyReads } from "@/core/scriptAnalysis/paramKeys";
-import type { FmObject, ObjectDetail, ObjectType, RawReference, StepIr } from "@/types/ddr";
+import type { FmObject, LayoutChoice, ObjectDetail, ObjectType, RawReference, StepIr } from "@/types/ddr";
 
 const FILE = "F0";
 
@@ -201,6 +201,40 @@ describe("Set Field context", () => {
     const list = steps(step("If"), { name: "Go to Layout", layoutChoice: "specified" }, step("End If"), step("Set Field"));
     expect(check(list, [call(button, SCRIPT), goTo(2, onC), setField(SCRIPT, 4, "3")])).toEqual([]);
     expect(rules(check(list, [call(button, SCRIPT), goTo(2, onA), setField(SCRIPT, 4, "3")]))).toEqual(["unrelated-set-field@4"]);
+  });
+
+  const layoutRef = (at: number, layout: FmObject): RawReference => ({ fromUid: SCRIPT.uid, toType: "layout", toId: layout.id, toName: layout.name, kind: "layout", fromStep: at });
+
+  it("follows New Window and Go to Related Record where they name a layout", () => {
+    const newWindow = (layoutChoice: LayoutChoice) => steps({ name: "New Window", layoutChoice }, step("Set Field"));
+    // A named layout is known even when nothing shows where the script starts.
+    expect(rules(check(newWindow("specified"), [layoutRef(1, onA), setField(SCRIPT, 2, "3")]))).toEqual(["unrelated-set-field@2"]);
+    // "<Current Layout>": still the button's.
+    expect(rules(check(newWindow("original"), [call(button, SCRIPT), setField(SCRIPT, 2, "3")]))).toEqual(["unrelated-set-field@2"]);
+    const related = steps({ name: "Go to Related Record", layoutChoice: "specified" }, step("Set Field"));
+    expect(rules(check(related, [call(button, SCRIPT), layoutRef(1, onA), setField(SCRIPT, 2, "3")]))).toEqual(["unrelated-set-field@2"]);
+    // With no related record it stays on LA, whose A it can set; nor is it
+    // known where it stays when nothing shows where the script starts.
+    expect(check(related, [call(button, SCRIPT), layoutRef(1, onC), setField(SCRIPT, 2, "1")])).toEqual([]);
+    expect(check(related, [layoutRef(1, onA), setField(SCRIPT, 2, "3")])).toEqual([]);
+  });
+
+  it("starts a performed script on the layout its caller is on at the call", () => {
+    const sub = steps(step("Set Field"));
+    const found = check(steps(step("Perform Script")), [call(button, SCRIPT), call(SCRIPT, SUB, 1), setField(SUB, 1, "3")], sub);
+    expect(found.map((f) => [f.uid, f.step])).toEqual([[SUB.uid, 1]]);
+    // Not once the caller has gone to LC, nor when Sub also runs itself.
+    const afterGoTo = steps({ name: "Go to Layout", layoutChoice: "specified" }, step("Perform Script"));
+    expect(check(afterGoTo, [call(button, SCRIPT), goTo(1, onC), call(SCRIPT, SUB, 2), setField(SUB, 1, "3")], sub)).toEqual([]);
+    const recursive = steps(step("Set Field"), step("Perform Script"));
+    expect(check(steps(step("Perform Script")), [call(button, SCRIPT), call(SCRIPT, SUB, 1), call(SUB, SUB, 2), setField(SUB, 1, "3")], recursive)).toEqual([]);
+  });
+
+  it("forgets the layout after a pause, when the user can go to another", () => {
+    const refs = [call(button, SCRIPT), setField(SCRIPT, 2, "3")];
+    expect(rules(check(steps(step("Beep"), step("Set Field")), refs))).toEqual(["unrelated-set-field@2"]);
+    expect(check(steps(step("Pause/Resume Script"), step("Set Field")), refs)).toEqual([]);
+    expect(check(steps({ name: "Enter Find Mode", flags: { Pause: true } }, step("Set Field")), refs)).toEqual([]);
   });
 
   it("forgets the layout after a calculated Go to Layout, a window step, or a call that might change it", () => {

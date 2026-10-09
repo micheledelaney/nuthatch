@@ -1,23 +1,41 @@
 import { layoutOf, type FmObject, type FmReference, type SolutionModel, type StepIr } from "@/types/ddr";
 import { objectUid } from "@/core/parser/uid";
-import { walk, type Block, type Domain } from "./blocks";
+import { buildBlocks, walk, type Domain } from "./blocks";
 import { refsByStep, type ScriptAnalysisInput, type ScriptFinding } from "./findings";
 
 /**
- * Which layout a script is on at each step, as far as the export shows: the
- * layout of the trigger or button that runs it, then whatever a Go to Layout
- * names. Anything else that can change the window or layout makes it unknown —
- * and so does a call to a script that might. With it, a Set Field into an
- * occurrence that isn't related to the layout's own is found: FileMaker has no
- * record to set there.
+ * Which layout a script is on at each step, as far as the export shows: where
+ * it starts (the layouts of the buttons and triggers that run it, and those
+ * the scripts that perform it are on at that step), then whatever a Go to
+ * Layout, New Window or Go to Related Record names. Anything else that can
+ * change the window or layout, or lets the user change it (a pause), makes it
+ * unknown — and so does a call to a script that might. With it, a Set Field
+ * into an occurrence that isn't related to the layout's own is found:
+ * FileMaker has no record to set there.
  */
 
 /** The layouts (uids) the script may be on, or "unknown". */
 type Where = "unknown" | ReadonlySet<string>;
 
-/** Steps that can leave the script on another window or layout. Go to Layout
- * and Perform Script are handled on their own. */
-const CHANGES_WINDOW: ReadonlySet<string> = new Set(["Go to Related Record", "New Window", "Select Window", "Close Window", "Open File", "Close File"]);
+/** Steps that can leave the script on another window or layout, or let the
+ * user go to one. Go to Layout, New Window and Go to Related Record are
+ * followed where they name their layout (see transfer), and Perform Script
+ * through what it calls. */
+const CHANGES_WINDOW: ReadonlySet<string> = new Set([
+  "Go to Related Record",
+  "New Window",
+  "Select Window",
+  "Close Window",
+  "Open File",
+  "Close File",
+  "Pause/Resume Script",
+]);
+
+/** One of CHANGES_WINDOW, or a step that pauses for the user (Enter Find Mode
+ * [ Pause ] …). */
+function changesWindow(step: StepIr): boolean {
+  return CHANGES_WINDOW.has(step.name) || step.flags?.["Pause"] === true;
+}
 
 function joinWhere(a: Where, b: Where): Where {
   return a === "unknown" || b === "unknown" ? "unknown" : new Set([...a, ...b]);
@@ -27,23 +45,37 @@ function sameWhere(a: Where, b: Where): boolean {
   return a === "unknown" || b === "unknown" ? a === b : a.size === b.size && [...a].every((uid) => b.has(uid));
 }
 
-/** What the context check needs from the whole solution, built once. */
+/** What the context check needs from the whole solution: built once, and
+ * each script's layouts worked out as they're needed. */
 export interface ContextIndex {
   model: SolutionModel;
+  irs: ReadonlyMap<string, readonly StepIr[]>;
   /** Layout uid → the uid of the occurrence it shows records from. */
   layoutOccurrence: Map<string, string>;
   /** Occurrence uid → a representative of its group of related occurrences. */
   occurrenceGroup: Map<string, string>;
   /** Scripts that might leave their caller on another window or layout. */
   changesContext: Set<string>;
+  /** Script uid → the layouts it starts on (see entryLayouts). */
+  entries: Map<string, Where>;
+  /** Script uid → the layouts it's on before each step a path reaches; null
+   * when its blocks don't nest (see layoutsBefore). */
+  befores: Map<string, ReadonlyMap<number, Where> | null>;
+  /** Scripts whose start is being worked out: a call back into one (a script
+   * that runs itself again) starts somewhere unknown. */
+  pending: Set<string>;
 }
 
 export function contextIndex(input: ScriptAnalysisInput): ContextIndex {
   return {
     model: input.model,
+    irs: input.irs,
     layoutOccurrence: layoutOccurrences(input.model),
     occurrenceGroup: occurrenceGroups(input.model),
     changesContext: scriptsThatChangeContext(input),
+    entries: new Map(),
+    befores: new Map(),
+    pending: new Set(),
   };
 }
 
@@ -107,7 +139,7 @@ function scriptsThatChangeContext(input: ScriptAnalysisInput): Set<string> {
     const calls: string[] = [];
     for (const step of steps) {
       if (!step.enabled) continue;
-      if (step.name === "Go to Layout" || CHANGES_WINDOW.has(step.name)) out.add(uid);
+      if (step.name === "Go to Layout" || changesWindow(step)) out.add(uid);
       if (step.name !== "Perform Script") continue;
       const targets = performed(byStep.get(step.index));
       if (opaqueCall(model, fileUid, targets)) out.add(uid);
@@ -126,51 +158,120 @@ function scriptsThatChangeContext(input: ScriptAnalysisInput): Set<string> {
   return out;
 }
 
-/** The layouts a script starts on: those of the triggers and buttons that run
- * it, when nothing else does (another script, a menu, the file's triggers,
- * a server schedule — or nothing in the export). */
+/** The layouts a script starts on: those of the buttons and triggers that run
+ * it, and those the scripts that perform it are on at that step. Unknown when
+ * anything else runs it (a menu, the file's triggers, a script on the server
+ * or in another file, a server schedule — or nothing in the export), and for a
+ * script that runs itself again. */
 function entryLayouts(index: ContextIndex, script: FmObject): Where {
-  const { byUid } = index.model;
+  const cached = index.entries.get(script.uid);
+  if (cached) return cached;
+  if (index.pending.has(script.uid)) return "unknown";
+  index.pending.add(script.uid);
+  const entry = callerLayouts(index, script);
+  index.pending.delete(script.uid);
+  index.entries.set(script.uid, entry);
+  return entry;
+}
+
+function callerLayouts(index: ContextIndex, script: FmObject): Where {
   const callers = (index.model.inbound.get(script.uid) ?? []).filter((ref) => (ref.kind === "performScript" || ref.kind === "trigger") && !ref.disabled);
-  if (callers.length === 0) return "unknown";
-  const layouts = new Set<string>();
+  let layouts: Where | null = null;
   for (const ref of callers) {
-    const from = byUid.get(ref.fromUid);
-    const layout = from?.type === "layout" ? from : from?.type === "layoutObject" ? layoutOf(from, byUid) : null;
-    if (!layout || layout.fileUid !== script.fileUid || !index.layoutOccurrence.has(layout.uid)) return "unknown";
-    layouts.add(layout.uid);
+    const from = index.model.byUid.get(ref.fromUid);
+    const at = from?.type === "script" ? layoutsAtCall(index, script, from, ref) : callerLayout(index, script, from);
+    if (at === "unknown") return "unknown";
+    if (at) layouts = layouts ? joinWhere(layouts, at) : at;
   }
-  return layouts;
+  // No caller, or none whose call is ever reached.
+  return layouts ?? "unknown";
+}
+
+/** The layout of the button or trigger that runs a script. */
+function callerLayout(index: ContextIndex, script: FmObject, from: FmObject | undefined): Where {
+  const layout = from?.type === "layout" ? from : from?.type === "layoutObject" ? layoutOf(from, index.model.byUid) : null;
+  return layout && layout.fileUid === script.fileUid && index.layoutOccurrence.has(layout.uid) ? new Set([layout.uid]) : "unknown";
+}
+
+/** The layouts a script that performs `script` is on at its Perform Script
+ * step; null when no path reaches the step. */
+function layoutsAtCall(index: ContextIndex, script: FmObject, caller: FmObject, ref: FmReference): Where | null {
+  const step = ref.fromStep == null ? undefined : index.irs.get(caller.uid)?.[ref.fromStep - 1];
+  // Performed on the server, or from another file, it starts somewhere else.
+  if (step?.name !== "Perform Script" || caller.fileUid !== script.fileUid) return "unknown";
+  const before = layoutsBefore(index, caller);
+  return before ? (before.get(step.index) ?? null) : "unknown";
+}
+
+/** The layouts a script is on before each step a path reaches; null when its
+ * blocks don't nest. */
+function layoutsBefore(index: ContextIndex, script: FmObject): ReadonlyMap<number, Where> | null {
+  const cached = index.befores.get(script.uid);
+  if (cached !== undefined) return cached;
+  const steps = index.irs.get(script.uid);
+  const blocks = steps ? buildBlocks(steps) : null;
+  if (!blocks || "error" in blocks) {
+    index.befores.set(script.uid, null);
+    return null;
+  }
+  // Worked out while its own start is (it runs itself again): not kept, since
+  // its start, once known, may be more than unknown.
+  const isPending = index.pending.has(script.uid);
+  const entry = entryLayouts(index, script);
+  const byStep = refsByStep(index.model, script.uid);
+  const domain: Domain<Where> = { join: joinWhere, equals: sameWhere, transfer: (step, where) => transfer(index, script.fileUid, byStep, entry, step, where) };
+  const before = new Map<number, Where>();
+  walk(blocks, entry, domain, (step, where) => {
+    if (where != null) before.set(step.index, where);
+  });
+  if (!isPending) index.befores.set(script.uid, before);
+  return before;
 }
 
 /** The context check for one script. */
-export function checkContext(index: ContextIndex, script: FmObject, blocks: readonly Block[]): ScriptFinding[] {
-  const { model } = index;
-  const byStep = refsByStep(model, script.uid);
-  const entry = entryLayouts(index, script);
-  const domain: Domain<Where> = { join: joinWhere, equals: sameWhere, transfer: (step, where) => transfer(index, script.fileUid, byStep, entry, step, where) };
+export function checkContext(index: ContextIndex, script: FmObject): ScriptFinding[] {
+  const before = layoutsBefore(index, script);
+  if (!before) return [];
+  const byStep = refsByStep(index.model, script.uid);
   const findings: ScriptFinding[] = [];
-  walk(blocks, entry, domain, (step, where) => {
-    if (!step.enabled || step.name !== "Set Field" || where == null || where === "unknown") return;
+  for (const step of index.irs.get(script.uid) ?? []) {
+    const where = before.get(step.index);
+    if (!step.enabled || step.name !== "Set Field" || where == null || where === "unknown") continue;
     for (const ref of byStep.get(step.index) ?? []) {
       const finding = unrelatedSetField(index, script.uid, step, ref, where);
       if (finding) findings.push(finding);
     }
-  });
+  }
   return findings;
 }
 
 function transfer(index: ContextIndex, fileUid: string, byStep: ReadonlyMap<number, FmReference[]>, entry: Where, step: StepIr, where: Where): Where {
-  if (step.name === "Go to Layout") {
-    if (step.layoutChoice === "original") return entry;
-    const target = (byStep.get(step.index) ?? []).find((ref) => ref.kind === "goToLayout");
-    return step.layoutChoice === "specified" && target?.toUid && index.layoutOccurrence.has(target.toUid) ? new Set([target.toUid]) : "unknown";
+  const named = () => namedLayout(index, fileUid, byStep.get(step.index));
+  switch (step.name) {
+    case "Go to Layout":
+      if (step.layoutChoice === "original") return entry;
+      return step.layoutChoice === "specified" ? named() : "unknown";
+    case "New Window":
+      // "<Current Layout>", or none given: the new window shows the layout the script is on.
+      if (step.layoutChoice === "original" || step.layoutChoice === "none") return where;
+      return step.layoutChoice === "specified" ? named() : "unknown";
+    case "Go to Related Record":
+      if (step.layoutChoice === "original") return where;
+      // With no related record, FileMaker stays where it was.
+      return step.layoutChoice === "specified" ? joinWhere(where, named()) : "unknown";
+    case "Perform Script": {
+      const targets = performed(byStep.get(step.index));
+      return opaqueCall(index.model, fileUid, targets) || targets.some((ref) => index.changesContext.has(ref.toUid!)) ? "unknown" : where;
+    }
   }
-  if (step.name === "Perform Script") {
-    const targets = performed(byStep.get(step.index));
-    return opaqueCall(index.model, fileUid, targets) || targets.some((ref) => index.changesContext.has(ref.toUid!)) ? "unknown" : where;
-  }
-  return CHANGES_WINDOW.has(step.name) ? "unknown" : where;
+  return changesWindow(step) ? "unknown" : where;
+}
+
+/** The layout a step names, when it's in the script's own file and shows
+ * records from a known occurrence. */
+function namedLayout(index: ContextIndex, fileUid: string, refs: readonly FmReference[] | undefined): Where {
+  const layout = (refs ?? []).find((ref) => ref.toType === "layout")?.toUid;
+  return layout && index.model.byUid.get(layout)?.fileUid === fileUid && index.layoutOccurrence.has(layout) ? new Set([layout]) : "unknown";
 }
 
 function unrelatedSetField(index: ContextIndex, scriptUid: string, step: StepIr, ref: FmReference, where: ReadonlySet<string>): ScriptFinding | undefined {

@@ -5,7 +5,10 @@ import { isPasswordParameterType, withoutPasswordText } from "../passwords";
 import { stepNodes } from "../steps";
 import { asArray, attr, child, children, isElementKey, isRecord, textAttr } from "../xmlUtils";
 
-const LAYOUT_CHOICES: Readonly<Record<string, LayoutChoice>> = { "1": "original", "5": "specified" };
+const LAYOUT_CHOICES: Readonly<Record<string, LayoutChoice>> = { "0": "none", "1": "original", "5": "specified" };
+
+/** Steps that pick a layout (see LayoutChoice). */
+const LAYOUT_STEPS: ReadonlySet<string> = new Set(["Go to Layout", "New Window", "Go to Related Record"]);
 
 /** The typed steps of a step list (a script's <ObjectList>), in order. */
 export function stepIrs(container: unknown): StepIr[] {
@@ -17,7 +20,7 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
   const params = step["ParameterValues"];
   const setsVariable = writtenVariable(params);
   const inputs = name === "Show Custom Dialog" ? inputVariables(params) : [];
-  const layoutChoice = name === "Go to Layout" ? goToLayoutChoice(params) : undefined;
+  const layoutChoice = LAYOUT_STEPS.has(name) ? layoutChoiceOf(params) : undefined;
   const parameter = name.startsWith("Perform Script") ? parameterFormula(params) : undefined;
   const flags = booleanFlags(params);
   return {
@@ -75,9 +78,11 @@ function inputVariables(params: unknown): string[] {
     .flatMap((param) => writtenVariable(param) ?? []);
 }
 
-function goToLayoutChoice(params: unknown): LayoutChoice {
+/** The step's <LayoutReferenceContainer value>: in its parameter, or New
+ * Window's in the parameter's <WindowReference>. */
+function layoutChoiceOf(params: unknown): LayoutChoice {
   for (const param of children(params, "Parameter")) {
-    const container = child(param, "LayoutReferenceContainer");
+    const container = child(param, "LayoutReferenceContainer") ?? child(child(param, "WindowReference"), "LayoutReferenceContainer");
     if (container != null) return ownValue(LAYOUT_CHOICES, attr(container, "value")) ?? "calculated";
   }
   return "calculated";

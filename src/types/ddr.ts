@@ -558,10 +558,12 @@ export interface ScriptStep {
   params: string;
 }
 
-/** How a Go to Layout step picks its layout (<LayoutReferenceContainer value>):
- * 1 its original layout, 5 one named in the step; anything else (3 by name, 4
- * by number) is a formula. */
-export type LayoutChoice = "original" | "specified" | "calculated";
+/** How a Go to Layout, New Window or Go to Related Record step picks its layout
+ * (<LayoutReferenceContainer value>): 0 none given, 1 its "original layout"
+ * (Go to Layout: the one the script started on; the other two: the current
+ * one, "<Current Layout>"), 5 one named in the step; anything else (3 by name,
+ * 4 by number) is a formula. */
+export type LayoutChoice = "none" | "original" | "specified" | "calculated";
 
 /**
  * One script step, typed from its XML instead of FileMaker's rendered text:
@@ -581,7 +583,7 @@ export interface StepIr {
   /** Show Custom Dialog: the variables its input fields write (when the user
    * clicks a button that commits them). */
   inputVariables?: string[];
-  /** Go to Layout: how it picks its layout. */
+  /** Go to Layout, New Window, Go to Related Record: how it picks its layout. */
   layoutChoice?: LayoutChoice;
   /** Perform Script (on Server): its parameter formula, when it has one. */
   parameter?: string;

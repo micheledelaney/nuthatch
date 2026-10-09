@@ -34,7 +34,7 @@ export function analyzeScripts(input: ScriptAnalysisInput): ScriptAnalysis {
       skipped.push({ uid: script.uid, check: "unreachable-steps, unrelated-set-field, script results", reason: `its blocks don't nest: ${blocks.error}` });
       continue;
     }
-    findings.push(...checkUnreachable(script.uid, blocks), ...checkContext(context, script, blocks));
+    findings.push(...checkUnreachable(script.uid, blocks), ...checkContext(context, script));
   }
   findings.push(...checkParameterKeys(input), ...checkScriptResults(input));
   return { findings, skipped, scriptCount };

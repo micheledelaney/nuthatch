@@ -240,3 +240,18 @@ describe("stepIrs", () => {
     expect(stepIrs(list["ObjectList"])[0]?.inputVariables).toEqual(["$name", "$note"]);
   });
 });
+
+describe("stepIrs: how a step picks its layout", () => {
+  it("reads New Window's in its window, and Go to Related Record's", () => {
+    const step = (name: string, parameter: string) => `<Step index="0" id="1" name="${name}" enable="True"><ParameterValues>${parameter}</ParameterValues></Step>`;
+    const window = (container: string) => `<Parameter type="WindowReference"><WindowReference><Name></Name>${container}</WindowReference></Parameter>`;
+    const list = xmlParser.parse(
+      `<ObjectList>` +
+        step("New Window", window(`<LayoutReferenceContainer value="5"><LayoutReference id="2" name="L"></LayoutReference></LayoutReferenceContainer>`)) +
+        step("New Window", window(`<LayoutReferenceContainer value="0"></LayoutReferenceContainer>`)) +
+        step("Go to Related Record", `<Parameter type="Related"><TableOccurrenceReference id="3" name="T"></TableOccurrenceReference><LayoutReferenceContainer value="1"><Label>original layout</Label></LayoutReferenceContainer></Parameter>`) +
+        `</ObjectList>`,
+    ) as Record<string, unknown>;
+    expect(stepIrs(list["ObjectList"]).map((s) => s.layoutChoice)).toEqual(["specified", "none", "original"]);
+  });
+});
