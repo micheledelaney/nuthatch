@@ -16,6 +16,7 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
   const name = textAttr(step, "name") ?? "(step)";
   const params = step["ParameterValues"];
   const setsVariable = writtenVariable(params);
+  const inputs = name === "Show Custom Dialog" ? inputVariables(params) : [];
   const layoutChoice = name === "Go to Layout" ? goToLayoutChoice(params) : undefined;
   const parameter = name.startsWith("Perform Script") ? parameterFormula(params) : undefined;
   const flags = booleanFlags(params);
@@ -25,6 +26,7 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
     enabled: (attr(step, "enable") ?? "True") !== "False",
     calcs: stepFormulas(params),
     ...(setsVariable ? { setsVariable } : {}),
+    ...(inputs.length > 0 ? { inputVariables: inputs } : {}),
     ...(layoutChoice ? { layoutChoice } : {}),
     ...(parameter ? { parameter } : {}),
     ...(flags ? { flags } : {}),
@@ -61,6 +63,14 @@ function writtenVariable(params: unknown): string | undefined {
     if (name?.startsWith("$")) return name;
   }
   return undefined;
+}
+
+/** Show Custom Dialog's input fields that write a variable: a
+ * <Parameter type="Field1"> (to Field3) holding a target's Parameter. */
+function inputVariables(params: unknown): string[] {
+  return children(params, "Parameter")
+    .filter((param) => /^Field\d$/.test(attr(param, "type") ?? ""))
+    .flatMap((param) => writtenVariable(param) ?? []);
 }
 
 function goToLayoutChoice(params: unknown): LayoutChoice {

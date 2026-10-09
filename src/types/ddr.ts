@@ -578,6 +578,9 @@ export interface StepIr {
   /** The variable the step writes: Set Variable's, or the target variable of
    * a step that stores its result (Insert from URL …). */
   setsVariable?: string;
+  /** Show Custom Dialog: the variables its input fields write (when the user
+   * clicks a button that commits them). */
+  inputVariables?: string[];
   /** Go to Layout: how it picks its layout. */
   layoutChoice?: LayoutChoice;
   /** Perform Script (on Server): its parameter formula, when it has one. */

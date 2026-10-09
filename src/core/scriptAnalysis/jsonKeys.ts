@@ -1,5 +1,6 @@
 import type { StepIr } from "@/types/ddr";
 import { bracketArgs, closingIndex, GET_TOKENS, isCall, isGet, isPunct, literalArg, tokenize, type Token } from "./calcTokens";
+import { writtenVariables } from "./findings";
 
 /**
  * JSON keys in formulas, for the checks that compare what one side builds with
@@ -53,8 +54,9 @@ export function holdersOf(steps: readonly StepIr[], what: string): Set<string> {
   const exact = new Set<string>();
   const other = new Set<string>();
   for (const step of steps) {
-    if (!step.enabled || !step.setsVariable) continue;
-    (isHolderStep(step, what) ? exact : other).add(step.setsVariable.toLowerCase());
+    if (!step.enabled) continue;
+    const into = isHolderStep(step, what) ? exact : other;
+    for (const name of writtenVariables(step)) into.add(name.toLowerCase());
   }
   return new Set([...exact].filter((name) => !other.has(name)));
 }

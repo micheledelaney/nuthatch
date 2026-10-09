@@ -1,6 +1,6 @@
 import type { SolutionModel, StepIr } from "@/types/ddr";
 import { calledFunctions, calledNames, tokenize, variableUses, type Token } from "./calcTokens";
-import { isLocalVariable, stepList, type ScriptFinding, type SkippedCheck } from "./findings";
+import { isLocalVariable, stepList, writtenVariables, type ScriptFinding, type SkippedCheck } from "./findings";
 
 /**
  * Local variables ($x) belong to one run of one script: a subscript has its
@@ -97,7 +97,7 @@ function stepUses(steps: readonly StepIr[], functions: ReadonlyMap<string, Formu
   for (const step of steps) {
     const reads = step.enabled ? out.reads : out.disabledReads;
     const sets = step.enabled ? out.sets : out.disabledSets;
-    if (step.setsVariable) note(sets, step.setsVariable, step.index);
+    for (const name of writtenVariables(step)) note(sets, name, step.index);
     for (const formula of step.calcs) {
       const tokens = tokenize(formula);
       const uses = variableUses(tokens);

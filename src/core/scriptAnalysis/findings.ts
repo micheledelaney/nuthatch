@@ -65,6 +65,12 @@ export function refsByStep(model: SolutionModel, scriptUid: string): Map<number,
   return out;
 }
 
+/** Every variable a step writes: its Set Variable's or target's, and its
+ * Show Custom Dialog inputs'. */
+export function writtenVariables(step: StepIr): string[] {
+  return [...(step.setsVariable ? [step.setsVariable] : []), ...(step.inputVariables ?? [])];
+}
+
 export function isLocalVariable(name: string): boolean {
   return name.startsWith("$") && !name.startsWith("$$");
 }

@@ -113,6 +113,12 @@ describe("variables", () => {
     expect(found.map(text)).toEqual([["$x is never set", "Read at step 2; only disabled step 1 would set it, so it's always empty."]]);
   });
 
+  it("counts a Show Custom Dialog's input variables as sets", () => {
+    const read = step("Beep", "$name & $note");
+    expect(analyzeAlone(steps({ name: "Show Custom Dialog", inputVariables: ["$name", "$note"] }, read))).toEqual([]);
+    expect(rules(analyzeAlone(steps({ name: "Show Custom Dialog", inputVariables: ["$name"] }, read)))).toEqual(["unset-variable@2"]);
+  });
+
   it("counts a Let and a custom function as sets, and leaves globals alone", () => {
     expect(analyzeAlone(steps(step("Beep", "Let ( $x = 1 ; $x )"), step("Beep", "$$g")))).toEqual([]);
     expect(analyzeAlone(steps(step("Beep", "SetIt ( 1 ) & $x")), { SetIt: "Let ( $x = 1 ; 1 )" })).toEqual([]);

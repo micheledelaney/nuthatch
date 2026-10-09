@@ -659,8 +659,8 @@
         <p>
           nuthatch is a static-analysis tool for FileMaker “Save a Copy as XML” exports.
           Load one file or a whole multi-file solution and explore its structure,
-          dependencies, call chains, and maintenance risks. Find broken references and
-          unused objects, trace where a <span class="kw" data-tag="&lt;ValueList&gt;">value list</span>,
+          dependencies, call chains, and maintenance risks. Find broken references,
+          unused objects, and mistakes in scripts, trace where a <span class="kw" data-tag="&lt;ValueList&gt;">value list</span>,
           <span class="kw" data-tag="&lt;CustomFunction&gt;">custom function</span>,
           <span class="kw" data-tag="&lt;TableOccurrence&gt;">table occurrence</span>, or any other object is used, and compare two
           versions side by side. Everything is parsed locally, in your browser or the
@@ -712,6 +712,36 @@
               </p>
             </div>
             <div class="shot" style="--ratio: 2400 / 1305"><img src="shots/report-card.jpg" alt="The report card: two objects with broken references, an account without a password, and 25 unreferenced objects" /></div>
+          </div>
+
+          <div class="row flip">
+            <div class="text">
+              <h2>Find what's really unused</h2>
+              <p>
+                The report card counts unreferenced objects, and also the objects used only by them,
+                since those are dead too. Some objects are used where the export can't see: by a
+                server schedule, the Data API, a file that isn't loaded, or a call by name. Mark them
+                as used, or as kept on purpose, and they drop off the unused lists along with
+                everything they use. Marks are saved with the project, so they still apply after you
+                export again.
+              </p>
+            </div>
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/unused.jpg" alt="Marking the unreferenced FormatDuration custom function as used because it's called by name, with the navigator filtered to unreferenced objects" /></div>
+          </div>
+
+          <div class="row">
+            <div class="text">
+              <h2>Catch mistakes in your scripts</h2>
+              <p>
+                Script checks go through every script step by step and flag what will go wrong:
+                steps that never run, a <code>$variable</code> that's read but never set, a Set Field
+                with no related record to write to, a parameter key that no caller passes, and a
+                script result that's read before any script has run or that the called script never
+                returns. Flagged steps are marked in the script, and the Script checks filter lists
+                every script with a finding.
+              </p>
+            </div>
+            <div class="shot" style="--ratio: 16 / 9"><img src="shots/script-checks.jpg" alt="The Script Checks script: three variables that are never set and a step that never runs, with steps 3 and 7 marked" /></div>
           </div>
 
           <div class="row flip">

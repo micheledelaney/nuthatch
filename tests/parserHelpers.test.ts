@@ -20,6 +20,7 @@ import {
 } from "@/core/parser/calcText";
 import { decodeEntities } from "@/core/parser/entities";
 import { splitLayoutCatalog } from "@/core/parser/objects/layoutStream";
+import { stepIrs } from "@/core/parser/objects/stepIr";
 import { stepParams } from "@/core/parser/objects/stepText";
 import type { StepTexts } from "@/core/parser/context";
 
@@ -222,5 +223,20 @@ describe("stepParams", () => {
       "[ By name; $s ] [ Wait for completion ]",
     );
     expect(params("Perform Script on Server", "Perform Script on Server [ By name; $s ]")).toBe("[ By name; $s ]");
+  });
+});
+
+describe("stepIrs", () => {
+  it("reads the variables a Show Custom Dialog's inputs write, not the fields", () => {
+    const target = (n: number, inner: string) => `<Parameter type="Field${n}"><Parameter type="Target">${inner}</Parameter></Parameter>`;
+    const repetition = `<repetition><Calculation><Calculation><![CDATA[1]]></Calculation></Calculation></repetition>`;
+    const list = xmlParser.parse(
+      `<ObjectList><Step index="0" id="87" name="Show Custom Dialog" enable="True"><ParameterValues>` +
+        target(1, `<Variable value="$name">${repetition}</Variable>`) +
+        target(2, `<FieldReference id="1" name="f">${repetition}<TableOccurrenceReference id="1" name="T"/></FieldReference>`) +
+        target(3, `<Variable value="$note">${repetition}</Variable>`) +
+        `</ParameterValues></Step></ObjectList>`,
+    ) as Record<string, unknown>;
+    expect(stepIrs(list["ObjectList"])[0]?.inputVariables).toEqual(["$name", "$note"]);
   });
 });

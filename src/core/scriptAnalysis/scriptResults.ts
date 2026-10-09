@@ -1,7 +1,7 @@
 import type { FmReference, StepIr } from "@/types/ddr";
 import { buildBlocks, walk, type Domain } from "./blocks";
 import { GET_TOKENS, isGet, tokenize } from "./calcTokens";
-import { refsByStep, stepList, type ScriptAnalysisInput, type ScriptFinding } from "./findings";
+import { refsByStep, stepList, writtenVariables, type ScriptAnalysisInput, type ScriptFinding } from "./findings";
 import { holdersOf, isHolderStep, jsonBuild, keyReadAt, passedKeys, sourceAt } from "./jsonKeys";
 
 /**
@@ -243,7 +243,7 @@ function builderKeys(steps: readonly StepIr[], name: string): string[] | undefin
   const keys: string[] = [];
   let sets = 0;
   for (const step of steps) {
-    if (!step.enabled || step.setsVariable?.toLowerCase() !== name) continue;
+    if (!step.enabled || !writtenVariables(step).some((written) => written.toLowerCase() === name)) continue;
     if (step.name !== "Set Variable") return undefined;
     const tokens = tokenize(step.calcs[0] ?? "");
     const built = jsonBuild(tokens, 0, name);
