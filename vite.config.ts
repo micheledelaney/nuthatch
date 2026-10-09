@@ -13,6 +13,12 @@ export default defineConfig({
   worker: {
     format: "es",
   },
+  // The parse worker is loaded via new URL(), which Vite's startup scan doesn't
+  // follow; without this its XML library is found on the first parse and Vite
+  // reloads the page to add it, dropping the parse.
+  optimizeDeps: {
+    entries: ["index.html", "src/worker/parse.worker.ts"],
+  },
   // Tauri integration: keep the dev server on a fixed port the Rust side expects,
   // don't clobber Tauri's own console output, and build for the system webview.
   clearScreen: false,
