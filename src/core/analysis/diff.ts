@@ -1,4 +1,4 @@
-import type { FmObject, ObjectType, ParseResult, RawReference } from "@/types/ddr";
+import type { FmObject, LayoutTriggerInfo, ObjectType, ParseResult, RawReference, SortField } from "@/types/ddr";
 import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 
 /**
@@ -270,6 +270,21 @@ function buildNoise(opts: DiffOptions): Set<string> {
   return s;
 }
 
+/** A script trigger as one line: its event, script, modes and parameters. */
+function triggerLine(t: LayoutTriggerInfo): string {
+  const modes = t.modes.length ? ` [${t.modes.join(", ")}]` : "";
+  const param = t.parameter ? ` param: ${t.parameter}` : "";
+  const field = t.parameterFieldName ? ` paramField: ${t.parameterFieldName}` : "";
+  return `trigger: ${t.action} → ${t.scriptName}${modes}${param}${field}`;
+}
+
+/** A sort order as one line, e.g. "T::a Ascending, T::b Custom (Order)". */
+function sortText(fields: readonly SortField[]): string {
+  return fields
+    .map((f) => `${f.field} ${f.order}${f.valueList ? ` (${f.valueList})` : ""}${f.summaryField ? ` by ${f.summaryField}` : ""}`)
+    .join(", ");
+}
+
 /**
  * A stable, line-oriented snapshot of an object's meaningful content for
  * diffing.
@@ -281,16 +296,21 @@ function buildNoise(opts: DiffOptions): Set<string> {
  *
  * The detail section handles things that live in nested XML and are NOT
  * reflected as element attributes: script steps, calc bodies, relationship
- * predicates, value-list entries, layout dimensions/triggers, layout-object
- * bindings.
+ * predicates and sort orders, value-list entries, layout dimensions, parts and
+ * triggers, layout-object bindings, file triggers.
  */
 function contentOf(obj: FmObject, noise: Set<string>): string {
   const parts: string[] = [];
 
+  // Already in the detail below: the conditions with their formatting, and the label as written.
+  const isDetailCopy = (k: string) => obj.type === "layoutObject" && (k === "conditionalFormats" || k === "label");
+
   // Generic attribute snapshot — stable key order, noise excluded.
   for (const k of Object.keys(obj.attributes).sort()) {
-    if (!noise.has(k)) parts.push(`${k}: ${obj.attributes[k]}`);
+    if (!noise.has(k) && !isDetailCopy(k)) parts.push(`${k}: ${obj.attributes[k]}`);
   }
+  // The folder it's filed in (Script Workspace, Manage Layouts).
+  if (obj.folder) parts.push(`folder: ${obj.folder}`);
 
   // Structured detail: nested-XML content not present in element attributes.
   const d = obj.detail;
@@ -317,6 +337,8 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
     parts.push(...d.predicates.map((p) => `${p.leftField} ${p.operator} ${p.rightField}`));
     if (d.left)  parts.push(`left: create=${d.left.cascadeCreate} delete=${d.left.cascadeDelete} sorted=${d.left.sorted}`);
     if (d.right) parts.push(`right: create=${d.right.cascadeCreate} delete=${d.right.cascadeDelete} sorted=${d.right.sorted}`);
+    if (d.left?.sortFields?.length)  parts.push(`left sort: ${sortText(d.left.sortFields)}`);
+    if (d.right?.sortFields?.length) parts.push(`right sort: ${sortText(d.right.sortFields)}`);
   } else if (d?.kind === "valueList") {
     // `source` is already in attributes; push the values and field binding.
     parts.push(...d.customValues);
@@ -330,32 +352,25 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
     }
   } else if (d?.kind === "layout") {
     parts.push(`size: ${d.width}×${d.height}`);
-    for (const t of d.triggers) {
-      const modes = t.modes.length ? ` [${t.modes.join(", ")}]` : "";
-      const param = t.parameter ? ` param: ${t.parameter}` : "";
-      const field = t.parameterFieldName ? ` paramField: ${t.parameterFieldName}` : "";
-      parts.push(`trigger: ${t.action} → ${t.scriptName}${modes}${param}${field}`);
-    }
-    for (const p of d.parts) if (p.breakField) parts.push(`part: ${p.type} by ${p.breakField}`);
+    parts.push(...d.triggers.map(triggerLine));
+    for (const p of d.parts) parts.push(`part: ${p.type} (${p.height} pt)${p.breakField ? ` by ${p.breakField}` : ""}`);
     for (const c of d.tableView ?? []) parts.push(`table view column: ${c.field} (${c.width} pt${c.hidden ? ", hidden" : ""})`);
   } else if (d?.kind === "layoutObject") {
     parts.push(`type: ${d.loType}`);
     if (d.fieldRef)    parts.push(`field: ${d.fieldRef}`);
     if (d.scriptRef)   parts.push(`script: ${d.scriptRef.name}`);
+    // A deleted value list is written with no name (and id -1).
+    if (d.valueListRef) parts.push(`value list: ${d.valueListRef.name || "<Value List Missing>"}`);
     if (d.actionStep)  parts.push(`action: ${d.actionStep.name}${d.actionStep.params ? ` [ ${d.actionStep.params} ]` : ""}`);
-    if (d.portalTable) parts.push(`portal: ${d.portalTable}${d.portalRows != null ? ` (${d.portalRows} rows)` : ""}`);
-    if (d.portalInitialRow != null) parts.push(`initial row: ${d.portalInitialRow}`);
-    if (d.portalFilter) parts.push(`filter: ${d.portalFilter}`);
+    // The portal's occurrence, rows, initial row and filter, the tooltip, placeholder,
+    // hide condition and popover title are attributes (see layoutObjectAttributes).
+    if (d.portalSort?.length) parts.push(`portal sort: ${sortText(d.portalSort)}`);
     if (d.info)        parts.push(`info: ${d.info}`);
-    if (d.tooltip)     parts.push(`tooltip: ${d.tooltip}`);
-    if (d.placeholder) parts.push(`placeholder: ${d.placeholder}${d.placeholderInFind ? " (also in Find mode)" : ""}`);
-    if (d.hideWhen)    parts.push(`hide when: ${d.hideWhen}${d.hideInFind ? " (also in Find mode)" : ""}`);
     (d.conditionalFormats ?? []).forEach((c, i) => {
       parts.push(`conditional format: ${c}`);
       const style = d.conditionalFormatStyles?.[i];
       if (style) parts.push(...style.split("\n").map((l) => `  ${l}`));
     });
-    if (d.popoverTitle) parts.push(`popover title: ${d.popoverTitle}`);
     if (d.chart) {
       const c = d.chart;
       parts.push(`chart: ${c.type ?? ""}${c.dataSource ? ` from ${c.dataSource}` : ""}${c.groupsWhenSorted ? " (record groups when sorted)" : ""}`);
@@ -365,9 +380,9 @@ function contentOf(obj: FmObject, noise: Set<string>): string {
       for (const series of c.series) parts.push(`${series.axis} series: ${[series.title, series.value].filter(Boolean).join(" = ")}`);
     }
     if (d.style)       parts.push("style:", ...d.style.split("\n").map((l) => `  ${l}`));
-    for (const t of d.triggers ?? []) {
-      parts.push(`trigger: ${t.action} → ${t.scriptName}${t.parameter ? ` param: ${t.parameter}` : ""}`);
-    }
+    parts.push(...(d.triggers ?? []).map(triggerLine));
+  } else if (d?.kind === "file") {
+    parts.push(...d.triggers.map(triggerLine));
   } else if (d?.kind === "privilegeSet") {
     for (const t of d.tables) {
       const view = t.viewCondition ? `${t.view} (${t.viewCondition})` : t.view;
