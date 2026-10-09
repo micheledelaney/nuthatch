@@ -270,10 +270,10 @@ Tab-separated, one reference per line, with a header row:
 | \`via_uid\` | for field references: the table occurrence the field is read through (empty when that occurrence was deleted) |
 
 A layout object's references (its field, button action, tooltip,
-hide-object-when, conditional formatting, …) are listed under the object, and
-again under its **layout** (\`from_type\` = \`layout\`), which lists everything on
-it — there without a \`step\`, and once per distinct use. The calculation text
-itself is on the object's \`detail\` in \`objects.jsonl\`.
+hide-object-when, conditional formatting, …) are listed under the object only
+(\`from_type\` = \`layoutObject\`); its layout, up its \`parent\` chain, lists
+just what the layout itself uses. The calculation text itself is on the
+object's \`detail\` in \`objects.jsonl\`.
 
 Reference kinds in this export: ${kindCounts}.
 

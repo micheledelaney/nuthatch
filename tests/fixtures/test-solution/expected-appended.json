@@ -154,7 +154,15 @@
       ]
     },
     "MAIN:layout:L_Calcs": {
-      "_note": "The layout lists everything on it, too: its own occurrence and every object's edges — without the button step an edge came from, which only the button keeps.",
+      "_note": "Only its own: its occurrence and its Table View's column. Each object's edges are the object's.",
+      "exact": true,
+      "edges": [
+        {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
+        {"to": "MAIN:field:T_Main::f_ID", "kind": "field", "via": "MAIN:tableOccurrence:TO_Main"}
+      ]
+    },
+    "MAIN:layout:L_Calcs/**": {
+      "_note": "The layout with everything on it: its own occurrence and every object's edges.",
       "exact": true,
       "edges": [
         {"to": "MAIN:tableOccurrence:TO_Main", "kind": "tableOccurrence"},
@@ -210,7 +218,6 @@
   "brokenSources": {
     "add": [
       "MAIN:field:T_Main::c_Fallback",
-      "MAIN:layout:L_Calcs",
       "MAIN:layoutObject:obj_PortalFilter",
       "MAIN:layoutObject:obj_ButtonParam",
       "MAIN:layoutObject:obj_ButtonStep",

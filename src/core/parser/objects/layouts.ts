@@ -32,12 +32,10 @@ interface LayoutObjectsContext {
  * document-ordered list with folder markers and separator items), with its
  * layout objects, references, and text-derived references; false when it has
  * no id. Each object reports what its own element uses, and the layout what
- * the rest of its element does — and, since a layout lists everything on it,
- * a copy of every one of its objects' references, made once they're complete.
- * The layout is stored with a compact term list as its text
- * (compactLayoutText), not the full text of every object on it. Nothing is
- * added to the file until the whole layout is read, so one that fails to read
- * leaves the file as it was.
+ * the rest of its element does. The layout is stored with a compact term list
+ * as its text (compactLayoutText), not the full text of every object on it.
+ * Nothing is added to the file until the whole layout is read, so one that
+ * fails to read leaves the file as it was.
  */
 export function processOneLayout(fp: FileParse, layout: unknown, folder: string, order: number): boolean {
   // Its text is set at the end: the full text of a layout with parts would
@@ -50,8 +48,6 @@ export function processOneLayout(fp: FileParse, layout: unknown, folder: string,
   const uidCounts = new Map<string, number>();
   const { layout: full, scans } = buildLayout(lp, layout, placeInCatalog(base, order, folder), uidCounts);
   addTextDerivedRefs(lp, scans);
-  // After the text passes, so the layout's placeholder check weighs only its own references.
-  addObjectRefsToLayout(lp, full.uid);
   lp.objects.push({ ...full, text: full.detail?.kind === "layout" ? compactLayoutText(full, full.detail) : displayText(layout) });
   for (const obj of lp.objects) fp.objects.push(obj);
   for (const ref of lp.references) fp.references.push(ref);
@@ -87,21 +83,6 @@ function buildLayout(
   cx.scans.push({ obj, text: scanOwnElement(fp, own, obj), source: own });
   addDeferredLayoutRefs(fp, layout, obj, cx.uidOfElement);
   return { layout: obj, scans: cx.scans };
-}
-
-/** Copy every reference the layout's objects (`lp.objects`, so far) recorded
- * onto the layout itself — without the step it came from: that's a step of
- * one button's action, which the object's own reference keeps, and on the
- * layout it would keep a use apart from the same use by another object. */
-function addObjectRefsToLayout(lp: FileParse, layoutUid: string): void {
-  const objectUids = new Set(lp.objects.map((o) => o.uid));
-  const end = lp.references.length;
-  for (let i = 0; i < end; i++) {
-    const ref = lp.references[i]!;
-    if (!objectUids.has(ref.fromUid)) continue;
-    const { fromStep: _fromStep, ...use } = ref;
-    lp.references.push({ ...use, fromUid: layoutUid });
-  }
 }
 
 /** Record what an element holds for `owner` — its references and the globals

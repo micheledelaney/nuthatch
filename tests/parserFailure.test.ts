@@ -116,7 +116,7 @@ describe("a layout that fails to parse", () => {
     expect(result.errors).toEqual(["MAIN.xml: layout “BAD” could not be read and was skipped — boom"]);
     expect(result.objects.filter((o) => o.type === "layout").map((o) => `${o.name} ${o.order}`)).toEqual(["GOOD 0"]);
     expect(result.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid)).toEqual(["F0:layoutObject:2.1"]);
-    expect(result.references.filter((r) => r.fromUid.includes(":layout")).map((r) => r.fromUid)).toEqual(["F0:layoutObject:2.1", "F0:layout:2"]);
+    expect(result.references.filter((r) => r.fromUid.includes(":layout")).map((r) => r.fromUid)).toEqual(["F0:layoutObject:2.1"]);
     expect(result.objects.some((o) => o.type === "script")).toBe(true);
     // The error itself, stack trace and all, goes to the console.
     expect(logged).toHaveBeenCalledWith("MAIN.xml: layout “BAD” could not be read", expect.objectContaining({ message: "boom" }));

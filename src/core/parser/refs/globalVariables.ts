@@ -52,13 +52,11 @@ export function addMergeVariableRefs(fp: FileParse, fromUid: string, text: strin
  * globals it touches. It's named by its most used spelling (the first, of
  * equally used ones); its text holds every spelling, for search.
  * `occurrences` counts uses before references are de-duplicated, so a calc
- * that reads $$x twice counts two. A use on a layout object is copied onto its
- * layout (addObjectRefsToLayout); it counts once. */
+ * that reads $$x twice counts two. */
 export function globalVariableObjects(fp: FileParse): FmObject[] {
-  const layoutObjectUids = new Set(fp.objects.filter((o) => o.type === "layoutObject").map((o) => o.uid));
   const spellingsById = new Map<string, Map<string, number>>();
   for (const ref of fp.references) {
-    if (ref.toType !== "globalVariable" || layoutObjectUids.has(ref.fromUid)) continue;
+    if (ref.toType !== "globalVariable") continue;
     const spellings = spellingsById.get(ref.toId) ?? new Map<string, number>();
     spellings.set(ref.toName, (spellings.get(ref.toName) ?? 0) + 1);
     spellingsById.set(ref.toId, spellings);

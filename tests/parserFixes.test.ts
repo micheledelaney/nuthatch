@@ -106,7 +106,7 @@ describe("layout objects record what they use", () => {
     expect(object(result, "F0:globalVariable:$$x").attributes.occurrences).toBe("2");
   });
 
-  it("flags a deleted field in a portal's filter on the portal, not only on its layout", () => {
+  it("flags a deleted field in a portal's filter on the portal, not on its layout", () => {
     // As in a sample export: the filter names a field of a deleted
     // occurrence, so its chunk list is empty.
     const filtered = parse(
@@ -124,7 +124,7 @@ describe("layout objects record what they use", () => {
     );
     const broken = buildModel(filtered).brokenReferences;
     expect(broken.filter((r) => r.fromUid === "F0:layoutObject:10.7")).toHaveLength(1);
-    expect(broken.filter((r) => r.fromUid === "F0:layout:10")).toHaveLength(1);
+    expect(broken.filter((r) => r.fromUid === "F0:layout:10")).toHaveLength(0);
   });
 });
 
@@ -656,15 +656,13 @@ describe("what a layout reports", () => {
       ),
     );
     expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Field Missing> via 1"]);
-    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1"]);
   });
 
-  it("flags a field object whose field and occurrence were deleted on its layout too", () => {
+  it("flags a field object whose field and occurrence were deleted", () => {
     // As on another layout in a sample export.
     const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(editBox("1", `<FieldReference id="0" name="" UUID=""></FieldReference>`))}</AddAction>`));
     expect(object(result, "F0:layoutObject:10.1").name).toBe("<Field Missing>");
     expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing>"]);
-    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing>"]);
   });
 
   it("flags a field object that has no field reference at all", () => {
@@ -673,7 +671,6 @@ describe("what a layout reports", () => {
     const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(editBox("1", field))}</AddAction>`));
     expect(object(result, "F0:layoutObject:10.1").name).toBe("<Field Missing>");
     expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing>"]);
-    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing>"]);
   });
 
   it("flags a button's broken Set Field once, as a script's", () => {
@@ -697,10 +694,9 @@ describe("what a layout reports", () => {
     const from = (uid: string): number => broken.filter((r) => r.fromUid === uid).length;
     expect(from("F0:script:1")).toBe(1);
     expect(from("F0:layoutObject:10.1")).toBe(1);
-    expect(from("F0:layout:10")).toBe(1);
   });
 
-  it("keeps a layout's use of a script enabled when only one of its buttons' steps is disabled", () => {
+  it("marks only the disabled button's use of a script disabled", () => {
     const button = (id: string, enable: string): string =>
       `<LayoutObject id="${id}" type="Button" name="b${id}"><Button><action><Step id="1" name="Perform Script" enable="${enable}"><ParameterValues>` +
       `<Parameter type="List"><List><ScriptReference id="1" name="S"></ScriptReference></List></Parameter></ParameterValues></Step></action></Button></LayoutObject>`;
@@ -709,25 +705,15 @@ describe("what a layout reports", () => {
       result.references.filter((r) => r.fromUid === uid && r.toType === "script").map((r) => (r.disabled ? "disabled" : "enabled"));
     expect(toScript("F0:layoutObject:10.1")).toEqual(["disabled"]);
     expect(toScript("F0:layoutObject:10.2")).toEqual(["enabled"]);
-    expect(toScript("F0:layout:10")).toEqual(["enabled"]);
   });
 
-  it("lists a button step's use on its layout once, without the step, beside another object's same use", () => {
+  it("records a button step's use on the button, with its step, not on its layout", () => {
     const setField =
       `<Step id="1" name="Set Field" enable="True"><ParameterValues><Parameter type="FieldReference">` +
       `<FieldReference id="2" name="b"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Parameter></ParameterValues></Step>`;
-    const result = parse(
-      doc(
-        "MAIN",
-        `<AddAction>${TABLE}${layout(
-          `<LayoutObject id="1" type="Button" name=""><Button><action>${setField}</action></Button></LayoutObject>` +
-            `<LayoutObject id="2" type="Edit Box" name=""><Field><FieldReference id="2" name="b"><TableOccurrenceReference id="1" name="T"></TableOccurrenceReference></FieldReference></Field></LayoutObject>`,
-        )}</AddAction>`,
-      ),
-    );
-    // The button keeps its step; on the layout, which button's step it was isn't known.
+    const result = parse(doc("MAIN", `<AddAction>${TABLE}${layout(`<LayoutObject id="1" type="Button" name=""><Button><action>${setField}</action></Button></LayoutObject>`)}</AddAction>`));
     expect(refsFrom(result, "F0:layoutObject:10.1")).toEqual(["field:2 via 1 step 1 setField", "tableOccurrence:1 step 1 tableOccurrence"]);
-    expect(refsFrom(result, "F0:layout:10")).toEqual(["field:2 via 1 field", "field:2 via 1 setField", "tableOccurrence:1 tableOccurrence"]);
+    expect(refsFrom(result, "F0:layout:10")).toEqual(["tableOccurrence:1 tableOccurrence"]);
   });
 
   it("labels a button whose calculated label is a literal, but not one whose label is computed", () => {
@@ -756,7 +742,6 @@ describe("what a layout reports", () => {
     );
     expect(object(result, "F0:layoutObject:10.1").text).toBe("");
     expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing> via 1"]);
-    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1"]);
   });
 });
 
@@ -967,7 +952,6 @@ describe("a deleted target that only a step's rendered text shows", () => {
     expect(forcedFrom(result, "F0:script:1")).toEqual(["field <Field Missing> via 1", "field <Table Missing>"]);
     expect(forcedFrom(result, "F0:layoutObject:10.1")).toEqual(["field <Field Missing> via 1"]);
     expect(forcedFrom(result, "F0:layoutObject:10.2")).toEqual(["field <Table Missing>"]);
-    expect(forcedFrom(result, "F0:layout:10")).toEqual(["field <Field Missing> via 1", "field <Table Missing>"]);
     expect(forcedFrom(result, "F0:customMenuItem:30.0")).toEqual(["field <Field Missing> via 1"]);
   });
 
@@ -1118,11 +1102,7 @@ describe("a field read through another file's occurrence, recovered from a calc'
 
   it("is recorded by the name its text gives, through that occurrence", () => {
     const byName = parse(main, ext).references.filter((r) => r.byName);
-    // The layout gets its copy, like of any reference its objects record.
-    expect(byName.map((r) => `${r.fromUid} ${r.toName} via ${r.viaToId}`)).toEqual([
-      "F0:layoutObject:10.1 Long Name via 2",
-      "F0:layout:10 Long Name via 2",
-    ]);
+    expect(byName.map((r) => `${r.fromUid} ${r.toName} via ${r.viaToId}`)).toEqual(["F0:layoutObject:10.1 Long Name via 2"]);
   });
 
   it("resolves to that file's field with the longest name the text starts with", () => {
@@ -1456,9 +1436,10 @@ describe("sort orders", () => {
 });
 
 describe("a deleted field with the id of another table's field", () => {
-  // As a layout of a sample export loaded without its local file: no field
-  // is found, and field ids are only unique within a table, so X's field 7 is
-  // no repeat of Y's, while Z's is: Z is another occurrence of Y's table.
+  // As a layout of a sample export loaded without its local file, here on one
+  // script's steps so one References list holds all three: no field is found,
+  // and field ids are only unique within a table, so X's field 7 is no repeat
+  // of Y's, while Z's is: Z is another occurrence of Y's table.
   const EXTERNAL = TABLE.replace(
     "</TableOccurrenceCatalog>",
     `<TableOccurrence id="2" name="X" type="External"><BaseTableSourceReference>
@@ -1474,20 +1455,29 @@ describe("a deleted field with the id of another table's field", () => {
   );
   const field7 = (to: string, toName: string): string =>
     `<FieldReference id="7" name="b"><TableOccurrenceReference id="${to}" name="${toName}"></TableOccurrenceReference></FieldReference>`;
+  const setField = (fieldRef: string): string =>
+    `<Step id="76" name="Set Field" enable="True"><ParameterValues><Parameter type="FieldReference">${fieldRef}</Parameter></ParameterValues></Step>`;
+  const steps = setField(field7("3", "Y")) + setField(blankField("7", "2", "X")) + setField(field7("4", "Z"));
   const model = buildModel(
-    parse(doc("MAIN", `<AddAction>${EXTERNAL}${layout(editBox("1", field7("3", "Y")) + editBox("2", blankField("7", "2", "X")) + editBox("3", field7("4", "Z")))}</AddAction>`)),
+    parse(
+      doc(
+        "MAIN",
+        `<AddAction>${EXTERNAL}<ScriptCatalog><Script id="1" name="S"></Script></ScriptCatalog>` +
+          `<StepsForScripts><Script><ScriptReference id="1" name="S"></ScriptReference><ObjectList>${steps}</ObjectList></Script></StepsForScripts></AddAction>`,
+      ),
+    ),
   );
-  const LAYOUT = "F0:layout:10";
+  const SCRIPT = "F0:script:1";
 
-  it("has a row of its own in the layout's References, unlike the same field through another occurrence", () => {
-    const fields = buildDependencyView(model, LAYOUT)!.outbound.filter((e) => e.ref.toType === "field");
+  it("has a row of its own in the script's References, unlike the same field through another occurrence", () => {
+    const fields = buildDependencyView(model, SCRIPT)!.outbound.filter((e) => e.ref.toType === "field");
     expect(fields.map((e) => `${e.ref.toName || "(blank)"}: ${e.ref.broken ? "broken" : "not found"}`).sort()).toEqual(["(blank): broken", "b: not found"]);
   });
 
   it("is counted by the badge, the navigator's dot and the report card alike", () => {
-    const listed = buildDependencyView(model, LAYOUT)!.outbound.filter((e) => e.ref.broken).length;
-    expect([listed, refStatsFor(model, LAYOUT).broken]).toEqual([1, 1]);
-    expect(brokenSourcesFor(model).has(LAYOUT)).toBe(true);
+    const listed = buildDependencyView(model, SCRIPT)!.outbound.filter((e) => e.ref.broken).length;
+    expect([listed, refStatsFor(model, SCRIPT).broken]).toEqual([1, 1]);
+    expect(brokenSourcesFor(model).has(SCRIPT)).toBe(true);
     expect(model.reportCard.brokenReferenceCount).toBe(brokenSourcesFor(model).size);
   });
 });
