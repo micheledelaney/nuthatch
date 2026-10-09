@@ -115,6 +115,11 @@ describe("passwords in steps", () => {
     expect(script.text).toContain(`Re-Login [ Account Name: "bot"; Password: ${T}; Current File ]`);
   });
 
+  it("keep their code, not their typed text, in the typed steps the script checks read", () => {
+    const calcs = result.scriptSteps?.["F0:script:1"]?.map((step) => step.calcs);
+    expect(calcs).toEqual([[`"bot"`, T], [`"bot"`, T], [`"me"`, T], [`"svc"`, "$$botPassword"], [`"bot"`, `$prefix & ${T} ${T}`], [`"bot"`, T]]);
+  });
+
   it("show as not stored in a button's action", () => {
     expect(JSON.stringify(object("F0:layout:10").detail)).toContain(`"params":"[ Account Name: \\"bot\\"; Password: ${T} ]"`);
   });

@@ -75,7 +75,6 @@ function deriveRiskFlags(card: ReportCard): RiskFlag[] {
     // "info", not "warn": the saved-analyses trend counts warn flags, and this
     // adds no new problem — it shows how far the unreferenced ones reach.
     { kind: "unusedChain", severity: "info", count: card.unusedChainCount },
-    { kind: "globalVariables", severity: "info", count: card.globalVariableCount },
   ];
   return flags.filter((f) => f.count > 0);
 }

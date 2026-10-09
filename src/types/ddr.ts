@@ -572,8 +572,8 @@ export interface StepIr {
   index: number;
   name: string;
   enabled: boolean;
-  /** Each of the step's formulas, as written (a nested one once), password
-   * formulas left out. */
+  /** Each of the step's formulas, as written (a nested one once); a password's
+   * without its typed text (see core/parser/passwords). */
   calcs: string[];
   /** The variable the step writes: Set Variable's, or the target variable of
    * a step that stores its result (Insert from URL …). */
@@ -657,11 +657,10 @@ export type RiskFlagKind =
   | "noPassword"
   | "unreferenced"
   | "unstored"
-  | "unusedChain"
-  | "globalVariables";
+  | "unusedChain";
 
-/** A report-card risk: which check it is, how serious, and how many objects
- * (or, for global variables, names) it covers. The UI owns the wording. */
+/** A report-card risk: which check it is, how serious, and how many objects it
+ * covers. The UI owns the wording. */
 export interface RiskFlag {
   kind: RiskFlagKind;
   severity: "info" | "warn" | "high";

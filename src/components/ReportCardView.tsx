@@ -1,6 +1,7 @@
 import { useStore } from "@/state/store";
 import { isUnresolvedTableOccurrence, type ObjectType, type RiskFlagKind } from "@/types/ddr";
 import { RiskFlags } from "@/components/RiskFlags";
+import { shownScriptChecksByScript } from "@/core/scriptAnalysis/analyze";
 
 /** Report card dashboard — the home base for a parsed solution. */
 export function ReportCardView() {
@@ -23,7 +24,7 @@ export function ReportCardView() {
   // Where each check's "show me" goes: the navigator, pointed at the matching
   // objects, on the Browse tab so the sidebar is visible. Shared by the tiles
   // and the risk flags.
-  const showAll = (filter: "broken" | "unreferenced" | "unusedChain") => {
+  const showAll = (filter: "broken" | "unreferenced" | "unusedChain" | "scriptChecks") => {
     showBrowse();
     setNavType("all");
     setNavRefFilter(filter);
@@ -43,11 +44,6 @@ export function ReportCardView() {
       setNavRefFilter("all");
       focusFields("unstored");
     },
-    globalVariables: () => {
-      showBrowse();
-      setNavRefFilter("all");
-      setNavType("globalVariable");
-    },
   };
   // A type's broken objects, for the risk card's "Found in" chips.
   const showBrokenOfType = (type: ObjectType) => {
@@ -64,6 +60,8 @@ export function ReportCardView() {
   // The main issue above already shows (and links) its own figure, so its tile
   // is left out rather than repeating the number.
   const hero = card.riskFlags[0]?.kind;
+  // Scripts with a finding: the same source as their flag and the Script checks filter.
+  const scriptCheckCount = shownScriptChecksByScript(model).size;
 
   return (
     <div className="report-card">
@@ -100,10 +98,10 @@ export function ReportCardView() {
         <div className="nh-tiles nh-card report-tiles">
           {hero !== "broken" && <Metric label="Objects with broken references" hint="They point to something that was deleted or can't be found, so the step, calculation or button that uses it fails." value={card.brokenReferenceCount} onClick={goTo.broken} tone={card.brokenReferenceCount > 0 ? "danger" : undefined} />}
           {hero !== "noPassword" && <Metric label="Active accounts, no password" hint="Anyone who knows the account name can open the file. Set a password or turn the account off." value={card.accountsNoPasswordCount} onClick={goTo.noPassword} tone={card.accountsNoPasswordCount > 0 ? "danger" : undefined} />}
+          {/* Left out for an analysis saved before the script checks: it has no steps to check. */}
+          {model.scriptSteps.size > 0 && <Metric label="Scripts flagged by script checks" hint="Steps that never run, variables that are never set, and other mistakes that make a script misbehave." value={scriptCheckCount} onClick={() => showAll("scriptChecks")} tone={scriptCheckCount > 0 ? "warning" : undefined} />}
           {hero !== "unstored" && <Metric label="Unstored calculations" hint="Recalculated every time they're displayed, which slows lists, finds and reports. Store them where you can." value={card.unstoredCalculationCount} onClick={goTo.unstored} tone={card.unstoredCalculationCount > 0 ? "warning" : undefined} />}
           <Metric label="Unstored calculations, 2+ hops" hint="Unstored calculations that read a field two or more relationships away. FileMaker follows every hop each time one is displayed, so they're the slowest kind." value={card.deepCalcCount} onClick={() => { setNavRefFilter("all"); focusFields("deepCalc"); }} tone={card.deepCalcCount > 0 ? "warning" : undefined} />
-          {hero !== "globalVariables" && <Metric label="Global variables" hint="Distinct $$variables in use: state shared across scripts. Each is a hidden dependency between them." value={card.globalVariableCount} onClick={goTo.globalVariables} />}
-          <Metric label="Global fields" hint="Fields with global storage: one value for the whole file, often used for settings and navigation." value={card.globalFieldCount} onClick={() => { setNavRefFilter("all"); focusFields("global"); }} />
         </div>
       </section>
 

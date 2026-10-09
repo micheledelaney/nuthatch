@@ -41,11 +41,6 @@ const FLAG_COPY: Record<
     what: (n) => (n === 1 ? "object is used only by unreferenced objects" : "objects are used only by unreferenced objects"),
     detail: "These are used only by objects that nothing points to, so they are dead code as well. Deleting the unreferenced ones would leave them without a caller.",
   },
-  globalVariables: {
-    title: (n) => (n === 1 ? "Distinct global variable in use" : "Distinct global variables in use"),
-    what: (n) => (n === 1 ? "global variable is in use" : "global variables are in use"),
-    detail: "Global variables are state shared across scripts, and each one is a hidden dependency between them. They are worth knowing about, not necessarily a problem.",
-  },
 };
 
 /** The value colour for each severity: red, yellow, or the accent. */

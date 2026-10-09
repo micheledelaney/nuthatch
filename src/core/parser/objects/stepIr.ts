@@ -1,7 +1,7 @@
 import type { LayoutChoice, StepIr } from "@/types/ddr";
 import { calculationText } from "../calcText";
 import { ownValue } from "../ownValue";
-import { isPasswordParameterType } from "../passwords";
+import { isPasswordParameterType, withoutPasswordText } from "../passwords";
 import { stepNodes } from "../steps";
 import { asArray, attr, child, children, isElementKey, isRecord, textAttr } from "../xmlUtils";
 
@@ -34,19 +34,21 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
 }
 
 /** Every formula under `node`: a <Calculation>'s once (not again for the
- * <Calculation> nested in it), none of a password's. */
-function stepFormulas(node: unknown, out: string[] = []): string[] {
+ * <Calculation> nested in it), a password's without its typed text — under a
+ * `<Parameter type="Password">` or a `<Password>`, as in the step's text. */
+function stepFormulas(node: unknown, out: string[] = [], inPassword = false): string[] {
   for (const item of asArray(node)) {
-    if (!isRecord(item) || isPasswordParameterType(attr(item, "type"))) continue;
+    if (!isRecord(item)) continue;
+    const isPassword = inPassword || isPasswordParameterType(attr(item, "type"));
     for (const [key, value] of Object.entries(item)) {
-      if (!isElementKey(key) || key === "Password") continue;
+      if (!isElementKey(key)) continue;
       if (key !== "Calculation") {
-        stepFormulas(value, out);
+        stepFormulas(value, out, isPassword || key === "Password");
         continue;
       }
       for (const calc of asArray(value)) {
         const formula = calculationText(calc);
-        if (formula) out.push(formula);
+        if (formula) out.push(isPassword ? withoutPasswordText(formula, [formula]) : formula);
       }
     }
   }
