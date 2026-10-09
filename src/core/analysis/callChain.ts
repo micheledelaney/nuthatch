@@ -10,6 +10,8 @@ export interface CallNode {
   external: boolean;
   /** True when expanding here would revisit an ancestor (recursion guard). */
   cyclic: boolean;
+  /** True when the step that performs it is disabled: FileMaker never runs it. */
+  disabled: boolean;
   children: CallNode[];
 }
 
@@ -31,6 +33,7 @@ function expand(model: SolutionModel, uid: string, ancestors: Set<string>): Call
     broken: false,
     external: false,
     cyclic: false,
+    disabled: false,
     children: [],
   };
 
@@ -47,6 +50,7 @@ function expand(model: SolutionModel, uid: string, ancestors: Set<string>): Call
         broken: true,
         external: false,
         cyclic: false,
+        disabled: edge.disabled === true,
         children: [],
       });
       continue;
@@ -67,6 +71,7 @@ function expand(model: SolutionModel, uid: string, ancestors: Set<string>): Call
         broken: false,
         external: true,
         cyclic: false,
+        disabled: edge.disabled === true,
         children: [],
       });
       continue;
@@ -79,11 +84,12 @@ function expand(model: SolutionModel, uid: string, ancestors: Set<string>): Call
         broken: false,
         external: false,
         cyclic: true,
+        disabled: edge.disabled === true,
         children: [],
       });
       continue;
     }
-    node.children.push(expand(model, edge.toUid, nextAncestors));
+    node.children.push({ ...expand(model, edge.toUid, nextAncestors), disabled: edge.disabled === true });
   }
   return node;
 }

@@ -94,7 +94,8 @@ export interface FmObject {
   /** Owning file uid. */
   fileUid: string;
   fileName: string;
-  /** uid of the containing object (e.g. a field's table, a TO's base table). */
+  /** uid of the containing object: a field's table, a layout object's layout
+   * (or the portal, panel or group it's in), a menu item's menu. */
   parentUid?: string;
   /** Raw attributes lifted from the source element. */
   attributes: Record<string, string>;
@@ -578,6 +579,9 @@ export interface FmReference {
    * listed (and still reported if broken), but it doesn't keep its target off
    * the unreferenced list, since FileMaker never runs it. */
   disabled?: boolean;
+  /** A field name read from calculation text (RawReference.byName) that names
+   * no field of its occurrence's table, although that table's file is loaded. */
+  unmatched?: boolean;
 }
 
 /** Aggregate metrics for the solution (the report card). */

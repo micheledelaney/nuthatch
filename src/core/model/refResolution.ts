@@ -1,11 +1,21 @@
 /**
- * Occurrence lookups by name for text that names them: finding the occurrences
- * a formula's `Occ::<Field Missing>` mentions, and a file's occurrences for
- * search. Whether a reference is found, deleted or external is the model's call
+ * Occurrence lookups: the base table an occurrence reads from, and, by name for
+ * text that names them, the occurrences a formula's `Occ::<Field Missing>`
+ * mentions and a file's occurrences for search. Whether a reference is found,
+ * deleted or external is the model's call
  * (core/model/refStatus), not this module's.
  */
 import type { FmObject, SolutionModel } from "@/types/ddr";
 import { occurrencesBeforeMissingField } from "@/core/identifiers";
+
+/** The base table an occurrence reads from, as the model resolved it — in
+ * another loaded file for an external occurrence. Null when that table isn't
+ * loaded or no longer exists. (Its `baseTableId` is an id in the data
+ * source's file, so it can't be looked up in the occurrence's own file.) */
+export function occurrenceBaseTable(model: SolutionModel, occurrence: FmObject): FmObject | null {
+  const ref = model.outbound.get(occurrence.uid)?.find((r) => r.toType === "table");
+  return ref?.toUid ? model.byUid.get(ref.toUid) ?? null : null;
+}
 
 /** Per-file occurrence index, lazily memoised on the model. Several call sites
  * iterate occurrences in the same file repeatedly (findMissingFieldOccurrences,

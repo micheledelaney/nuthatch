@@ -17,7 +17,9 @@ export const UNREF_ELIGIBLE: ReadonlySet<string> = ORPHAN_CANDIDATE_TYPES;
 
 /** Types that can be the source of a (breakable) reference, so "Has broken
  * references" is meaningful for them. Types that reference nothing (tables,
- * themes, …) or whose references aren't tracked are excluded. */
+ * themes, …) or whose references aren't tracked are excluded. Privilege sets
+ * (record-access calculations) and custom menus (install conditions) are in:
+ * their calculations can name something deleted. */
 export const BROKEN_ELIGIBLE: ReadonlySet<string> = new Set([
   "script",
   "layout",
@@ -26,7 +28,9 @@ export const BROKEN_ELIGIBLE: ReadonlySet<string> = new Set([
   "tableOccurrence",
   "relationship",
   "account",
+  "privilegeSet",
   "customMenuSet",
+  "customMenu",
   "customMenuItem",
   "field",
   "layoutObject",

@@ -54,10 +54,11 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
   const parsed = parseDocuments(paths.map((p) => ({ name: basename(p), content: readExport(p) })));
   const model = buildModel(parsed);
   const tags = new Map(parsed.files.map((f) => [f.uid, fileTag(f.name)]));
-  const byUid = new Map(parsed.objects.map((o) => [o.uid, o]));
+  // The model's objects: buildModel adds to them (relationship depth) on copies.
+  const byUid = model.byUid;
 
   const refOf = new Map<string, string>();
-  for (const o of parsed.objects) {
+  for (const o of model.objects) {
     const file = tags.get(o.fileUid) ?? "?";
     if (o.type === "field") {
       const table = byUid.get(o.parentUid ?? "")?.name ?? "?";
@@ -89,7 +90,7 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
   }
 
   const snapshot: Snapshot = {
-    objects: parsed.objects,
+    objects: model.objects,
     byUid,
     refOf,
     edgesFrom,
@@ -104,7 +105,7 @@ export function loadSnapshot(paths: string[], ignoredTypes: ReadonlySet<string>)
     errors: parsed.errors,
   };
 
-  for (const g of parsed.objects.filter((o) => o.type === "globalVariable")) {
+  for (const g of model.objects.filter((o) => o.type === "globalVariable")) {
     const users = new Set<string>();
     for (const r of model.references) {
       if (r.toUid !== g.uid) continue;

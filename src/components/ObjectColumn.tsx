@@ -19,7 +19,7 @@ import { type DependencyEdge } from "@/core/analysis/dependencies";
 import type { CallNode } from "@/core/analysis/callChain";
 import { BROKEN_PLACEHOLDER_RE } from "@/core/identifiers";
 import { findMissingFieldOccurrences } from "@/core/model/refResolution";
-import { ownFieldRef, refLabel, refStatus } from "@/core/model/refStatus";
+import { ownFieldRef, ownScriptRef, refLabel, refStatus } from "@/core/model/refStatus";
 import { brokenSourcesFor } from "./browseA/refStats";
 import { RelationshipERD } from "./RelationshipERD";
 import { CodeBox } from "./CodeBox";
@@ -33,16 +33,14 @@ import { pressable } from "./a11y";
 /** How many rows a References / Referenced By widget shows before "Show more". */
 const DETAIL_REF_PREVIEW_LIMIT = 10;
 
-/** A referencing field in a Referenced by list as `OCCURRENCE::field`; null
- * for all other types. Prefers the named occurrence from viaUid; falls back to
- * the field's parent base table. */
+/** A referencing field in a Used by list as `Table::field`, by the table it
+ * belongs to; null for all other types. (The reference's own occurrence,
+ * viaUid, is the one the listed object is read through, not the field's.) */
 function sourceFieldLabel(edge: DependencyEdge, byUid: Map<string, FmObject>): string | null {
   const obj = edge.target;
   if (obj?.type !== "field") return null;
-  const occ = edge.ref.viaUid ? byUid.get(edge.ref.viaUid) : undefined;
-  const parentTable = obj.parentUid ? byUid.get(obj.parentUid) : undefined;
-  const occName = occ?.name ?? parentTable?.name;
-  return occName ? `${occName}::${obj.name}` : obj.name;
+  const table = obj.parentUid ? byUid.get(obj.parentUid) : undefined;
+  return table ? `${table.name}::${obj.name}` : obj.name;
 }
 
 /** Attributes rendered explicitly below (or internal markers) — kept out of the
@@ -1095,7 +1093,6 @@ function LayoutDetail({
                     obj={obj}
                     depth={0}
                     model={model}
-                    fileUid={owner.fileUid}
                     onGo={onGo}
                   />
                 ))}
@@ -1117,7 +1114,6 @@ function LayoutDetail({
                     obj={obj}
                     depth={0}
                     model={model}
-                    fileUid={owner.fileUid}
                     onGo={onGo}
                   />
                 ))}
@@ -1355,15 +1351,12 @@ function LayoutObjectColumnDetail({
 }) {
   const fileUid = owner.fileUid;
 
-  function scriptTarget(id: string | undefined): FmObject | null {
-    if (!id) return null;
-    return model.byUid.get(`${fileUid}:script:${id}`) ?? null;
-  }
-
   const fieldRef = detail.fieldRef ? ownFieldRef(model, owner.uid, detail.fieldRef) : undefined;
   const fieldStatus = fieldRef ? refStatus(fieldRef, model.byUid) : "ok";
   const fieldClassName = fieldStatus === "broken" ? "broken" : fieldStatus === "ok" ? "" : "external";
-  const scriptObj = detail.scriptRef ? scriptTarget(detail.scriptRef.id) : null;
+  // The model's reference knows the script's file (it can be another one's).
+  const scriptEdge = detail.scriptRef ? ownScriptRef(model, owner.uid) : undefined;
+  const scriptObj = scriptEdge?.toUid ? model.byUid.get(scriptEdge.toUid) ?? null : null;
   const scriptName = detail.scriptRef?.name || (detail.scriptRef?.id ? `Script ${detail.scriptRef.id}` : "");
   const valueListObj = detail.valueListRef?.id
     ? model.byUid.get(`${fileUid}:valueList:${detail.valueListRef.id}`) ?? null
@@ -1427,7 +1420,7 @@ function LayoutObjectColumnDetail({
               <span className="ellipsis">
                 <FieldRefLink qualified={detail.fieldRef} model={model} owner={owner.uid} onGo={onGo} />
               </span>
-              {fieldClassName === "external" && <RefStatusChip kind="external" />}
+              {fieldClassName === "external" && <RefStatusChip kind={fieldStatus === "unmatched" ? "unmatched" : "external"} />}
             </li>
           </ul>
         </Section>
@@ -1660,13 +1653,11 @@ function LayoutObjectTree({
   obj,
   depth,
   model,
-  fileUid,
   onGo,
 }: {
   obj: LayoutObjectInfo;
   depth: number;
   model?: SolutionModel;
-  fileUid?: string;
   onGo?: (uid: string, rowKey: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1675,9 +1666,10 @@ function LayoutObjectTree({
   // A placeholder in its label reads as broken only when the model says so.
   const broken = model == null || obj.uid == null || brokenSourcesFor(model).has(obj.uid);
 
-  function scriptTarget(id: string | undefined): FmObject | null {
-    if (!id || !model || !fileUid) return null;
-    return model.byUid.get(`${fileUid}:script:${id}`) ?? null;
+  /** The script the object performs, as the model resolved it (it can be in another file). */
+  function scriptTarget(): FmObject | null {
+    const ref = model && obj.uid ? ownScriptRef(model, obj.uid) : undefined;
+    return ref?.toUid ? model!.byUid.get(ref.toUid) ?? null : null;
   }
 
   const indent = depth * 14;
@@ -1712,7 +1704,7 @@ function LayoutObjectTree({
           {...pressable(() => onGo?.(obj.uid!, `lo:${obj.uid}`), { inert: !(obj.uid && onGo) })}
         >{renderWithBrokenPlaceholders(text, broken)}</span>
         {obj.scriptRef && (() => {
-          const target = scriptTarget(obj.scriptRef.id);
+          const target = scriptTarget();
           const sName = obj.scriptRef.name || (obj.scriptRef.id ? `Script ${obj.scriptRef.id}` : "");
           return sName ? (
             <span className="lo-script-ref">
@@ -1744,7 +1736,6 @@ function LayoutObjectTree({
             obj={child}
             depth={depth + 1}
             model={model}
-            fileUid={fileUid}
             onGo={onGo}
           />
         ))}
@@ -2178,10 +2169,12 @@ export function GroupedRefList({
               const obj = edge.target;
               // The target's status and label are the model's (core/model/refStatus):
               // deleted is broken; a field behind a file that wasn't available at
-              // export can't be verified; one in another, unloaded file is external.
+              // export can't be verified; a name from calc text that its loaded
+              // file doesn't have is unmatched; one in another, unloaded file is external.
               const status = side === "to" ? refStatus(edge.ref, byUid) : "ok";
               const broken = status === "broken";
               const unverifiable = status === "unverifiable";
+              const unmatched = status === "unmatched";
               const external = status === "external" || unverifiable;
               const unused = obj != null && (isUnused?.(obj.uid) ?? false);
               const rowKey = `${edge.ref.fromUid}-${edge.ref.toId}-${group.type}-${i}`;
@@ -2191,21 +2184,27 @@ export function GroupedRefList({
                 ? `Broken — ${label}`
                 : unverifiable
                   ? `${label} — can't be verified: its file wasn't available when this file was exported`
-                  : external
-                    ? `${label} — in another file (not loaded)`
-                    : unused
-                      ? `${label} — itself unused`
-                      : label;
+                  : unmatched
+                    ? `${label} — no field by that name in its file (read from calculation text)`
+                    : external
+                      ? `${label} — in another file (not loaded)`
+                      : edge.disabled
+                        ? `${label} — in a disabled step, so it doesn't count as a use`
+                        : unused
+                          ? `${label} — itself unused`
+                          : label;
               return (
                 <li key={rowKey}>
                   <div
-                    className={`row${broken ? " broken inert" : external ? " external inert" : ""}`}
-                    {...pressable(() => obj && onGo(obj.uid, rowKey), { inert: broken || external || !obj })}
+                    className={`row${broken ? " broken inert" : external || unmatched ? " external inert" : ""}`}
+                    {...pressable(() => obj && onGo(obj.uid, rowKey), { inert: broken || external || unmatched || !obj })}
                     title={title}
                   >
                     <TypePill type={type} short />
                     <span className="ellipsis">{label}</span>
                     {external && <RefStatusChip kind="external" />}
+                    {unmatched && <RefStatusChip kind="unmatched" />}
+                    {edge.disabled && <RefStatusChip kind="disabled" />}
                     {unused && <RefStatusChip kind="unused" />}
                   </div>
                 </li>
@@ -2251,11 +2250,12 @@ export function CallTreeNode({
       <span
         className={className}
         {...pressable(() => onGo(node.uid, rowKey), { inert: !clickable })}
-        title={unused ? "Used only by unused scripts" : undefined}
+        title={node.disabled ? "Called in a disabled step: FileMaker never runs it" : unused ? "Used only by unused scripts" : undefined}
       >
         {node.name}
         {node.broken && " — missing"}
         {node.external && <RefStatusChip kind="external" />}
+        {node.disabled && <RefStatusChip kind="disabled" />}
       </span>
       {node.children.length > 0 && (
         <ul className="tree">

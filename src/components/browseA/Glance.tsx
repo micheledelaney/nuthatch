@@ -2,6 +2,8 @@ import type React from "react";
 import { isBrokenTableOccurrence, objectLabel, type FmObject, type ObjectType, type SolutionModel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
+import { occurrenceBaseTable } from "@/core/model/refResolution";
+import { ownScriptRef } from "@/core/model/refStatus";
 import { FieldRefLink, ObjLink } from "../FieldRefLink";
 import { TypePill } from "../TypePill";
 import { renderWithBrokenPlaceholders, Section } from "../ObjectColumn";
@@ -42,9 +44,9 @@ function ancestorLayout(model: SolutionModel, obj: FmObject): FmObject | null {
   return null;
 }
 
-/** The base table behind a table occurrence. */
+/** The base table behind a table occurrence, as the model resolved it. */
 function baseTableOf(model: SolutionModel, to: FmObject | null): FmObject | null {
-  return to ? byId(model, to.fileUid, "table", to.attributes.baseTableId) : null;
+  return to ? occurrenceBaseTable(model, to) : null;
 }
 
 /** A linked object with its short type pill, or the fallback text when it isn't loaded. */
@@ -117,7 +119,10 @@ function boundTo(obj: FmObject, model: SolutionModel, onGo: OnGo): React.ReactNo
   if (!lo) return null;
   if (lo.fieldRef) return <FieldRefLink qualified={lo.fieldRef} model={model} owner={obj.uid} onGo={onGo} />;
   if (lo.scriptRef) {
-    const script = byId(model, f, "script", lo.scriptRef.id) ?? byName(model, f, "script", lo.scriptRef.name);
+    // The model's reference, which knows the script's file; a script reference
+    // with no id has none, so it's looked up by name in this file.
+    const ref = ownScriptRef(model, obj.uid);
+    const script = ref ? (ref.toUid ? model.byUid.get(ref.toUid) ?? null : null) : byName(model, f, "script", lo.scriptRef.name);
     return linkOrText(script, lo.scriptRef.name, onGo);
   }
   if (lo.portalTable) return linkOrText(byName(model, f, "tableOccurrence", lo.portalTable), lo.portalTable, onGo);
@@ -187,15 +192,10 @@ function detailRows(obj: FmObject, model: SolutionModel, onGo: OnGo): GlanceRow[
         { label: "Fields", value: countWhere(model, (o) => o.parentUid === obj.uid && o.type === "field").toLocaleString() },
         {
           label: "Occurrences",
-          // Local occurrences point at the table by id; occurrences in other
-          // loaded files match it by UUID.
-          value: countWhere(
-            model,
-            (o) =>
-              o.type === "tableOccurrence" &&
-              ((o.fileUid === f && o.attributes.baseTableId === obj.id) ||
-                (o.fileUid !== f && !!a.uuid && o.attributes.baseTableUuid === a.uuid)),
-          ).toLocaleString(),
+          // The occurrences the model resolved to this table, in this file or
+          // another loaded one (an external occurrence's base-table id is an id
+          // in its data source's file, not this one's).
+          value: countWhere(model, (o) => o.type === "tableOccurrence" && occurrenceBaseTable(model, o)?.uid === obj.uid).toLocaleString(),
         },
         { label: "Comment", value: a.comment },
       ];

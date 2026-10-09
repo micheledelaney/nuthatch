@@ -43,17 +43,20 @@ export function findUnusedChains(
 ): FmObject[] {
   // In use without needing a reference to it (subject to its container).
   const isStart = (o: FmObject) => !isCandidate(o) || isChainEntryPoint(o) || marked.has(o.uid);
-  const live = findLive(objects, outbound, byUid, isStart);
+  const live = findLive(objects, outbound, byUid, isStart, marked);
   const unref = new Set(unreferenced.map((o) => o.uid));
   return objects.filter((o) => isCandidate(o) && !live.has(o.uid) && !unref.has(o.uid));
 }
 
-/** Every object reachable from the start objects. */
+/** Every object reachable from the start objects. `marked` objects are in use
+ * whatever their container: someone said so (a field the Data API writes is
+ * used even when nothing uses its table). */
 function findLive(
   objects: FmObject[],
   outbound: Map<string, FmReference[]>,
   byUid: Map<string, FmObject>,
   isStart: (o: FmObject) => boolean,
+  marked: ReadonlySet<string>,
 ): Set<string> {
   const children = new Map<string, FmObject[]>();
   for (const o of objects) {
@@ -70,9 +73,10 @@ function findLive(
     live.add(o.uid);
     queue.push(o.uid);
   };
-  // Top-level starts; contained ones are reached through their container below.
+  // Top-level starts and marked objects; other contained starts are reached
+  // through their container below.
   for (const o of objects) {
-    if (isStart(o) && (!o.parentUid || !byUid.has(o.parentUid))) mark(o);
+    if (marked.has(o.uid) || (isStart(o) && (!o.parentUid || !byUid.has(o.parentUid)))) mark(o);
   }
   while (queue.length > 0) {
     const uid = queue.pop()!;

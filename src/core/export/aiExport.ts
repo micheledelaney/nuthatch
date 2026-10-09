@@ -3,7 +3,6 @@ import { OBJECT_TYPE_META, objectLabel } from "@/types/ddr";
 import { chainTops } from "@/core/analysis/unusedChains";
 import { brokenSources } from "@/core/analysis/dependencies";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
-import { buildDataSourceIndex, type DataSourceIndex } from "@/core/model/dataSources";
 import { refLabel, refStatus } from "@/core/model/refStatus";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
@@ -51,11 +50,10 @@ export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportF
   const brokenFrom = brokenSources(model);
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
   const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
-  const sources = buildDataSourceIndex(model.objects, model.files);
   return [
     { name: "README.md", content: buildReadme(model, info) },
     { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced, unusedChain)).join("\n") + "\n" },
-    { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model, sources))].join("\n") + "\n" },
+    { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model))].join("\n") + "\n" },
     // Keeps the dump (which can include account names and emails) out of git
     // by default; the README explains how to opt in.
     { name: ".gitignore", content: "*\n" },
@@ -126,17 +124,12 @@ function slimDetail(detail: ObjectDetail | undefined): object | undefined {
   return detail;
 }
 
-/** The reference's status column: the app's status (see refStatus), with a
- * disabled step's resolved reference as `disabled`, and a field name read from
- * calculation text that matched no field of a loaded file as `unmatched`. */
-function refRowStatus(r: FmReference, model: SolutionModel, sources: DataSourceIndex): string {
+/** The reference's status column: the app's status (see refStatus — a field
+ * name read from calculation text that matched no field of a loaded file is
+ * `unmatched`), with a disabled step's resolved reference as `disabled`. */
+function refRowStatus(r: FmReference, model: SolutionModel): string {
   const status = refStatus(r, model.byUid);
-  if (status === "ok") return r.disabled ? "disabled" : "ok";
-  if (status !== "external") return status;
-  // Only a field name recovered from calculation text has no FileMaker id.
-  const via = r.viaUid ? model.byUid.get(r.viaUid) : undefined;
-  const isFromText = r.toType === "field" && r.toId === "";
-  return isFromText && via && sources.fileForOccurrence(via) ? "unmatched" : "external";
+  return status === "ok" && r.disabled ? "disabled" : status;
 }
 
 /** The target's name; when FileMaker left it blank, the app's label for it
@@ -151,7 +144,7 @@ function refRowName(r: FmReference, model: SolutionModel): string {
   return status === "broken" ? "<Field Missing>" : status === "unverifiable" ? "<File Missing>" : `(field ${r.toId})`;
 }
 
-function refRow(r: FmReference, model: SolutionModel, sources: DataSourceIndex): string {
+function refRow(r: FmReference, model: SolutionModel): string {
   const from = model.byUid.get(r.fromUid);
   return [
     r.fromUid,
@@ -159,7 +152,7 @@ function refRow(r: FmReference, model: SolutionModel, sources: DataSourceIndex):
     from ? objectLabel(from) : "",
     r.fromStep ?? "",
     r.kind,
-    refRowStatus(r, model, sources),
+    refRowStatus(r, model),
     r.toUid ?? "",
     r.toType,
     refRowName(r, model),

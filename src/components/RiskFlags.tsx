@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { TypePill } from "@/components/TypePill";
 import { pressable } from "@/components/a11y";
+import { brokenSourcesFor } from "@/components/browseA/refStats";
 import {
   OBJECT_TYPE_META,
   type ObjectType,
@@ -128,9 +129,10 @@ function MainIssue({
   );
 }
 
-/** The object types that hold broken references, in the usual type order. */
+/** The object types that hold broken references, in the usual type order —
+ * from the same source as the count, the dots and the Broken filter. */
 function brokenTypes(model: SolutionModel): ObjectType[] {
-  const brokenFrom = new Set(model.brokenReferences.map((r) => r.fromUid));
+  const brokenFrom = brokenSourcesFor(model);
   const present = new Set(model.objects.filter((o) => brokenFrom.has(o.uid)).map((o) => o.type));
   return (Object.keys(OBJECT_TYPE_META) as ObjectType[]).filter((t) => present.has(t));
 }

@@ -7,6 +7,9 @@ export interface DependencyEdge {
   ref: FmReference;
   /** Resolved target object, or null when the reference is broken/external. */
   target: FmObject | null;
+  /** Inbound only: every reference in the row comes from a disabled step, so
+   * it doesn't count as a use of the object (FileMaker never runs it). */
+  disabled?: boolean;
 }
 
 export interface DependencyView {
@@ -28,20 +31,45 @@ export function buildDependencyView(model: SolutionModel, uid: string): Dependen
   return {
     object,
     outbound: dedupe(model.outbound.get(uid) ?? [], model, (r) => r.toUid),
-    inbound: dedupe(model.inbound.get(uid) ?? [], model, (r) => r.fromUid),
+    inbound: dedupe(model.inbound.get(uid) ?? [], model, (r) => r.fromUid, true),
   };
 }
 
+/** One edge per row, sorted. For an inbound list, each row says whether every
+ * reference in it comes from a disabled step. */
 function dedupe(
   refs: FmReference[],
   model: SolutionModel,
   keyOf: (r: FmReference) => string | null,
+  inbound = false,
 ): DependencyEdge[] {
-  const edges = distinctRefs(refs, keyOf, model.byUid).map((ref) => {
+  const enabledRows = inbound ? new Set(refs.filter((r) => !r.disabled).map((r) => rowKey(r, keyOf, model.byUid))) : null;
+  const edges = distinctRefs(refs, keyOf, model.byUid).map((ref): DependencyEdge => {
     const targetUid = keyOf(ref);
-    return { ref, target: targetUid ? model.byUid.get(targetUid) ?? null : null };
+    const target = targetUid ? model.byUid.get(targetUid) ?? null : null;
+    return enabledRows && !enabledRows.has(rowKey(ref, keyOf, model.byUid)) ? { ref, target, disabled: true } : { ref, target };
   });
   return sortByType(edges);
+}
+
+/** Whether an inbound reference means its target is actually used. It doesn't
+ * when it comes from a disabled script step (FileMaker never runs it), or from
+ * the target itself or something inside it — a recursive script or custom
+ * function, or a button on a layout that goes to that same layout. */
+export function countsAsUse(ref: FmReference, targetUid: string, byUid: ReadonlyMap<string, FmObject>): boolean {
+  return !ref.disabled && !isWithin(ref.fromUid, targetUid, byUid);
+}
+
+/** Whether `uid` is `containerUid` or inside it, up the containment chain
+ * (layout object → … → layout, field → table); the hop cap only guards
+ * against a malformed cycle. */
+function isWithin(uid: string, containerUid: string, byUid: ReadonlyMap<string, FmObject>): boolean {
+  let current: string | undefined = uid;
+  for (let hops = 0; current != null && hops < 64; hops++) {
+    if (current === containerUid) return true;
+    current = byUid.get(current)?.parentUid;
+  }
+  return false;
 }
 
 /** The references a list shows: the first of each row. A list has one row per
@@ -56,11 +84,15 @@ export function distinctRefs(
 ): FmReference[] {
   const seen = new Set<string>();
   return refs.filter((ref) => {
-    const key = `${keyOf(ref) ?? `missing:${ref.toType}:${tableOf(ref, byUid)}:${ref.toId}`}|${ref.kind}`;
+    const key = rowKey(ref, keyOf, byUid);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function rowKey(ref: FmReference, keyOf: (r: FmReference) => string | null, byUid: ReadonlyMap<string, FmObject>): string {
+  return `${keyOf(ref) ?? `missing:${ref.toType}:${tableOf(ref, byUid)}:${ref.toId}`}|${ref.kind}`;
 }
 
 /** The table a reference that wasn't found points into, as far as the export

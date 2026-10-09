@@ -1,4 +1,5 @@
-import type { SolutionModel } from "@/types/ddr";
+import { isBrokenTableOccurrence, type SolutionModel } from "@/types/ddr";
+import { occurrenceBaseTable } from "@/core/model/refResolution";
 
 /**
  * FileMaker's own relationship graph, reconstructed from the DDR. Each file in a
@@ -26,6 +27,8 @@ export interface GraphNode {
   /** The fields this occurrence uses in relationships, in base-table order.
    * Shown when the box is expanded (boxes start collapsed). */
   fields: string[];
+  /** Its base table is gone (see isBrokenTableOccurrence). */
+  broken?: boolean;
 }
 
 /** An undirected link between two occurrences (one relationship), carrying the
@@ -106,7 +109,9 @@ export function buildRelationshipGraph(model: SolutionModel): FileGraph[] {
     if (!rect) continue;
     const [left, top, right, bottom] = rect;
     const baseTableId = obj.attributes.baseTableId;
-    const baseUid = baseTableId ? `${obj.fileUid}:table:${baseTableId}` : "";
+    // The table the model resolved: an external occurrence's base-table id is
+    // an id in its data source's file, not this one's.
+    const baseUid = occurrenceBaseTable(model, obj)?.uid ?? "";
     // Identity of the base table, scoped by external data source (or this file)
     // so same-named tables from different sources never group together.
     const baseKey = baseTableId
@@ -131,6 +136,7 @@ export function buildRelationshipGraph(model: SolutionModel): FileGraph[] {
       baseTable: obj.attributes.baseTable,
       baseKey,
       fields,
+      ...(isBrokenTableOccurrence(obj) ? { broken: true } : {}),
     };
     (nodesByFile.get(obj.fileUid) ?? nodesByFile.set(obj.fileUid, []).get(obj.fileUid)!).push(node);
     placed.add(obj.uid);

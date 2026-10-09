@@ -18,13 +18,16 @@ import { BROKEN_PLACEHOLDER_RE } from "@/core/identifiers";
  * - broken: the target should be there and isn't (deleted).
  * - unverifiable: a field FileMaker left nameless behind an occurrence whose
  *   file wasn't available at export, so no one can tell whether it exists.
+ * - unmatched: a field name read from calculation text that no field of its
+ *   loaded file has (see FmReference.unmatched).
  * - external: the target lives in a file that isn't loaded.
  */
-export type RefStatus = "ok" | "broken" | "unverifiable" | "external";
+export type RefStatus = "ok" | "broken" | "unverifiable" | "unmatched" | "external";
 
 export function refStatus(ref: FmReference, byUid: ReadonlyMap<string, FmObject>): RefStatus {
   if (ref.broken) return "broken";
   if (ref.toUid) return "ok";
+  if (ref.unmatched) return "unmatched";
   const via = ref.viaUid ? byUid.get(ref.viaUid) : undefined;
   return ref.toType === "field" && ref.toName === "" && via != null && isUnresolvedTableOccurrence(via) ? "unverifiable" : "external";
 }
@@ -90,6 +93,13 @@ function fieldRefsOf(model: SolutionModel, ownerUid: string): Map<string, FmRefe
   }
   byOwner.set(ownerUid, refs);
   return refs;
+}
+
+/** The owner's own reference to the script it performs (a button's), as the
+ * model resolved it — so a script in another file is never looked up by its
+ * id in the button's own file. Undefined when the owner has none. */
+export function ownScriptRef(model: SolutionModel, ownerUid: string): FmReference | undefined {
+  return model.outbound.get(ownerUid)?.find((r) => r.toType === "script" && r.kind === "script");
 }
 
 /** The owner's own reference to the field a `TO::Field` label names, as the

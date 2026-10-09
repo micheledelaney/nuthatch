@@ -157,7 +157,7 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly TextScan[]): void {
     const ref = {
       ...brokenRef(obj.uid, "field", MISSING_FIELD_TOKEN),
       // The field is gone but its occurrence is still a navigable target (keeps
-      // the TO clickable inline, and surfaces the broken ref under its inbound list).
+      // the TO clickable inline).
       ...(deleted.viaToId != null ? { viaToId: deleted.viaToId } : {}),
     };
     pushRef(fp.references, ref, site);
@@ -167,10 +167,13 @@ function addMissingFieldRefs(fp: FileParse, batch: readonly TextScan[]): void {
 /** Classify every `<Field Missing>` in the text: one qualified by an occurrence
  * that was unresolved at export is unverifiable and skipped; any other
  * (qualified by a real or missing occurrence, or bare) is a deleted field.
- * Returns the occurrence of the first deleted one (the navigable context), or
- * null when every placeholder was unverifiable. */
+ * Returns the occurrence of the first deleted one (the navigable context) — for
+ * `<Table Missing>::<Field Missing>`, the id FileMaker gives a deleted
+ * occurrence (-1), as its structural references do — or null when every
+ * placeholder was unverifiable. */
 function deletedFieldVia(text: string, index: FileIndex): { viaToId?: string } | null {
-  for (const name of missingFieldOccurrences(text, index.toNames)) {
+  for (const name of missingFieldOccurrences(text, [...index.toNames, MISSING_TABLE_TOKEN])) {
+    if (name === MISSING_TABLE_TOKEN) return { viaToId: "-1" };
     const occ = name != null ? index.toByName.get(name) : undefined;
     if (occ?.unresolved) continue;
     return occ ? { viaToId: occ.id } : {};

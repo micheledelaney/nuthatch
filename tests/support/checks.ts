@@ -35,7 +35,7 @@ interface Oracle {
   brokenSources: { exact: string[] };
   globalVariables: Record<string, string[]>;
   reportCard: Record<string, unknown>;
-  mainAlone?: { reportCard?: Record<string, unknown> };
+  mainAlone?: { reportCard?: Record<string, unknown>; unresolvedEdges?: { from: string; to: string; step?: number }[] };
 }
 
 export interface Check {
@@ -326,6 +326,17 @@ export function buildChecks(oracle: Oracle, snapshot: () => Snapshot, mainAlone:
         .map((a) => `unexpected edge → ${a.to} kind=${a.kind} via=${a.via ?? "-"} step=${a.step ?? "-"} name=${fmt(a.toName)}`);
       return [...missing, ...extra];
     });
+  }
+
+  if (mainAlone) {
+    add("edges: unresolved without TEST_EXT", () =>
+      (oracle.mainAlone?.unresolvedEdges ?? []).flatMap((e) => {
+        const actual = edgesOf(snapshot(), e.from);
+        if (actual == null) return [`${e.from}: source object not found`];
+        const found = actual.some((a) => targetMatches(e.to, a.to) && (e.step == null || a.step === e.step));
+        return found ? [] : [`${e.from} step ${e.step ?? "-"}: no edge → ${e.to}`];
+      }),
+    );
   }
 
   add("edges: absent", () =>

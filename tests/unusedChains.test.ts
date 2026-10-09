@@ -142,6 +142,16 @@ describe("usage marks", () => {
     expect(names(later.unreferenced)).toEqual(["L", "M", "V"]);
   });
 
+  it("keeps a marked field in use when nothing uses its table", () => {
+    // As the test solution's T_Unused::u_Field, marked as written by the Data API.
+    const table = obj("table", "1", "T");
+    const field = obj("field", "1.1", "f", { parentUid: table.uid });
+    const files = [{ uid: FILE, name: "TEST", source: "TEST.xml" }];
+    const marked = buildModel({ files, objects: [table, field], references: [], errors: [] }, [createMark(field, "externalApp", undefined, 0)]);
+    expect(names(marked.unreferenced)).toEqual(["T"]);
+    expect(names(marked.unusedChain)).toEqual([]);
+  });
+
   it("ignores marks for objects that aren't loaded", () => {
     expect(withUsageMarks(model, [{ ...markP, ref: "script:999" }]).reportCard.markedUsedCount).toBe(0);
   });

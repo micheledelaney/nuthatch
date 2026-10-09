@@ -9,7 +9,7 @@ import type {
 } from "@/types/ddr";
 import { ORPHAN_CANDIDATE_TYPES, isBrokenTableOccurrence } from "@/types/ddr";
 import { buildReportCard } from "@/core/analysis/reportCard";
-import { brokenSources } from "@/core/analysis/dependencies";
+import { brokenSources, countsAsUse } from "@/core/analysis/dependencies";
 import { findUnusedChains } from "@/core/analysis/unusedChains";
 import { resolveMarks } from "@/core/analysis/usageMarks";
 import { longestPrefixName } from "@/core/identifiers";
@@ -40,6 +40,17 @@ export function buildModel(parsed: ParseResult, marks: readonly UsageMark[] = []
   const byUid = new Map<string, FmObject>();
   for (const obj of parsed.objects) byUid.set(obj.uid, obj);
 
+  // Calculation fields get their relationship depth on a copy: the parse
+  // result itself is left as it was.
+  const depths = relationshipDepths(parsed, byUid);
+  const objects = parsed.objects.map((obj) => {
+    const relationshipDepth = depths.get(obj.uid);
+    if (relationshipDepth == null) return obj;
+    const withDepth = { ...obj, relationshipDepth };
+    byUid.set(obj.uid, withDepth);
+    return withDepth;
+  });
+
   const references = resolveReferences(parsed, byUid);
 
   const outbound = new Map<string, FmReference[]>();
@@ -49,14 +60,12 @@ export function buildModel(parsed: ParseResult, marks: readonly UsageMark[] = []
     if (ref.toUid) push(inbound, ref.toUid, ref);
   }
 
-  annotateRelationshipDepths(parsed, byUid);
-
   const brokenReferences = references.filter((r) => r.broken);
 
   return withUsageMarks(
     {
       files: parsed.files,
-      objects: parsed.objects,
+      objects,
       byUid,
       references,
       outbound,
@@ -117,15 +126,15 @@ function resolveReferences(parsed: ParseResult, byUid: Map<string, FmObject>): F
     // The DDR explicitly marked the target deleted (e.g. a `<Field Missing>`
     // placeholder in a calculation), so it is broken regardless of lookup.
     // The occurrence (viaToId) survives the field deletion, so resolve it here
-    // too — keeps the occurrence clickable inline and lists the broken ref in
-    // its inbound references.
+    // too — keeps the occurrence clickable inline (a broken reference has no
+    // target, so it's in no object's inbound references).
     if (raw.forceBroken) {
       const viaUid = raw.viaToId != null ? `${fileUid}:tableOccurrence:${raw.viaToId}` : undefined;
       return { ...base(raw), toUid: null, broken: true, ...(viaUid ? { viaUid } : {}) };
     }
 
     if (raw.toType === "field") {
-      return resolveFieldReference(raw, fileUid, byUid, occByUid, fieldsByTable);
+      return resolveFieldReference(raw, fileUid, byUid, occByUid, fieldsByTable, sources);
     }
     if (raw.toType === "table") {
       return resolveTableReference(raw, fileUid, byUid, occByUid);
@@ -194,6 +203,7 @@ function resolveFieldReference(
   byUid: Map<string, FmObject>,
   occByUid: Map<string, OccurrenceTarget>,
   fieldsByTable: Map<string, Map<string, FmObject>>,
+  sources: DataSourceIndex,
 ): FmReference {
   // The occurrence is looked up within the referencing file, so same-named
   // occurrences in different files never cross-contaminate.
@@ -202,14 +212,16 @@ function resolveFieldReference(
   if (raw.byName) {
     // A name recovered from calc text: the longest field of the occurrence's base
     // table that the text starts with. Heuristic, so no match is simply
-    // unresolved — never broken.
+    // unresolved — never broken; when the occurrence's file is loaded, that
+    // no-match is `unmatched` (the file is there, the name isn't).
     const fields = occ?.fileLoaded ? fieldsByTable.get(`${occ.fileUid}:table:${occ.baseTableId}`) : undefined;
     const name = fields ? longestPrefixName(raw.toName, fields.keys()) : undefined;
     const field = name != null ? fields?.get(name) : undefined;
     const via = viaOccUid ? { viaUid: viaOccUid } : {};
-    return field
-      ? { ...base(raw), toId: field.id, toName: field.name, toUid: field.uid, broken: false, ...via }
-      : { ...base(raw), toUid: null, broken: false, ...via };
+    if (field) return { ...base(raw), toId: field.id, toName: field.name, toUid: field.uid, broken: false, ...via };
+    const viaObj = viaOccUid != null ? byUid.get(viaOccUid) : undefined;
+    const unmatched = viaObj != null && sources.fileForOccurrence(viaObj) != null;
+    return { ...base(raw), toUid: null, broken: false, ...via, ...(unmatched ? { unmatched: true } : {}) };
   }
   if (occ && !(occ.external && !occ.fileLoaded)) {
     const targetUid = `${occ.fileUid}:field:${occ.baseTableId}.${raw.toId}`;
@@ -279,13 +291,13 @@ function mapFieldsByTable(objects: FmObject[]): Map<string, Map<string, FmObject
 }
 
 /**
- * Annotate each calculation field with how deep through the relationship graph
- * its references reach (max relationship hops from the field's context
+ * Each calculation field's uid → how deep through the relationship graph its
+ * references reach (max relationship hops from the field's context
  * occurrence to any occurrence it reads a field through). The occurrence graph
  * is built once from relationship→occurrence edges; BFS distances are cached per
  * context occurrence, so thousands of calc fields share a handful of searches.
  */
-function annotateRelationshipDepths(parsed: ParseResult, byUid: Map<string, FmObject>): void {
+function relationshipDepths(parsed: ParseResult, byUid: Map<string, FmObject>): Map<string, number> {
   // Occurrence adjacency: every relationship links its two table occurrences.
   const relOccs = new Map<string, string[]>();
   for (const raw of parsed.references) {
@@ -341,6 +353,7 @@ function annotateRelationshipDepths(parsed: ParseResult, byUid: Map<string, FmOb
   // Every calculation field gets a depth — 0 when it stays in its own table,
   // otherwise the deepest relationship hop it reaches through. (Summary fields
   // summarize a field in their own table, so depth is never meaningful for them.)
+  const depths = new Map<string, number>();
   for (const field of parsed.objects) {
     if (field.type !== "field" || field.detail?.kind !== "calculation") continue;
     const refs = refsByField.get(field.uid);
@@ -354,8 +367,9 @@ function annotateRelationshipDepths(parsed: ParseResult, byUid: Map<string, FmOb
         if (d != null && d > max) max = d;
       }
     }
-    field.relationshipDepth = max;
+    depths.set(field.uid, max);
   }
+  return depths;
 }
 
 function base(raw: RawReference) {
@@ -381,24 +395,6 @@ function findUnreferenced(
       ORPHAN_CANDIDATE_TYPES.has(obj.type) &&
       !(inbound.get(obj.uid) ?? []).some((ref) => countsAsUse(ref, obj.uid, byUid)),
   );
-}
-
-/**
- * Whether an inbound reference means its target is actually used. It doesn't
- * when it comes from a disabled script step (FileMaker never runs it), or from
- * the target itself or something inside it — a recursive script or custom
- * function, or a button on a layout that goes to that same layout.
- */
-function countsAsUse(ref: FmReference, targetUid: string, byUid: Map<string, FmObject>): boolean {
-  if (ref.disabled) return false;
-  // Walk up the containment chain (layout object → … → layout, field → table);
-  // the hop cap only guards against a malformed cycle.
-  let uid: string | undefined = ref.fromUid;
-  for (let hops = 0; uid != null && hops < 64; hops++) {
-    if (uid === targetUid) return false;
-    uid = byUid.get(uid)?.parentUid;
-  }
-  return true;
 }
 
 function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {

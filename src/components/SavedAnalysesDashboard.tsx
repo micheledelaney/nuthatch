@@ -330,7 +330,8 @@ interface MetricDef {
 /** Everything a user might want to track over a project's lifetime — risks first
  * (broken/orphaned/unstored), then the global-state and size metrics. */
 const HEALTH_METRICS: MetricDef[] = [
-  { key: "broken", label: "Broken refs", risk: true, color: "var(--high)", get: (m) => m.brokenCount },
+  // Objects with a broken reference, as on the report card — not references.
+  { key: "broken", label: "Objects with broken refs", risk: true, color: "var(--high)", get: (m) => m.brokenCount },
   { key: "unreferenced", label: "Unreferenced", risk: true, color: "var(--warn)", get: (m) => m.unreferencedCount },
   { key: "unstored", label: "Unstored calcs", risk: true, color: "var(--warn)", get: (m) => m.unstoredCalculationCount },
   { key: "globalFields", label: "Global fields", risk: false, color: "var(--accent)", get: (m) => m.globalFieldCount },

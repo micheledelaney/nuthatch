@@ -527,7 +527,9 @@ function GraphBox({
   const w = node.right - node.left;
   const h = drawnHeight(node, expanded);
   const { rows, overflow } = shownFields(node, expanded);
-  const colors = boxColors(node.color);
+  // A broken occurrence (its base table is gone) reads like anything broken:
+  // red outline and red name.
+  const colors = node.broken ? { ...boxColors(node.color), border: "var(--high)", text: "var(--high)" } : boxColors(node.color);
 
   return (
     <g
@@ -578,7 +580,13 @@ function GraphBox({
           +{overflow} more
         </text>
       )}
-      <title>{node.baseTable && node.baseTable !== node.name ? `${node.name}  ·  ${node.baseTable}` : node.name}</title>
+      <title>
+        {node.broken
+          ? `${node.name}  ·  base table missing`
+          : node.baseTable && node.baseTable !== node.name
+            ? `${node.name}  ·  ${node.baseTable}`
+            : node.name}
+      </title>
     </g>
   );
 }

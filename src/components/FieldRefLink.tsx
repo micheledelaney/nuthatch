@@ -38,16 +38,22 @@ export function ObjLink({
   );
 }
 
-const STATUS_CHIP: Record<"external" | "broken" | "unused", { label: string; tone?: "high" | "warn" }> = {
+type StatusChipKind = "external" | "broken" | "unused" | "unmatched" | "disabled";
+
+const STATUS_CHIP: Record<StatusChipKind, { label: string; tone?: "high" | "warn" }> = {
   external: { label: "External" },
   broken: { label: "Broken", tone: "high" },
   unused: { label: "Unused", tone: "warn" },
+  unmatched: { label: "Unmatched" },
+  disabled: { label: "Disabled" },
 };
 
-/** A status tag ("External", "Broken", "Unused") right after a reference's
- * name — the same tag as an object's flags (Broken in red, Unused in the
- * warning tone, like Unreferenced). */
-export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused" }) {
+/** A status tag right after a reference's name — the same tag as an object's
+ * flags: Broken in red, Unused in the warning tone (like Unreferenced), and,
+ * with no tone, External (in a file that isn't loaded), Unmatched (a name from
+ * calculation text its loaded file doesn't have) and Disabled (from a disabled
+ * step). */
+export function RefStatusChip({ kind }: { kind: StatusChipKind }) {
   const { label, tone } = STATUS_CHIP[kind];
   return <span className={`tag ref-external-tag${tone ? ` tone-${tone}` : ""}`}>{label}</span>;
 }
@@ -58,12 +64,12 @@ export function RefStatusChip({ kind }: { kind: "external" | "broken" | "unused"
  * target that goes to the field, or to its occurrence when the field itself
  * can't be reached:
  *   - found → links the field
- *   - in another file / can't be verified → links the occurrence
+ *   - in another file / can't be verified / unmatched → links the occurrence
  *   - deleted → links the occurrence; the field half is `broken-value`
  *   - occurrence deleted too → not linked; both halves are `broken-value`
  *   - the object has no such reference → the label as written, not linked
  *
- * `showChip` toggles the trailing EXTERNAL chip — useful in property-sheet
+ * `showChip` toggles the trailing EXTERNAL (or UNMATCHED) chip — useful in property-sheet
  * rows; inline (inside calc text) the chip just adds noise. The prop is named
  * `qualified` (not `ref`) because React reserves `ref` for ref-forwarding.
  */
@@ -112,6 +118,7 @@ export function FieldRefLink({
         {inner}
       </ObjLink>
       {showChip && (status === "external" || status === "unverifiable") && <RefStatusChip kind="external" />}
+      {showChip && status === "unmatched" && <RefStatusChip kind="unmatched" />}
     </>
   );
 }
