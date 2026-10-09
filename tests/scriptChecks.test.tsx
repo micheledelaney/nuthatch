@@ -10,9 +10,10 @@ import { factsFor } from "@/components/browseA/facts";
 import { applyNavFilters, chipGroupsFor, NO_FILTERS } from "@/components/browseA/filters";
 import { ScriptChecks } from "@/components/ScriptChecks";
 import { ScriptWorkspace } from "@/components/ScriptWorkspace";
+import { buildAiExport } from "@/core/export/aiExport";
 import { buildModel } from "@/core/model/buildModel";
 import { shownScriptChecks } from "@/core/scriptAnalysis/analyze";
-import type { FmObject, ScriptStep, StepIr } from "@/types/ddr";
+import type { FmObject, ScriptStep, SolutionModel, StepIr } from "@/types/ddr";
 
 const FILE = "F0";
 
@@ -112,5 +113,36 @@ describe("the flag and the filter", () => {
     expect(chips("script")).toEqual([["Script checks", "warn"]]);
     expect(chips("all")).toEqual([["Script checks", "warn"]]);
     expect(chips("layout")).toEqual([]);
+  });
+});
+
+describe("the AI export", () => {
+  const exported = (model: SolutionModel) => {
+    const files = buildAiExport(model, { analysisName: "A", projectName: "P", savedAt: 0, exportedAt: 0 });
+    return (name: string) => files.find((f) => f.name === name)!.content;
+  };
+
+  it("lists the findings the app shows, and counts them on the script's line", () => {
+    // Step 1's $unused is a possible finding: left out, as in the app.
+    const { script, model } = solution(["Set Variable", "Exit Script", "Beep"], { 1: { setsVariable: "$unused", calcs: ["1"] }, 3: { calcs: ["$x"] } });
+    const file = exported(model);
+    const lines = file("script-checks.jsonl").trim().split("\n").map((line) => JSON.parse(line));
+    expect(lines).toEqual(
+      shownScriptChecks(model, script.uid).map((f) => ({ uid: script.uid, script: "S", rule: f.rule, certainty: f.certainty, step: 3, title: expect.any(String), detail: expect.any(String) })),
+    );
+    expect(lines.map((l) => [l.rule, l.certainty, l.title])).toEqual([
+      ["unset-variable", "likely", "$x is never set"],
+      ["unreachable-steps", "fact", "This step never runs"],
+    ]);
+    expect(JSON.parse(file("objects.jsonl").split("\n")[0]!)).toMatchObject({ uid: script.uid, scriptChecks: 2 });
+    expect(file("README.md")).toContain("**Scripts flagged by script checks:** 1 (2 findings)");
+  });
+
+  it("says the checks weren't run for an analysis saved without typed steps", () => {
+    const { model } = solution(["Exit Script", "Beep"]);
+    const file = exported({ ...model, scriptSteps: new Map() });
+    expect(file("script-checks.jsonl")).toBe("");
+    expect(file("README.md")).toContain("**Script checks:** not run");
+    expect(file("README.md")).toContain("Empty: the script checks weren't run");
   });
 });

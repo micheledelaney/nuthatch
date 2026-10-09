@@ -4,6 +4,8 @@ import { chainTops } from "@/core/analysis/unusedChains";
 import { brokenSources } from "@/core/analysis/dependencies";
 import { USAGE_REASON_LABELS } from "@/core/analysis/usageMarks";
 import { refLabel, refStatus } from "@/core/model/refStatus";
+import { scriptChecksRan, shownScriptChecksByScript } from "@/core/scriptAnalysis/analyze";
+import { plainText, type ScriptFinding } from "@/core/scriptAnalysis/findings";
 import type { FmObject, FmReference, ObjectDetail, ObjectType, SolutionModel } from "@/types/ddr";
 
 /**
@@ -50,10 +52,13 @@ export function buildAiExport(model: SolutionModel, info: AiExportInfo): ExportF
   const brokenFrom = brokenSources(model);
   const unreferenced = new Set(model.unreferenced.map((o) => o.uid));
   const unusedChain = new Set(model.unusedChain.map((o) => o.uid));
+  const checks = shownScriptChecksByScript(model);
   return [
-    { name: "README.md", content: buildReadme(model, info) },
-    { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced, unusedChain)).join("\n") + "\n" },
+    { name: "README.md", content: buildReadme(model, info, checks) },
+    { name: "objects.jsonl", content: model.objects.map((o) => exportObject(o, model, brokenFrom, unreferenced, unusedChain, checks)).join("\n") + "\n" },
     { name: "refs.tsv", content: [REF_COLUMNS.join("\t"), ...model.references.map((r) => refRow(r, model))].join("\n") + "\n" },
+    // Written even when empty, so it replaces an earlier export's.
+    { name: "script-checks.jsonl", content: scriptCheckLines(model, checks) },
     // Keeps the dump (which can include account names and emails) out of git
     // by default; the README explains how to opt in.
     { name: ".gitignore", content: "*\n" },
@@ -67,6 +72,7 @@ function exportObject(
   brokenFrom: ReadonlySet<string>,
   unreferenced: ReadonlySet<string>,
   unusedChain: ReadonlySet<string>,
+  checks: ReadonlyMap<string, readonly ScriptFinding[]>,
 ): string {
   const chain = unusedChain.has(o.uid) ? chainTops(model, o.uid) : null;
   const usedOnlyBy = chain ? (chain.tops.length > 0 ? chain.tops : chain.loop) : [];
@@ -88,6 +94,7 @@ function exportObject(
     usedOnlyBy: usedOnlyBy.length > 0 ? usedOnlyBy.map((u) => u.uid) : undefined,
     markedUsed: mark ? { reason: USAGE_REASON_LABELS[mark.reason], note: mark.note } : undefined,
     hasBrokenRefs: brokenFrom.has(o.uid) || undefined,
+    scriptChecks: checks.get(o.uid)?.length,
     relationshipDepth: o.relationshipDepth,
     // A layout object's attributes and text restate its detail (type, label,
     // position, bound names), so only the detail is kept.
@@ -163,6 +170,26 @@ function refRow(r: FmReference, model: SolutionModel): string {
     .join("\t");
 }
 
+/** One JSON line per finding the app shows (see shownScriptChecksByScript):
+ * scripts in the objects' order, each one's findings in step order. */
+function scriptCheckLines(model: SolutionModel, checks: ReadonlyMap<string, readonly ScriptFinding[]>): string {
+  const lines = model.objects.flatMap((o) =>
+    (checks.get(o.uid) ?? []).map((f) =>
+      JSON.stringify({
+        uid: o.uid,
+        script: objectLabel(o),
+        rule: f.rule,
+        certainty: f.certainty,
+        step: f.step,
+        lastStep: f.lastStep,
+        title: plainText(f.title),
+        detail: plainText(f.detail),
+      }),
+    ),
+  );
+  return lines.length > 0 ? lines.join("\n") + "\n" : "";
+}
+
 /** Keep one reference per line: tabs and newlines inside names become spaces. */
 function tsvCell(value: string): string {
   return value.replace(/[\t\r\n]+/g, " ");
@@ -177,7 +204,7 @@ function countBy<T>(items: readonly T[], key: (item: T) => string): [string, num
   return [...counts].sort((a, b) => b[1] - a[1]);
 }
 
-function buildReadme(model: SolutionModel, info: AiExportInfo): string {
+function buildReadme(model: SolutionModel, info: AiExportInfo, checks: ReadonlyMap<string, readonly ScriptFinding[]>): string {
   const typeCounts = countBy(model.objects, (o) => o.type)
     .map(([t, n]) => `| \`${t}\` | ${OBJECT_TYPE_META[t as ObjectType]?.label ?? t} | ${n} |`)
     .join("\n");
@@ -188,6 +215,11 @@ function buildReadme(model: SolutionModel, info: AiExportInfo): string {
     .map((f) => `- \`${f.uid}\` = **${f.name}** (from \`${f.source}\`${f.version ? `, FileMaker ${f.version}` : ""})`)
     .join("\n");
   const card = model.reportCard;
+  const checksRan = scriptChecksRan(model);
+  const findingCount = [...checks.values()].reduce((sum, findings) => sum + findings.length, 0);
+  const checksLine = checksRan
+    ? `**Scripts flagged by script checks:** ${checks.size} (${findingCount} ${findingCount === 1 ? "finding" : "findings"})`
+    : "**Script checks:** not run (see script-checks.jsonl below)";
 
   return `# FileMaker solution analysis (nuthatch export)
 
@@ -201,6 +233,7 @@ dependency questions ("what uses X?", "can I delete X?") are a lookup in
 - **Exported:** ${new Date(info.exportedAt).toISOString()}
 - **Objects:** ${model.objects.length} · **References:** ${model.references.length} · **Broken references:** ${model.brokenReferences.length} (in ${card.brokenReferenceCount} objects)
 - **Unreferenced objects:** ${card.unreferencedCount} · **Used only by unreferenced objects:** ${card.unusedChainCount}
+- ${checksLine}
 
 This is a snapshot. If the FileMaker solution has changed since the date
 above, re-export the XML, re-analyze it in nuthatch, and export again.
@@ -239,6 +272,8 @@ One JSON object per line:
   can't show, not a reference: it keeps the object, and everything it uses, out
   of \`unreferenced\` and \`unusedChain\`.
 - \`hasBrokenRefs: true\`: it references something that no longer exists.
+- \`scriptChecks\`: on a script, how many findings the script checks have in its
+  steps (listed in \`script-checks.jsonl\`).
 - \`attributes\`: raw attributes from the XML element (field type, storage, …).
 - \`detail\`: type-specific structure. Scripts: \`steps\` with \`index\`, \`name\`,
   \`enabled\`, and \`params\` (FileMaker's own step text). Calculated fields and
@@ -277,6 +312,43 @@ object's \`detail\` in \`objects.jsonl\`.
 
 Reference kinds in this export: ${kindCounts}.
 
+## script-checks.jsonl
+
+${
+  checksRan
+    ? `What nuthatch's script checks found in the scripts' steps, one finding per
+line: the same findings the app lists in a script's Script checks section.`
+    : `Empty: the script checks weren't run, because this analysis was saved before
+nuthatch had them. Re-analyze the XML to get them. Until then, the empty file
+doesn't mean the scripts are fine.`
+}
+
+- \`uid\`, \`script\`: the script.
+- \`step\` (and \`lastStep\`, for a run of steps): 1-based, as \`index\` in the
+  script's \`detail.steps\` in \`objects.jsonl\`.
+- \`rule\`: which check (below). \`certainty\`: \`fact\` (what the steps say) or
+  \`likely\` (a defect unless something the export can't show makes up for it).
+- \`title\`, \`detail\`: what's wrong and why, as the app words it.
+
+| rule | finds |
+| --- | --- |
+| \`unreachable-steps\` | steps no path reaches: after an Exit Script or Halt Script, an If whose every branch stops the script, or a Loop with no way out |
+| \`unset-variable\` | a \`$variable\` the script reads but never sets: not in a step, a \`Let\`, or a custom function it calls |
+| \`unrelated-set-field\` | a Set Field into an occurrence unrelated to the layout the script is on at that step (known from the buttons and triggers that run it, and its Go to Layout steps) |
+| \`unpassed-parameter-key\` | a JSON key the script reads from \`Get ( ScriptParameter )\` that none of its callers passes |
+| \`unreturned-result-key\` | a JSON key read from \`Get ( ScriptResult )\` that the script performed before it never returns |
+| \`result-before-call\` | \`Get ( ScriptResult )\` read before the script has performed any other |
+
+Confirm a \`likely\` finding before changing anything. Common deliberate cases:
+a debug switch set only by a disabled step, or by hand in the Data Viewer; an
+optional parameter key; a caller the export can't see (a server schedule, a file
+that isn't loaded, a call by name).
+
+No finding doesn't mean a script is fine. Only literal JSON keys are compared,
+the flow checks skip scripts with a disabled If or Loop step, and findings that
+are often deliberate (a variable set but never read, a passed key the script
+never reads) are left out.
+
 ## Recipes
 
 \`\`\`sh
@@ -297,6 +369,12 @@ grep '"type":"script"' objects.jsonl | grep '"unreferenced":true' | jq -r .name
 
 # Objects used only by unused objects, and what their chain hangs from
 grep '"unusedChain":true' objects.jsonl | jq -c '{name, usedOnlyBy}'
+
+# What the script checks found in a script
+grep -F '"uid":"F0:script:1056"' script-checks.jsonl | jq -r '"step \\(.step): \\(.title). \\(.detail)"'
+
+# Scripts the script checks flagged
+jq -r .script script-checks.jsonl | sort -u
 \`\`\`
 
 ## Before concluding something is safe to delete

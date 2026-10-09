@@ -72,6 +72,12 @@ export function shownScriptChecksByScript(model: SolutionModel): ReadonlyMap<str
   return byScript;
 }
 
+/** Whether the script checks ran on a model: not for an analysis saved before
+ * them, whose scripts have steps but no typed steps. */
+export function scriptChecksRan(model: SolutionModel): boolean {
+  return !model.objects.some((o) => o.detail?.kind === "script" && o.detail.steps.length > 0 && !model.scriptSteps.has(o.uid));
+}
+
 /** The findings a script's page lists (see shownScriptChecksByScript). */
 export function shownScriptChecks(model: SolutionModel, scriptUid: string): readonly ScriptFinding[] {
   return shownScriptChecksByScript(model).get(scriptUid) ?? [];
