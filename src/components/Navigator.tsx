@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/store";
 import { OBJECT_TYPE_META, layoutOf, objectLabel, type FmFile, type FmObject, type ObjectType } from "@/types/ddr";
 import { TypePill } from "./TypePill";
@@ -513,21 +513,7 @@ export function Navigator() {
       <div className="controls">
         <div className="nav-title-row">
           <span className="nav-title">{typeFilter === "all" ? "All objects" : OBJECT_TYPE_META[typeFilter].plural}</span>
-          <label className={`nav-search${searching ? " has-query" : ""}`} title="Search this list">
-            <SearchIcon />
-            <input
-              type="search"
-              value={query}
-              placeholder="Search"
-              aria-label="Search objects in the navigator"
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== "Escape") return;
-                setQuery("");
-                e.currentTarget.blur();
-              }}
-            />
-          </label>
+          <NavSearch onSearch={setQuery} />
           <FilterMenu model={model} base={baseObjects} type={typeFilter} filters={filters} />
         </div>
       </div>
@@ -596,6 +582,34 @@ export function Navigator() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** The navigator's search box. It shows what's typed at once and hands the
+ * text to the tree as a transition, which the next keystroke interrupts, so
+ * typing never waits for the tree to narrow. */
+function NavSearch({ onSearch }: { onSearch: (query: string) => void }) {
+  const [text, setText] = useState("");
+  const change = (value: string) => {
+    setText(value);
+    startTransition(() => onSearch(value));
+  };
+  return (
+    <label className={`nav-search${text.trim() !== "" ? " has-query" : ""}`} title="Search this list">
+      <SearchIcon />
+      <input
+        type="search"
+        value={text}
+        placeholder="Search"
+        aria-label="Search objects in the navigator"
+        onChange={(e) => change(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") return;
+          change("");
+          e.currentTarget.blur();
+        }}
+      />
+    </label>
   );
 }
 
