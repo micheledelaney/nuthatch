@@ -3,13 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FileMaker Analysis Tool | nuthatch</title>
+    <title>FileMaker Analysis Tool &amp; Script Checker | nuthatch</title>
     <meta
       name="description"
-      content="nuthatch is a FileMaker analysis tool for inspecting Save a Copy as XML exports, with static analysis of structure, dependencies, call chains, and maintenance risks."
+      content="Free FileMaker analysis tool for Save a Copy as XML exports. Find broken references, unused objects and mistakes in scripts, and see what uses what."
     />
     <meta name="google-site-verification" content="qyNK321f2mFZEJNhs7DAZwppNxswrpPqWBrWgp4IZsQ" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="canonical" href="https://micheledelaney.github.io/nuthatch/" />
+    <!-- The card a shared link shows (LinkedIn, Slack, X …). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://micheledelaney.github.io/nuthatch/" />
+    <meta property="og:title" content="FileMaker Analysis Tool &amp; Script Checker | nuthatch" />
+    <meta property="og:description" content="Free FileMaker analysis tool for Save a Copy as XML exports. Find broken references, unused objects and mistakes in scripts, and see what uses what." />
+    <meta property="og:image" content="https://micheledelaney.github.io/nuthatch/shots/side-by-side.jpg" />
+    <meta property="og:image:alt" content="nuthatch showing two custom functions side by side, each with its signature, definition and an Unreferenced tag" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>
       /* The app's fonts (fonts/OFL.txt), latin only. */
       @font-face {
@@ -733,12 +742,13 @@
             <div class="text">
               <h2>Catch mistakes in your scripts</h2>
               <p>
-                Script checks go through every script step by step and flag what will go wrong:
-                steps that never run, a <code>$variable</code> that's read but never set, a Set Field
-                with no related record to write to, a parameter key that no caller passes, and a
+                Script checks go through every script step by step, like a linter for FileMaker, and
+                flag what will go wrong: steps that never run, a <code>$variable</code> that's read but
+                never set, a field that's set, inserted into or read from a table occurrence that isn't
+                related to the layout the script is on, a parameter key that no caller passes, and a
                 script result that's read before any script has run or that the called script never
                 returns. Flagged steps are marked in the script, and the Script checks filter lists
-                every script with a finding.
+                every script with a finding. Script checks are in preview.
               </p>
             </div>
             <div class="shot" style="--ratio: 16 / 9"><img src="shots/script-checks.jpg" alt="The Script Checks script: three variables that are never set and a step that never runs, with steps 3 and 7 marked" /></div>
@@ -813,8 +823,8 @@
             <p>
               Choose <strong>Export for AI</strong> on any saved analysis, or run
               <a href="#cli">the command-line tool</a>. nuthatch writes a compact index of your solution
-              into your project folder, with every reference already resolved, so your assistant looks
-              answers up instead of searching the raw XML. That saves tokens, makes each lookup faster,
+              into your project folder, with every reference already resolved and what the script checks
+              found, so your assistant looks answers up instead of searching the raw XML. That saves tokens, makes each lookup faster,
               and gets you better answers, because the assistant no longer has to work out from the XML
               what refers to what.
             </p>
