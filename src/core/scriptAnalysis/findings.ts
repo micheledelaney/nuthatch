@@ -13,6 +13,8 @@ export type RuleId =
   | "unset-variable"
   | "unread-variable"
   | "unrelated-set-field"
+  | "unrelated-field-target"
+  | "unrelated-field-read"
   | "unpassed-parameter-key"
   | "unread-parameter-key"
   | "unreturned-result-key"

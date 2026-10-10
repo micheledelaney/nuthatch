@@ -1,6 +1,7 @@
 import type { SolutionModel } from "@/types/ddr";
 import { buildBlocks } from "./blocks";
 import { checkContext, contextIndex } from "./context";
+import { checkFieldReads, nameTakingFunctions } from "./fieldReads";
 import type { Certainty, ScriptAnalysisInput, ScriptFinding, SkippedCheck } from "./findings";
 import { checkParameterKeys } from "./paramKeys";
 import { checkScriptResults } from "./scriptResults";
@@ -19,6 +20,7 @@ export function analyzeScripts(input: ScriptAnalysisInput): ScriptAnalysis {
   const { model, irs } = input;
   const functions = customFunctionUses(model);
   const context = contextIndex(input);
+  const nameTaking = nameTakingFunctions(model);
   const findings: ScriptFinding[] = [];
   const skipped: SkippedCheck[] = [];
   let scriptCount = 0;
@@ -31,10 +33,11 @@ export function analyzeScripts(input: ScriptAnalysisInput): ScriptAnalysis {
     skipped.push(...variables.skipped);
     const blocks = buildBlocks(steps);
     if ("error" in blocks) {
-      skipped.push({ uid: script.uid, check: "unreachable-steps, unrelated-set-field, script results", reason: `its blocks don't nest: ${blocks.error}` });
+      skipped.push({ uid: script.uid, check: "unreachable-steps, unrelated-set-field, unrelated-field-target, unrelated-field-read, script results", reason: `its blocks don't nest: ${blocks.error}` });
       continue;
     }
     findings.push(...checkUnreachable(script.uid, blocks), ...checkContext(context, script));
+    findings.push(...checkFieldReads(context, script, nameTaking.get(script.fileUid) ?? new Set()));
   }
   findings.push(...checkParameterKeys(input), ...checkScriptResults(input));
   return { findings, skipped, scriptCount };

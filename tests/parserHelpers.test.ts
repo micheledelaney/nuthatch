@@ -255,3 +255,19 @@ describe("stepIrs: how a step picks its layout", () => {
     expect(stepIrs(list["ObjectList"]).map((s) => s.layoutChoice)).toEqual(["specified", "none", "original"]);
   });
 });
+
+describe("stepIrs: the fields a step writes into or goes to", () => {
+  it("reads a FieldReference or Target parameter and a dialog input's, not a field a step only reads", () => {
+    const field = (id: string) => `<FieldReference id="${id}" name="f${id}"><TableOccurrenceReference id="7" name="T"></TableOccurrenceReference></FieldReference>`;
+    const step = (name: string, parameters: string) => `<Step index="0" id="1" name="${name}" enable="True"><ParameterValues>${parameters}</ParameterValues></Step>`;
+    const list = xmlParser.parse(
+      `<ObjectList>` +
+        step("Insert Text", `<Parameter type="Target">${field("1")}</Parameter>`) +
+        step("Go to Field", `<Parameter type="FieldReference">${field("2")}</Parameter>`) +
+        step("Show Custom Dialog", `<Parameter type="Field1"><Parameter type="Target">${field("3")}</Parameter></Parameter><Parameter type="Field2"><Parameter type="Target"><Variable value="$v"></Variable></Parameter></Parameter>`) +
+        step("Copy", `<Parameter type="FieldReference">${field("4")}</Parameter>`) +
+        `</ObjectList>`,
+    ) as Record<string, unknown>;
+    expect(stepIrs(list["ObjectList"]).map((s) => s.fieldTargets)).toEqual([[{ field: "1", occurrence: "7" }], [{ field: "2", occurrence: "7" }], [{ field: "3", occurrence: "7" }], undefined]);
+  });
+});

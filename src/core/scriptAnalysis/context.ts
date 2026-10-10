@@ -9,13 +9,14 @@ import { refsByStep, type ScriptAnalysisInput, type ScriptFinding } from "./find
  * the scripts that perform it are on at that step), then whatever a Go to
  * Layout, New Window or Go to Related Record names. Anything else that can
  * change the window or layout, or lets the user change it (a pause), makes it
- * unknown — and so does a call to a script that might. With it, a Set Field
- * into an occurrence that isn't related to the layout's own is found:
- * FileMaker has no record to set there.
+ * unknown — and so does a call to a script that might. With it, a Set Field,
+ * or another step that writes into or goes to a field (Insert Text, Go to
+ * Field …), into an occurrence that isn't related to the layout's own is
+ * found: FileMaker has no record there.
  */
 
 /** The layouts (uids) the script may be on, or "unknown". */
-type Where = "unknown" | ReadonlySet<string>;
+export type Where = "unknown" | ReadonlySet<string>;
 
 /** Steps that can leave the script on another window or layout, or let the
  * user go to one. Go to Layout, New Window and Go to Related Record are
@@ -205,7 +206,7 @@ function layoutsAtCall(index: ContextIndex, script: FmObject, caller: FmObject, 
 
 /** The layouts a script is on before each step a path reaches; null when its
  * blocks don't nest. */
-function layoutsBefore(index: ContextIndex, script: FmObject): ReadonlyMap<number, Where> | null {
+export function layoutsBefore(index: ContextIndex, script: FmObject): ReadonlyMap<number, Where> | null {
   const cached = index.befores.get(script.uid);
   if (cached !== undefined) return cached;
   const steps = index.irs.get(script.uid);
@@ -236,9 +237,18 @@ export function checkContext(index: ContextIndex, script: FmObject): ScriptFindi
   const findings: ScriptFinding[] = [];
   for (const step of index.irs.get(script.uid) ?? []) {
     const where = before.get(step.index);
-    if (!step.enabled || step.name !== "Set Field" || where == null || where === "unknown") continue;
-    for (const ref of byStep.get(step.index) ?? []) {
-      const finding = unrelatedSetField(index, script.uid, step, ref, where);
+    if (!step.enabled || where == null || where === "unknown") continue;
+    const refs = byStep.get(step.index) ?? [];
+    if (step.name === "Set Field") {
+      for (const ref of refs) {
+        const finding = ref.kind === "setField" ? unrelatedSetField(index, script.uid, step, ref, where) : undefined;
+        if (finding) findings.push(finding);
+      }
+    }
+    for (const target of step.fieldTargets ?? []) {
+      const occurrence = objectUid(script.fileUid, "tableOccurrence", target.occurrence);
+      const ref = refs.find((r) => r.toType === "field" && r.toId === target.field && r.viaUid === occurrence);
+      const finding = ref ? unrelatedTarget(index, script.uid, step, ref, where) : undefined;
       if (finding) findings.push(finding);
     }
   }
@@ -275,8 +285,38 @@ function namedLayout(index: ContextIndex, fileUid: string, refs: readonly FmRefe
 }
 
 function unrelatedSetField(index: ContextIndex, scriptUid: string, step: StepIr, ref: FmReference, where: ReadonlySet<string>): ScriptFinding | undefined {
+  const unreached = unreachedField(index, ref, where);
+  if (!unreached) return undefined;
+  return {
+    rule: "unrelated-set-field",
+    certainty: "likely",
+    uid: scriptUid,
+    step: step.index,
+    title: ["Set Field into ", { code: unreached.field }, " has no record to set"],
+    detail: [unreached.why],
+  };
+}
+
+/** Another step that writes into or goes to a field (see StepIr.fieldTargets). */
+function unrelatedTarget(index: ContextIndex, scriptUid: string, step: StepIr, ref: FmReference, where: ReadonlySet<string>): ScriptFinding | undefined {
+  const unreached = unreachedField(index, ref, where);
+  if (!unreached) return undefined;
+  return {
+    rule: "unrelated-field-target",
+    certainty: "likely",
+    uid: scriptUid,
+    step: step.index,
+    title: [`${step.name} can't reach `, { code: unreached.field }],
+    detail: [unreached.why],
+  };
+}
+
+/** A field reached through an occurrence related to none of the layouts the
+ * script may be on: its name and why. Undefined when one of them reaches it,
+ * or it's global. */
+export function unreachedField(index: ContextIndex, ref: FmReference, where: ReadonlySet<string>): { field: string; why: string } | undefined {
   const { byUid } = index.model;
-  if (ref.kind !== "setField" || !ref.toUid || !ref.viaUid) return undefined;
+  if (!ref.toUid || !ref.viaUid) return undefined;
   // A global field holds one value for the whole file: any context reaches it.
   if (byUid.get(ref.toUid)?.attributes.global === "Yes") return undefined;
   const target = ref.viaUid;
@@ -284,11 +324,7 @@ function unrelatedSetField(index: ContextIndex, scriptUid: string, step: StepIr,
   const occurrenceName = byUid.get(target)?.name ?? "?";
   const layouts = [...where].map((layout) => `${byUid.get(layout)?.name ?? "?"} (${byUid.get(index.layoutOccurrence.get(layout)!)?.name ?? "?"})`);
   return {
-    rule: "unrelated-set-field",
-    certainty: "likely",
-    uid: scriptUid,
-    step: step.index,
-    title: ["Set Field into ", { code: `${occurrenceName}::${ref.toName}` }, " has no record to set"],
-    detail: [`${occurrenceName} isn't related to the occurrence of the layout the script is on here: ${layouts.join(" or ")}.`],
+    field: `${occurrenceName}::${ref.toName}`,
+    why: `${occurrenceName} isn't related to the occurrence of the layout the script is on here: ${layouts.join(" or ")}.`,
   };
 }

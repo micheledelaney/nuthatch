@@ -1,4 +1,4 @@
-import type { LayoutChoice, StepIr } from "@/types/ddr";
+import type { FieldTarget, LayoutChoice, StepIr } from "@/types/ddr";
 import { calculationText } from "../calcText";
 import { ownValue } from "../ownValue";
 import { isPasswordParameterType, withoutPasswordText } from "../passwords";
@@ -6,6 +6,11 @@ import { stepNodes } from "../steps";
 import { asArray, attr, child, children, isElementKey, isRecord, textAttr } from "../xmlUtils";
 
 const LAYOUT_CHOICES: Readonly<Record<string, LayoutChoice>> = { "0": "none", "1": "original", "5": "specified" };
+
+/** Steps that name a field they only read (Write to Data File's "Target" is
+ * its data source), or whose target the Set Field check reads from its
+ * setField reference: no fieldTargets. */
+const NOT_FIELD_TARGETS: ReadonlySet<string> = new Set(["Set Field", "Copy", "Export Field Contents", "Sort Records by Field", "Install Plug-In File", "Write to Data File"]);
 
 /** Steps that pick a layout (see LayoutChoice). */
 const LAYOUT_STEPS: ReadonlySet<string> = new Set(["Go to Layout", "New Window", "Go to Related Record"]);
@@ -20,6 +25,7 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
   const params = step["ParameterValues"];
   const setsVariable = writtenVariable(params);
   const inputs = name === "Show Custom Dialog" ? inputVariables(params) : [];
+  const targets = NOT_FIELD_TARGETS.has(name) ? [] : fieldTargets(params);
   const layoutChoice = LAYOUT_STEPS.has(name) ? layoutChoiceOf(params) : undefined;
   const parameter = name.startsWith("Perform Script") ? parameterFormula(params) : undefined;
   const flags = booleanFlags(params);
@@ -30,6 +36,7 @@ function stepIr(step: Record<string, unknown>, index: number): StepIr {
     calcs: stepFormulas(params),
     ...(setsVariable ? { setsVariable } : {}),
     ...(inputs.length > 0 ? { inputVariables: inputs } : {}),
+    ...(targets.length > 0 ? { fieldTargets: targets } : {}),
     ...(layoutChoice ? { layoutChoice } : {}),
     ...(parameter ? { parameter } : {}),
     ...(flags ? { flags } : {}),
@@ -76,6 +83,23 @@ function inputVariables(params: unknown): string[] {
   return children(params, "Parameter")
     .filter((param) => /^Field\d$/.test(attr(param, "type") ?? ""))
     .flatMap((param) => writtenVariable(param) ?? []);
+}
+
+/** The fields a step names in its own parameter: a <Parameter
+ * type="FieldReference"> (Go to Field, Replace Field Contents, Paste …) or
+ * type="Target"> (Insert Text, Insert from URL …), or a Show Custom Dialog
+ * input's target (<Parameter type="Field1"> to Field3). */
+function fieldTargets(params: unknown): FieldTarget[] {
+  const out: FieldTarget[] = [];
+  for (const param of children(params, "Parameter")) {
+    const type = attr(param, "type") ?? "";
+    const holder = type === "FieldReference" || type === "Target" ? param : /^Field\d$/.test(type) ? child(param, "Parameter") : undefined;
+    const ref = child(holder, "FieldReference");
+    const field = attr(ref, "id");
+    const occurrence = attr(child(ref, "TableOccurrenceReference"), "id");
+    if (field && occurrence) out.push({ field, occurrence });
+  }
+  return out;
 }
 
 /** The step's <LayoutReferenceContainer value>: in its parameter, or New

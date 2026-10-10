@@ -565,6 +565,12 @@ export interface ScriptStep {
  * 4 by number) is a formula. */
 export type LayoutChoice = "none" | "original" | "specified" | "calculated";
 
+/** A field a step names: its id and that of the occurrence it goes through. */
+export interface FieldTarget {
+  field: string;
+  occurrence: string;
+}
+
 /**
  * One script step, typed from its XML instead of FileMaker's rendered text:
  * what the script checks (core/scriptAnalysis) read of it.
@@ -583,6 +589,10 @@ export interface StepIr {
   /** Show Custom Dialog: the variables its input fields write (when the user
    * clicks a button that commits them). */
   inputVariables?: string[];
+  /** The fields the step writes into or goes to (Insert Text's target, Go to
+   * Field's, a Show Custom Dialog input's …), other than Set Field's (see its
+   * setField reference). */
+  fieldTargets?: FieldTarget[];
   /** Go to Layout, New Window, Go to Related Record: how it picks its layout. */
   layoutChoice?: LayoutChoice;
   /** Perform Script (on Server): its parameter formula, when it has one. */

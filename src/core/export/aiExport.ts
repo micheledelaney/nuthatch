@@ -335,6 +335,8 @@ doesn't mean the scripts are fine.`
 | \`unreachable-steps\` | steps no path reaches: after an Exit Script or Halt Script, an If whose every branch stops the script, or a Loop with no way out |
 | \`unset-variable\` | a \`$variable\` the script reads but never sets: not in a step, a \`Let\`, or a custom function it calls |
 | \`unrelated-set-field\` | a Set Field into an occurrence unrelated to the layout the script is on at that step (known from the buttons and triggers that run it, and its Go to Layout steps) |
+| \`unrelated-field-target\` | the same for another step that writes into or goes to a field: Insert Text, Insert Calculated Result, Insert from URL …, Replace Field Contents, Paste, Clear, Cut, Go to Field, a Show Custom Dialog input |
+| \`unrelated-field-read\` | a field a step's formula reads through an occurrence unrelated to the layout the script is on, which FileMaker reads as empty. A field inside \`GetFieldName ( … )\`, \`IsValid ( … )\` or a custom function that calls them isn't counted as read |
 | \`unpassed-parameter-key\` | a JSON key the script reads from \`Get ( ScriptParameter )\` that none of its callers passes |
 | \`unreturned-result-key\` | a JSON key read from \`Get ( ScriptResult )\` that the script performed before it never returns |
 | \`result-before-call\` | \`Get ( ScriptResult )\` read before the script has performed any other |

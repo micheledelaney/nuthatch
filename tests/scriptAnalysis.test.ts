@@ -169,12 +169,12 @@ describe("Set Field context", () => {
   });
   const goTo = (at: number, layout: FmObject): RawReference => ({ fromUid: SCRIPT.uid, toType: "layout", toId: layout.id, toName: layout.name, kind: "goToLayout", fromStep: at });
 
-  /** S with `list`, and Sub with `sub` (no typed steps when null). */
-  function check(list: StepIr[], references: RawReference[], sub: StepIr[] | null = steps(step("Beep"))): ScriptFinding[] {
-    const objects = [table, field, globalField, A, B, C, AB, onA, onC, button, SCRIPT, SUB];
+  /** S with `list`, and Sub with `sub` (no typed steps when null), with `functions` as custom functions. */
+  function check(list: StepIr[], references: RawReference[], sub: StepIr[] | null = steps(step("Beep")), functions: FmObject[] = []): ScriptFinding[] {
+    const objects = [table, field, globalField, A, B, C, AB, onA, onC, button, SCRIPT, SUB, ...functions];
     const model = buildModel({ files: [{ uid: FILE, name: "TEST", source: "TEST.xml" }], objects, references, errors: [] });
     const irs = new Map([[SCRIPT.uid, list], ...(sub ? [[SUB.uid, sub] as const] : [])]);
-    return only(analyzeScripts({ model, irs }).findings, "unrelated-set-field");
+    return analyzeScripts({ model, irs }).findings.filter((f) => f.rule.startsWith("unrelated-"));
   }
 
   it("finds a Set Field into an occurrence unrelated to the button's layout", () => {
@@ -228,6 +228,31 @@ describe("Set Field context", () => {
     expect(check(afterGoTo, [call(button, SCRIPT), goTo(1, onC), call(SCRIPT, SUB, 2), setField(SUB, 1, "3")], sub)).toEqual([]);
     const recursive = steps(step("Set Field"), step("Perform Script"));
     expect(check(steps(step("Perform Script")), [call(button, SCRIPT), call(SCRIPT, SUB, 1), call(SUB, SUB, 2), setField(SUB, 1, "3")], recursive)).toEqual([]);
+  });
+
+  const fieldRef = (at: number, occurrenceId: string): RawReference => ({ ...setField(SCRIPT, at, occurrenceId), kind: "field" });
+
+  it("checks the field other steps write into or go to, apart from the fields their formulas read", () => {
+    const target = (name: string, occurrence: string): StepSpec => ({ name, fieldTargets: [{ field: "1", occurrence }] });
+    const found = check(steps(target("Insert Text", "3"), target("Go to Field", "2")), [call(button, SCRIPT), fieldRef(1, "3"), fieldRef(2, "2")]);
+    expect(found.map((f) => [f.rule, f.step, ...text(f)])).toEqual([
+      ["unrelated-field-target", 1, "Insert Text can't reach C::f", "C isn't related to the occurrence of the layout the script is on here: LA (A)."],
+    ]);
+    expect(rules(check(steps(step("Insert Calculated Result", "C::f")), [call(button, SCRIPT), fieldRef(1, "3")]))).toEqual(["unrelated-field-read@1"]);
+  });
+
+  it("finds a formula reading a field the layout can't reach, not one taking only its name", () => {
+    const reading = (formula: string, functions: FmObject[] = []) => rules(check(steps(step("Set Variable", formula)), [call(button, SCRIPT), fieldRef(1, "3")], undefined, functions));
+    expect(reading("C::f + 1")).toEqual(["unrelated-field-read@1"]);
+    expect(reading("GetFieldName ( C::f )")).toEqual([]);
+    expect(reading("If ( IsValid ( C::f ) ; 1 )")).toEqual([]);
+    expect(reading('"C::f" /* C::f */')).toEqual([]);
+    const cf = (name: string, body: string) => obj("customFunction", name, name, { detail: { kind: "calculation", signature: `${name} ( field )`, body } });
+    expect(reading("SqlName ( C::f )", [cf("SqlName", "Quote ( GetFieldName ( field ) )")])).toEqual([]);
+    expect(reading("Twice ( C::f )", [cf("Twice", "field * 2")])).toEqual(["unrelated-field-read@1"]);
+    // B is related to LA's A; Set Field's own target has its own finding.
+    expect(rules(check(steps(step("Set Variable", "B::f")), [call(button, SCRIPT), fieldRef(1, "2")]))).toEqual([]);
+    expect(rules(check(steps(step("Set Field", "C::f + 1")), [call(button, SCRIPT), setField(SCRIPT, 1, "3"), fieldRef(1, "3")]))).toEqual(["unrelated-set-field@1"]);
   });
 
   it("forgets the layout after a pause, when the user can go to another", () => {
