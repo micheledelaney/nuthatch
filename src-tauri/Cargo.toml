@@ -1,6 +1,6 @@
 [package]
 name = "nuthatch"
-version = "1.3.0"
+version = "1.4.0"
 description = "DDR / XML analysis for FileMaker solutions (structure, dependencies, call chains, risks)"
 authors = ["Michèle Delaney"]
 license = "MIT"
